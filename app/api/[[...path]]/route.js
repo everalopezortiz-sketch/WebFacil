@@ -1,104 +1,808 @@
-import { MongoClient } from 'mongodb'
-import { v4 as uuidv4 } from 'uuid'
 import { NextResponse } from 'next/server'
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
+import { v4 as uuidv4 } from 'uuid'
 
-// MongoDB connection
-let client
-let db
-
-async function connectToMongo() {
-  if (!client) {
-    client = new MongoClient(process.env.MONGO_URL)
-    await client.connect()
-    db = client.db(process.env.DB_NAME)
-  }
-  return db
+// Create Supabase client for server-side operations
+function createSupabaseServer() {
+  const cookieStore = cookies()
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll()
+        },
+        setAll(cookiesToSet) {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options)
+            )
+          } catch {
+            // Server component cookie handling
+          }
+        },
+      },
+    }
+  )
 }
 
-// Helper function to handle CORS
+// CORS headers
 function handleCORS(response) {
-  response.headers.set('Access-Control-Allow-Origin', process.env.CORS_ORIGINS || '*')
+  response.headers.set('Access-Control-Allow-Origin', '*')
   response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
   response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-  response.headers.set('Access-Control-Allow-Credentials', 'true')
   return response
 }
 
-// OPTIONS handler for CORS
 export async function OPTIONS() {
   return handleCORS(new NextResponse(null, { status: 200 }))
 }
 
-// Route handler function
-async function handleRoute(request, { params }) {
-  const { path = [] } = params
-  const route = `/${path.join('/')}`
-  const method = request.method
+export async function GET(request, { params }) {
+  const path = params?.path || []
+  const pathStr = path.join('/')
+  const supabase = createSupabaseServer()
+  const { searchParams } = new URL(request.url)
 
   try {
-    const db = await connectToMongo()
-
-    // Root endpoint - GET /api/root (since /api/ is not accessible with catch-all)
-    if (route === '/root' && method === 'GET') {
-      return handleCORS(NextResponse.json({ message: "Hello World" }))
-    }
-    // Root endpoint - GET /api/root (since /api/ is not accessible with catch-all)
-    if (route === '/' && method === 'GET') {
-      return handleCORS(NextResponse.json({ message: "Hello World" }))
+    // Health check
+    if (pathStr === 'health') {
+      return handleCORS(NextResponse.json({ status: 'ok', timestamp: new Date().toISOString() }))
     }
 
-    // Status endpoints - POST /api/status
-    if (route === '/status' && method === 'POST') {
-      const body = await request.json()
-      
-      if (!body.client_name) {
-        return handleCORS(NextResponse.json(
-          { error: "client_name is required" }, 
-          { status: 400 }
-        ))
+    // Get current user
+    if (pathStr === 'auth/user') {
+      const { data: { user }, error } = await supabase.auth.getUser()
+      if (error || !user) {
+        return handleCORS(NextResponse.json({ user: null }, { status: 200 }))
       }
-
-      const statusObj = {
-        id: uuidv4(),
-        client_name: body.client_name,
-        timestamp: new Date()
-      }
-
-      await db.collection('status_checks').insertOne(statusObj)
-      return handleCORS(NextResponse.json(statusObj))
-    }
-
-    // Status endpoints - GET /api/status
-    if (route === '/status' && method === 'GET') {
-      const statusChecks = await db.collection('status_checks')
-        .find({})
-        .limit(1000)
-        .toArray()
-
-      // Remove MongoDB's _id field from response
-      const cleanedStatusChecks = statusChecks.map(({ _id, ...rest }) => rest)
       
-      return handleCORS(NextResponse.json(cleanedStatusChecks))
+      // Get profile
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single()
+      
+      return handleCORS(NextResponse.json({ user, profile }))
     }
 
-    // Route not found
-    return handleCORS(NextResponse.json(
-      { error: `Route ${route} not found` }, 
-      { status: 404 }
-    ))
+    // Get user settings
+    if (pathStr === 'settings') {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+      
+      const { data, error } = await supabase
+        .from('user_settings')
+        .select('*')
+        .eq('user_id', user.id)
+        .single()
+      
+      return handleCORS(NextResponse.json(data || {}))
+    }
+
+    // Get categories
+    if (pathStr === 'categories') {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+      
+      const { data, error } = await supabase
+        .from('categories')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('display_order', { ascending: true })
+      
+      return handleCORS(NextResponse.json(data || []))
+    }
+
+    // Get products
+    if (pathStr === 'products') {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+      
+      const { data, error } = await supabase
+        .from('products')
+        .select('*, categories(name)')
+        .eq('user_id', user.id)
+        .order('createdAt', { ascending: false })
+      
+      return handleCORS(NextResponse.json(data || []))
+    }
+
+    // Get orders
+    if (pathStr === 'orders') {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+      
+      const dateFilter = searchParams.get('date')
+      let query = supabase
+        .from('orders')
+        .select('*, order_items(*)')
+        .eq('user_id', user.id)
+        .order('createdAt', { ascending: false })
+      
+      if (dateFilter) {
+        const startOfDay = new Date(dateFilter)
+        startOfDay.setHours(0, 0, 0, 0)
+        const endOfDay = new Date(dateFilter)
+        endOfDay.setHours(23, 59, 59, 999)
+        query = query.gte('createdAt', startOfDay.toISOString()).lte('createdAt', endOfDay.toISOString())
+      }
+      
+      const { data, error } = await query
+      return handleCORS(NextResponse.json(data || []))
+    }
+
+    // Get checkout fields
+    if (pathStr === 'checkout-fields') {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+      
+      const { data, error } = await supabase
+        .from('checkout_fields')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('display_order', { ascending: true })
+      
+      return handleCORS(NextResponse.json(data || []))
+    }
+
+    // Get plans
+    if (pathStr === 'plans') {
+      const { data, error } = await supabase
+        .from('plans')
+        .select('*')
+        .eq('is_active', true)
+      
+      return handleCORS(NextResponse.json(data || []))
+    }
+
+    // Get user plan
+    if (pathStr === 'user-plan') {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+      
+      const { data, error } = await supabase
+        .from('user_plans')
+        .select('*, plans(*)')
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .single()
+      
+      return handleCORS(NextResponse.json(data || null))
+    }
+
+    // Get support messages
+    if (pathStr === 'messages') {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+      
+      const { data, error } = await supabase
+        .from('support_messages')
+        .select('*')
+        .or(`user_id.eq.${user.id},is_global.eq.true`)
+        .order('createdAt', { ascending: false })
+      
+      return handleCORS(NextResponse.json(data || []))
+    }
+
+    // Get info content
+    if (pathStr === 'info-content') {
+      const { data, error } = await supabase
+        .from('info_content')
+        .select('*')
+        .eq('is_active', true)
+      
+      return handleCORS(NextResponse.json(data || []))
+    }
+
+    // Get reports
+    if (pathStr === 'reports') {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+      
+      const startDate = searchParams.get('startDate')
+      const endDate = searchParams.get('endDate')
+      
+      let query = supabase
+        .from('orders')
+        .select('*, order_items(*)')
+        .eq('user_id', user.id)
+        .neq('status', 'cancelled')
+      
+      if (startDate) query = query.gte('createdAt', startDate)
+      if (endDate) query = query.lte('createdAt', endDate)
+      
+      const { data: orders } = await query
+      
+      // Calculate top products
+      const productSales = {}
+      orders?.forEach(order => {
+        order.order_items?.forEach(item => {
+          if (!productSales[item.product_name]) {
+            productSales[item.product_name] = { quantity: 0, revenue: 0 }
+          }
+          productSales[item.product_name].quantity += item.quantity
+          productSales[item.product_name].revenue += parseFloat(item.subtotal)
+        })
+      })
+      
+      const topProducts = Object.entries(productSales)
+        .map(([name, data]) => ({ name, ...data }))
+        .sort((a, b) => b.quantity - a.quantity)
+        .slice(0, 10)
+      
+      const totalRevenue = orders?.reduce((sum, o) => sum + parseFloat(o.total), 0) || 0
+      const totalOrders = orders?.length || 0
+      
+      return handleCORS(NextResponse.json({ orders, topProducts, totalRevenue, totalOrders }))
+    }
+
+    // ============ ADMIN ROUTES ============
+    
+    // Get all users (admin)
+    if (pathStr === 'admin/users') {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+      
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+      if (profile?.role !== 'DESARROLLADOR') {
+        return handleCORS(NextResponse.json({ error: 'Forbidden' }, { status: 403 }))
+      }
+      
+      const search = searchParams.get('search')
+      const type = searchParams.get('type')
+      
+      let query = supabase
+        .from('profiles')
+        .select('*, user_settings(*), user_plans(*, plans(*))')
+        .order('createdAt', { ascending: false })
+      
+      if (search) {
+        query = query.or(`first_name.ilike.%${search}%,last_name.ilike.%${search}%,email.ilike.%${search}%`)
+      }
+      if (type) query = query.eq('business_type', type)
+      
+      const { data, error } = await query
+      return handleCORS(NextResponse.json(data || []))
+    }
+
+    // ============ PUBLIC STORE ROUTES ============
+    
+    // Get store by slug
+    if (pathStr.startsWith('store/')) {
+      const slug = path[1]
+      
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('slug', slug)
+        .eq('is_active', true)
+        .single()
+      
+      if (!profile) {
+        return handleCORS(NextResponse.json({ error: 'Store not found' }, { status: 404 }))
+      }
+      
+      if (profile.maintenance_mode) {
+        return handleCORS(NextResponse.json({ error: 'Store in maintenance', maintenance: true }, { status: 503 }))
+      }
+      
+      const { data: settings } = await supabase
+        .from('user_settings')
+        .select('*')
+        .eq('user_id', profile.id)
+        .single()
+      
+      const { data: categories } = await supabase
+        .from('categories')
+        .select('*')
+        .eq('user_id', profile.id)
+        .eq('is_active', true)
+        .order('display_order')
+      
+      const { data: products } = await supabase
+        .from('products')
+        .select('*, categories(name)')
+        .eq('user_id', profile.id)
+        .eq('is_active', true)
+        .order('createdAt', { ascending: false })
+      
+      const { data: checkoutFields } = await supabase
+        .from('checkout_fields')
+        .select('*')
+        .eq('user_id', profile.id)
+        .eq('is_active', true)
+        .order('display_order')
+      
+      return handleCORS(NextResponse.json({
+        profile,
+        settings,
+        categories,
+        products,
+        checkoutFields
+      }))
+    }
+
+    return handleCORS(NextResponse.json({ error: 'Not found' }, { status: 404 }))
 
   } catch (error) {
     console.error('API Error:', error)
-    return handleCORS(NextResponse.json(
-      { error: "Internal server error" }, 
-      { status: 500 }
-    ))
+    return handleCORS(NextResponse.json({ error: error.message }, { status: 500 }))
   }
 }
 
-// Export all HTTP methods
-export const GET = handleRoute
-export const POST = handleRoute
-export const PUT = handleRoute
-export const DELETE = handleRoute
-export const PATCH = handleRoute
+export async function POST(request, { params }) {
+  const path = params?.path || []
+  const pathStr = path.join('/')
+  const supabase = createSupabaseServer()
+
+  try {
+    const body = await request.json()
+
+    // Sign up
+    if (pathStr === 'auth/signup') {
+      const { email, password, firstName, lastName, city, country, phone, businessType } = body
+      
+      // Create auth user
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { first_name: firstName, last_name: lastName }
+        }
+      })
+      
+      if (authError) {
+        return handleCORS(NextResponse.json({ error: authError.message }, { status: 400 }))
+      }
+      
+      // Check if this is the first user (make them admin)
+      const { count } = await supabase.from('profiles').select('*', { count: 'exact', head: true })
+      const role = count === 0 ? 'DESARROLLADOR' : 'USER'
+      
+      // Generate unique slug
+      const baseSlug = `${firstName}-${lastName}`.toLowerCase().replace(/[^a-z0-9]/g, '-')
+      const slug = `${baseSlug}-${Date.now().toString(36)}`
+      
+      // Create profile
+      const { error: profileError } = await supabase.from('profiles').insert({
+        id: authData.user.id,
+        email,
+        first_name: firstName,
+        last_name: lastName,
+        city,
+        country,
+        phone,
+        business_type: businessType,
+        role,
+        slug
+      })
+      
+      if (profileError) {
+        return handleCORS(NextResponse.json({ error: profileError.message }, { status: 400 }))
+      }
+      
+      // Create default settings
+      await supabase.from('user_settings').insert({
+        user_id: authData.user.id,
+        currency: 'USD'
+      })
+      
+      // Create default checkout fields
+      const defaultFields = [
+        { user_id: authData.user.id, field_name: 'name', field_label: 'Nombre completo', field_type: 'text', is_required: true, display_order: 1 },
+        { user_id: authData.user.id, field_name: 'phone', field_label: 'Teléfono', field_type: 'phone', is_required: true, display_order: 2 },
+        { user_id: authData.user.id, field_name: 'email', field_label: 'Email', field_type: 'email', is_required: false, display_order: 3 },
+        { user_id: authData.user.id, field_name: 'address', field_label: 'Dirección', field_type: 'textarea', is_required: false, display_order: 4 }
+      ]
+      await supabase.from('checkout_fields').insert(defaultFields)
+      
+      return handleCORS(NextResponse.json({ user: authData.user, role, message: 'Account created successfully' }))
+    }
+
+    // Sign in
+    if (pathStr === 'auth/signin') {
+      const { email, password } = body
+      
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+      
+      if (error) {
+        return handleCORS(NextResponse.json({ error: error.message }, { status: 401 }))
+      }
+      
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', data.user.id)
+        .single()
+      
+      if (!profile?.is_active) {
+        await supabase.auth.signOut()
+        return handleCORS(NextResponse.json({ error: 'Account is disabled' }, { status: 403 }))
+      }
+      
+      return handleCORS(NextResponse.json({ user: data.user, profile }))
+    }
+
+    // Sign out
+    if (pathStr === 'auth/signout') {
+      await supabase.auth.signOut()
+      return handleCORS(NextResponse.json({ message: 'Signed out' }))
+    }
+
+    // Update settings
+    if (pathStr === 'settings') {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+      
+      const { data, error } = await supabase
+        .from('user_settings')
+        .upsert({ ...body, user_id: user.id })
+        .select()
+        .single()
+      
+      if (error) return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
+      return handleCORS(NextResponse.json(data))
+    }
+
+    // Create category
+    if (pathStr === 'categories') {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+      
+      const { data, error } = await supabase
+        .from('categories')
+        .insert({ ...body, user_id: user.id })
+        .select()
+        .single()
+      
+      if (error) return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
+      return handleCORS(NextResponse.json(data))
+    }
+
+    // Create product
+    if (pathStr === 'products') {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+      
+      const { data, error } = await supabase
+        .from('products')
+        .insert({ ...body, user_id: user.id })
+        .select()
+        .single()
+      
+      if (error) return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
+      return handleCORS(NextResponse.json(data))
+    }
+
+    // Create checkout field
+    if (pathStr === 'checkout-fields') {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+      
+      const { data, error } = await supabase
+        .from('checkout_fields')
+        .insert({ ...body, user_id: user.id })
+        .select()
+        .single()
+      
+      if (error) return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
+      return handleCORS(NextResponse.json(data))
+    }
+
+    // Create order (public)
+    if (pathStr === 'orders') {
+      const { userId, customerName, customerPhone, customerEmail, customerData, items, total, notes } = body
+      
+      const orderNumber = `ORD-${Date.now().toString(36).toUpperCase()}`
+      
+      const { data: order, error } = await supabase
+        .from('orders')
+        .insert({
+          user_id: userId,
+          order_number: orderNumber,
+          customer_name: customerName,
+          customer_phone: customerPhone,
+          customer_email: customerEmail,
+          customer_data: customerData,
+          total,
+          notes
+        })
+        .select()
+        .single()
+      
+      if (error) return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
+      
+      // Insert order items
+      const orderItems = items.map(item => ({
+        order_id: order.id,
+        product_id: item.productId,
+        product_name: item.productName,
+        quantity: item.quantity,
+        unit_price: item.unitPrice,
+        subtotal: item.subtotal
+      }))
+      
+      await supabase.from('order_items').insert(orderItems)
+      
+      return handleCORS(NextResponse.json({ order, orderNumber }))
+    }
+
+    // ============ ADMIN ROUTES ============
+    
+    // Admin: Update user
+    if (pathStr === 'admin/users/update') {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+      
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+      if (profile?.role !== 'DESARROLLADOR') {
+        return handleCORS(NextResponse.json({ error: 'Forbidden' }, { status: 403 }))
+      }
+      
+      const { userId, ...updates } = body
+      
+      const { data, error } = await supabase
+        .from('profiles')
+        .update(updates)
+        .eq('id', userId)
+        .select()
+        .single()
+      
+      if (error) return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
+      return handleCORS(NextResponse.json(data))
+    }
+
+    // Admin: Send message
+    if (pathStr === 'admin/messages') {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+      
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+      if (profile?.role !== 'DESARROLLADOR') {
+        return handleCORS(NextResponse.json({ error: 'Forbidden' }, { status: 403 }))
+      }
+      
+      const { data, error } = await supabase
+        .from('support_messages')
+        .insert(body)
+        .select()
+        .single()
+      
+      if (error) return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
+      return handleCORS(NextResponse.json(data))
+    }
+
+    // Admin: Assign plan
+    if (pathStr === 'admin/assign-plan') {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+      
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+      if (profile?.role !== 'DESARROLLADOR') {
+        return handleCORS(NextResponse.json({ error: 'Forbidden' }, { status: 403 }))
+      }
+      
+      const { userId, planId, autoRenew } = body
+      
+      // Get plan details
+      const { data: plan } = await supabase.from('plans').select('*').eq('id', planId).single()
+      if (!plan) return handleCORS(NextResponse.json({ error: 'Plan not found' }, { status: 404 }))
+      
+      // Deactivate current plan
+      await supabase.from('user_plans').update({ is_active: false }).eq('user_id', userId).eq('is_active', true)
+      
+      // Calculate end date
+      const startDate = new Date()
+      const endDate = new Date(startDate.getTime() + plan.duration_days * 24 * 60 * 60 * 1000)
+      
+      const { data, error } = await supabase
+        .from('user_plans')
+        .insert({
+          user_id: userId,
+          plan_id: planId,
+          start_date: startDate.toISOString(),
+          end_date: endDate.toISOString(),
+          auto_renew: autoRenew || false
+        })
+        .select('*, plans(*)')
+        .single()
+      
+      if (error) return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
+      return handleCORS(NextResponse.json(data))
+    }
+
+    // Admin: Update info content
+    if (pathStr === 'admin/info-content') {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+      
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+      if (profile?.role !== 'DESARROLLADOR') {
+        return handleCORS(NextResponse.json({ error: 'Forbidden' }, { status: 403 }))
+      }
+      
+      const { data, error } = await supabase
+        .from('info_content')
+        .upsert(body)
+        .select()
+        .single()
+      
+      if (error) return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
+      return handleCORS(NextResponse.json(data))
+    }
+
+    return handleCORS(NextResponse.json({ error: 'Not found' }, { status: 404 }))
+
+  } catch (error) {
+    console.error('API Error:', error)
+    return handleCORS(NextResponse.json({ error: error.message }, { status: 500 }))
+  }
+}
+
+export async function PUT(request, { params }) {
+  const path = params?.path || []
+  const pathStr = path.join('/')
+  const supabase = createSupabaseServer()
+
+  try {
+    const body = await request.json()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+
+    // Update profile
+    if (pathStr === 'profile') {
+      const { data, error } = await supabase
+        .from('profiles')
+        .update(body)
+        .eq('id', user.id)
+        .select()
+        .single()
+      
+      if (error) return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
+      return handleCORS(NextResponse.json(data))
+    }
+
+    // Update category
+    if (pathStr.startsWith('categories/')) {
+      const id = path[1]
+      const { data, error } = await supabase
+        .from('categories')
+        .update(body)
+        .eq('id', id)
+        .eq('user_id', user.id)
+        .select()
+        .single()
+      
+      if (error) return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
+      return handleCORS(NextResponse.json(data))
+    }
+
+    // Update product
+    if (pathStr.startsWith('products/')) {
+      const id = path[1]
+      const { data, error } = await supabase
+        .from('products')
+        .update(body)
+        .eq('id', id)
+        .eq('user_id', user.id)
+        .select()
+        .single()
+      
+      if (error) return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
+      return handleCORS(NextResponse.json(data))
+    }
+
+    // Update checkout field
+    if (pathStr.startsWith('checkout-fields/')) {
+      const id = path[1]
+      const { data, error } = await supabase
+        .from('checkout_fields')
+        .update(body)
+        .eq('id', id)
+        .eq('user_id', user.id)
+        .select()
+        .single()
+      
+      if (error) return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
+      return handleCORS(NextResponse.json(data))
+    }
+
+    // Update order status
+    if (pathStr.startsWith('orders/')) {
+      const id = path[1]
+      const { data, error } = await supabase
+        .from('orders')
+        .update(body)
+        .eq('id', id)
+        .eq('user_id', user.id)
+        .select()
+        .single()
+      
+      if (error) return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
+      return handleCORS(NextResponse.json(data))
+    }
+
+    return handleCORS(NextResponse.json({ error: 'Not found' }, { status: 404 }))
+
+  } catch (error) {
+    console.error('API Error:', error)
+    return handleCORS(NextResponse.json({ error: error.message }, { status: 500 }))
+  }
+}
+
+export async function DELETE(request, { params }) {
+  const path = params?.path || []
+  const pathStr = path.join('/')
+  const supabase = createSupabaseServer()
+
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+
+    // Delete category
+    if (pathStr.startsWith('categories/')) {
+      const id = path[1]
+      const { error } = await supabase
+        .from('categories')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user.id)
+      
+      if (error) return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
+      return handleCORS(NextResponse.json({ success: true }))
+    }
+
+    // Delete product
+    if (pathStr.startsWith('products/')) {
+      const id = path[1]
+      const { error } = await supabase
+        .from('products')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user.id)
+      
+      if (error) return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
+      return handleCORS(NextResponse.json({ success: true }))
+    }
+
+    // Delete checkout field
+    if (pathStr.startsWith('checkout-fields/')) {
+      const id = path[1]
+      const { error } = await supabase
+        .from('checkout_fields')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user.id)
+      
+      if (error) return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
+      return handleCORS(NextResponse.json({ success: true }))
+    }
+
+    // Admin: Delete user
+    if (pathStr.startsWith('admin/users/')) {
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+      if (profile?.role !== 'DESARROLLADOR') {
+        return handleCORS(NextResponse.json({ error: 'Forbidden' }, { status: 403 }))
+      }
+      
+      const userId = path[2]
+      const { error } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', userId)
+      
+      if (error) return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
+      return handleCORS(NextResponse.json({ success: true }))
+    }
+
+    return handleCORS(NextResponse.json({ error: 'Not found' }, { status: 404 }))
+
+  } catch (error) {
+    console.error('API Error:', error)
+    return handleCORS(NextResponse.json({ error: error.message }, { status: 500 }))
+  }
+}
