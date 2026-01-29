@@ -108,7 +108,15 @@ export default function AdminPanel({ user, profile, onLogout }) {
     const res = await fetch('/api/info-content')
     if (res.ok) {
       const data = await res.json()
+      setAllInfoContent(data || [])
       setInfoContent(data[0] || { title: '', link_url: '', description: '' })
+    }
+  }
+
+  const loadSentMessages = async () => {
+    const res = await fetch('/api/admin/messages-list')
+    if (res.ok) {
+      setSentMessages(await res.json())
     }
   }
 
