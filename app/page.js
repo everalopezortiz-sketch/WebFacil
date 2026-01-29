@@ -12,8 +12,8 @@ import { toast } from 'sonner'
 import { Loader2, Store, User, Utensils, Eye, EyeOff } from 'lucide-react'
 
 // Dashboard imports
-import Dashboard from './components/Dashboard'
-import AdminPanel from './components/AdminPanel'
+import Dashboard from '@/app/components/Dashboard'
+import AdminPanel from '@/app/components/AdminPanel'
 
 export default function App() {
   const [user, setUser] = useState(null)
