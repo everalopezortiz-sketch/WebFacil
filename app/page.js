@@ -85,6 +85,18 @@ export default function App() {
     setAuthLoading(true)
     
     try {
+      // Use Supabase client directly for proper session handling
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: loginForm.email,
+        password: loginForm.password
+      })
+      
+      if (authError) {
+        toast.error(authError.message || 'Error al iniciar sesión')
+        return
+      }
+      
+      // Fetch profile using API (which uses admin client)
       const res = await fetch('/api/auth/signin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -94,12 +106,12 @@ export default function App() {
       const data = await res.json()
       
       if (!res.ok) {
-        toast.error(data.error || 'Error al iniciar sesión')
+        toast.error(data.error || 'Error al obtener perfil')
         return
       }
       
       toast.success('¡Bienvenido de nuevo!')
-      setUser(data.user)
+      setUser(authData.user)
       setProfile(data.profile)
     } catch (error) {
       toast.error('Error de conexión')
