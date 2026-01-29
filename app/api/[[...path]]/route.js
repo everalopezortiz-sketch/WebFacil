@@ -529,12 +529,12 @@ export async function POST(request, { params }) {
       return handleCORS(NextResponse.json(data))
     }
 
-    // Create category
+    // Create category - use admin client
     if (pathStr === 'categories') {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
       
-      const { data, error } = await supabase
+      const { data, error } = await supabaseAdmin
         .from('categories')
         .insert({ ...body, user_id: user.id })
         .select()
@@ -544,14 +544,20 @@ export async function POST(request, { params }) {
       return handleCORS(NextResponse.json(data))
     }
 
-    // Create product
+    // Create product - use admin client
     if (pathStr === 'products') {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
       
-      const { data, error } = await supabase
+      // Clean category_id if it's 'none'
+      const productData = { ...body, user_id: user.id }
+      if (productData.category_id === 'none' || productData.category_id === '') {
+        productData.category_id = null
+      }
+      
+      const { data, error } = await supabaseAdmin
         .from('products')
-        .insert({ ...body, user_id: user.id })
+        .insert(productData)
         .select()
         .single()
       
