@@ -82,7 +82,7 @@ export default function AdminPanel({ user, profile, onLogout }) {
   const loadData = async () => {
     setLoading(true)
     try {
-      await Promise.all([loadUsers(), loadPlans(), loadInfoContent()])
+      await Promise.all([loadUsers(), loadPlans(), loadInfoContent(), loadSentMessages()])
     } catch (error) {
       console.error('Error loading data:', error)
     } finally {
