@@ -1169,62 +1169,116 @@ export default function Dashboard({ user, profile, onLogout }) {
 
       {/* Checkout Field Dialog */}
       <Dialog open={fieldDialog.open} onOpenChange={(open) => setFieldDialog({ ...fieldDialog, open })}>
-        <DialogContent>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>{fieldDialog.data?.id ? 'Editar' : 'Nuevo'} Campo</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>Nombre del campo (interno)</Label>
-              <Input
-                placeholder="direccion_entrega"
-                value={fieldDialog.data?.field_name || ''}
-                onChange={(e) => setFieldDialog({ ...fieldDialog, data: { ...fieldDialog.data, field_name: e.target.value.toLowerCase().replace(/\s/g, '_') } })}
-              />
+          <ScrollArea className="max-h-[70vh]">
+            <div className="space-y-4 p-1">
+              <div>
+                <Label>Nombre del campo (interno)</Label>
+                <Input
+                  placeholder="direccion_entrega"
+                  value={fieldDialog.data?.field_name || ''}
+                  onChange={(e) => setFieldDialog({ ...fieldDialog, data: { ...fieldDialog.data, field_name: e.target.value.toLowerCase().replace(/\s/g, '_') } })}
+                />
+              </div>
+              <div>
+                <Label>Etiqueta (visible al cliente)</Label>
+                <Input
+                  placeholder="Dirección de entrega"
+                  value={fieldDialog.data?.field_label || ''}
+                  onChange={(e) => setFieldDialog({ ...fieldDialog, data: { ...fieldDialog.data, field_label: e.target.value } })}
+                />
+              </div>
+              <div>
+                <Label>Tipo de campo</Label>
+                <Select
+                  value={fieldDialog.data?.field_type || 'text'}
+                  onValueChange={(v) => {
+                    const newData = { ...fieldDialog.data, field_type: v }
+                    // Initialize options for select type
+                    if (v === 'select' && (!newData.options || newData.options.length < 2)) {
+                      newData.options = ['Opción 1', 'Opción 2']
+                    }
+                    setFieldDialog({ ...fieldDialog, data: newData })
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="text">Texto</SelectItem>
+                    <SelectItem value="email">Email</SelectItem>
+                    <SelectItem value="phone">Teléfono</SelectItem>
+                    <SelectItem value="number">Número</SelectItem>
+                    <SelectItem value="textarea">Área de texto</SelectItem>
+                    <SelectItem value="select">Selección Múltiple</SelectItem>
+                    <SelectItem value="checkbox">Casilla</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              {/* Options for Select type */}
+              {fieldDialog.data?.field_type === 'select' && (
+                <div className="space-y-2">
+                  <Label>Opciones de selección</Label>
+                  <p className="text-xs text-muted-foreground">El cliente podrá elegir una o varias opciones</p>
+                  {(fieldDialog.data?.options || ['Opción 1', 'Opción 2']).map((option, idx) => (
+                    <div key={idx} className="flex gap-2">
+                      <Input
+                        value={option}
+                        onChange={(e) => {
+                          const newOptions = [...(fieldDialog.data?.options || ['Opción 1', 'Opción 2'])]
+                          newOptions[idx] = e.target.value
+                          setFieldDialog({ ...fieldDialog, data: { ...fieldDialog.data, options: newOptions } })
+                        }}
+                        placeholder={`Opción ${idx + 1}`}
+                      />
+                      {(fieldDialog.data?.options || []).length > 2 && (
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          onClick={() => {
+                            const newOptions = [...(fieldDialog.data?.options || [])]
+                            newOptions.splice(idx, 1)
+                            setFieldDialog({ ...fieldDialog, data: { ...fieldDialog.data, options: newOptions } })
+                          }}
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      const newOptions = [...(fieldDialog.data?.options || ['Opción 1', 'Opción 2']), `Opción ${(fieldDialog.data?.options || []).length + 1}`]
+                      setFieldDialog({ ...fieldDialog, data: { ...fieldDialog.data, options: newOptions } })
+                    }}
+                  >
+                    <Plus className="w-4 h-4 mr-2" /> Agregar opción
+                  </Button>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={fieldDialog.data?.is_required || false}
+                  onCheckedChange={(v) => setFieldDialog({ ...fieldDialog, data: { ...fieldDialog.data, is_required: v } })}
+                />
+                <Label>Campo requerido</Label>
+              </div>
+              <div className="flex justify-end gap-2 pt-4">
+                <Button variant="outline" onClick={() => setFieldDialog({ open: false, data: null })}>Cancelar</Button>
+                <Button onClick={() => saveCheckoutField(fieldDialog.data)} disabled={saving}>
+                  {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                  Guardar
+                </Button>
+              </div>
             </div>
-            <div>
-              <Label>Etiqueta (visible al cliente)</Label>
-              <Input
-                placeholder="Dirección de entrega"
-                value={fieldDialog.data?.field_label || ''}
-                onChange={(e) => setFieldDialog({ ...fieldDialog, data: { ...fieldDialog.data, field_label: e.target.value } })}
-              />
-            </div>
-            <div>
-              <Label>Tipo de campo</Label>
-              <Select
-                value={fieldDialog.data?.field_type || 'text'}
-                onValueChange={(v) => setFieldDialog({ ...fieldDialog, data: { ...fieldDialog.data, field_type: v } })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="text">Texto</SelectItem>
-                  <SelectItem value="email">Email</SelectItem>
-                  <SelectItem value="phone">Teléfono</SelectItem>
-                  <SelectItem value="number">Número</SelectItem>
-                  <SelectItem value="textarea">Área de texto</SelectItem>
-                  <SelectItem value="select">Selección</SelectItem>
-                  <SelectItem value="checkbox">Casilla</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-center gap-2">
-              <Switch
-                checked={fieldDialog.data?.is_required || false}
-                onCheckedChange={(v) => setFieldDialog({ ...fieldDialog, data: { ...fieldDialog.data, is_required: v } })}
-              />
-              <Label>Campo requerido</Label>
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setFieldDialog({ open: false, data: null })}>Cancelar</Button>
-              <Button onClick={() => saveCheckoutField(fieldDialog.data)} disabled={saving}>
-                {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                Guardar
-              </Button>
-            </div>
-          </div>
+          </ScrollArea>
         </DialogContent>
       </Dialog>
     </div>
