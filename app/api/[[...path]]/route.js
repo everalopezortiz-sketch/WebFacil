@@ -757,6 +757,7 @@ export async function PUT(request, { params }) {
   const path = params?.path || []
   const pathStr = path.join('/')
   const supabase = createSupabaseServer()
+  const supabaseAdmin = createSupabaseAdmin()
 
   try {
     const body = await request.json()
@@ -765,7 +766,7 @@ export async function PUT(request, { params }) {
 
     // Update profile
     if (pathStr === 'profile') {
-      const { data, error } = await supabase
+      const { data, error } = await supabaseAdmin
         .from('profiles')
         .update(body)
         .eq('id', user.id)
@@ -779,7 +780,7 @@ export async function PUT(request, { params }) {
     // Update category
     if (pathStr.startsWith('categories/')) {
       const id = path[1]
-      const { data, error } = await supabase
+      const { data, error } = await supabaseAdmin
         .from('categories')
         .update(body)
         .eq('id', id)
@@ -794,15 +795,24 @@ export async function PUT(request, { params }) {
     // Update product
     if (pathStr.startsWith('products/')) {
       const id = path[1]
-      const { data, error } = await supabase
+      // Clean category_id if it's 'none'
+      const productData = { ...body }
+      if (productData.category_id === 'none' || productData.category_id === '') {
+        productData.category_id = null
+      }
+      
+      const { data, error } = await supabaseAdmin
         .from('products')
-        .update(body)
+        .update(productData)
         .eq('id', id)
         .eq('user_id', user.id)
         .select()
         .single()
       
-      if (error) return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
+      if (error) {
+        console.error('Product update error:', error)
+        return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
+      }
       return handleCORS(NextResponse.json(data))
     }
 
