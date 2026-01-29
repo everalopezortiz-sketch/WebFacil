@@ -578,6 +578,79 @@ export default function Dashboard({ user, profile, onLogout }) {
                     </p>
                   </div>
 
+                  {/* Additional sections for personal pages */}
+                  {profile.business_type === 'personal' && (
+                    <div className="border-t pt-4 space-y-4">
+                      <Label className="text-base font-semibold">Secciones Adicionales</Label>
+                      <p className="text-sm text-muted-foreground">Agrega más información a tu página personal</p>
+                      
+                      <div>
+                        <Label>Sobre Mí</Label>
+                        <Textarea
+                          placeholder="Cuéntanos sobre ti, tu experiencia..."
+                          value={settings?.about_me || ''}
+                          onChange={(e) => setSettings({ ...settings, about_me: e.target.value })}
+                          rows={4}
+                        />
+                      </div>
+                      
+                      <div>
+                        <Label>Experiencia / Trayectoria</Label>
+                        <Textarea
+                          placeholder="Tu experiencia profesional..."
+                          value={settings?.experience || ''}
+                          onChange={(e) => setSettings({ ...settings, experience: e.target.value })}
+                          rows={4}
+                        />
+                      </div>
+                      
+                      <div>
+                        <Label>Habilidades / Especialidades</Label>
+                        <Textarea
+                          placeholder="Lista tus habilidades principales..."
+                          value={settings?.skills || ''}
+                          onChange={(e) => setSettings({ ...settings, skills: e.target.value })}
+                          rows={3}
+                        />
+                      </div>
+                      
+                      <div>
+                        <Label>Información de Contacto Adicional</Label>
+                        <Textarea
+                          placeholder="Horarios, redes sociales, etc..."
+                          value={settings?.contact_info || ''}
+                          onChange={(e) => setSettings({ ...settings, contact_info: e.target.value })}
+                          rows={3}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Additional info for ecommerce/restaurant */}
+                  {(profile.business_type === 'ecommerce' || profile.business_type === 'restaurant') && (
+                    <div className="border-t pt-4 space-y-4">
+                      <div>
+                        <Label>Horario de Atención</Label>
+                        <Textarea
+                          placeholder="Lun-Vie: 9am-6pm&#10;Sáb: 9am-1pm"
+                          value={settings?.business_hours || ''}
+                          onChange={(e) => setSettings({ ...settings, business_hours: e.target.value })}
+                          rows={3}
+                        />
+                      </div>
+                      
+                      <div>
+                        <Label>Políticas de Envío/Entrega</Label>
+                        <Textarea
+                          placeholder="Información sobre entregas, tiempos, zonas..."
+                          value={settings?.shipping_info || ''}
+                          onChange={(e) => setSettings({ ...settings, shipping_info: e.target.value })}
+                          rows={3}
+                        />
+                      </div>
+                    </div>
+                  )}
+
                   <div>
                     <Label>Moneda</Label>
                     <Select
