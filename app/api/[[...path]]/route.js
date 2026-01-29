@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
+import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { v4 as uuidv4 } from 'uuid'
 
-// Create Supabase client for server-side operations
+// Create Supabase client for server-side operations (with user context)
 function createSupabaseServer() {
   const cookieStore = cookies()
   return createServerClient(
@@ -24,6 +25,20 @@ function createSupabaseServer() {
           }
         },
       },
+    }
+  )
+}
+
+// Create Supabase Admin client (bypasses RLS)
+function createSupabaseAdmin() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
     }
   )
 }
