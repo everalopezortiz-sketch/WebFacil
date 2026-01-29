@@ -689,6 +689,29 @@ export async function POST(request, { params }) {
       return handleCORS(NextResponse.json(data))
     }
 
+    // Admin: Update plan
+    if (pathStr === 'admin/plans/update') {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+      
+      const { data: profile } = await supabaseAdmin.from('profiles').select('role').eq('id', user.id).single()
+      if (profile?.role !== 'DESARROLLADOR') {
+        return handleCORS(NextResponse.json({ error: 'Forbidden' }, { status: 403 }))
+      }
+      
+      const { id, name, duration_days, price, is_active } = body
+      
+      const { data, error } = await supabaseAdmin
+        .from('plans')
+        .update({ name, duration_days, price, is_active })
+        .eq('id', id)
+        .select()
+        .single()
+      
+      if (error) return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
+      return handleCORS(NextResponse.json(data))
+    }
+
     // Admin: Update info content
     if (pathStr === 'admin/info-content') {
       const { data: { user } } = await supabase.auth.getUser()
