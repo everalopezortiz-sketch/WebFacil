@@ -6,7 +6,7 @@ Debug specific API failures
 import requests
 import json
 
-BASE_URL = "https://websaas-maker.preview.emergentagent.com/api"
+BASE_URL = "https://sitehub-47.preview.emergentagent.com/api"
 
 USER_CREDENTIALS = {
     "email": "testuser@test.com", 
