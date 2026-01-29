@@ -38,7 +38,7 @@ export default function AdminPanel({ user, profile, onLogout }) {
   
   // Filters
   const [searchQuery, setSearchQuery] = useState('')
-  const [typeFilter, setTypeFilter] = useState('')
+  const [typeFilter, setTypeFilter] = useState('all')
   
   // Dialogs
   const [userDialog, setUserDialog] = useState({ open: false, user: null })
