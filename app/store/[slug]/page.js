@@ -17,7 +17,7 @@ import {
   ShoppingCart, Plus, Minus, Trash2, X, ArrowLeft,
   Phone, MapPin, Store, User, Utensils, Loader2,
   MessageCircle, CreditCard, QrCode, Building, ExternalLink,
-  Star, Tag, Truck, AlertTriangle, Banknote, Link2, Check
+  Star, Tag, Truck, AlertTriangle, Banknote, Link2, Check, Search
 } from 'lucide-react'
 
 const CURRENCIES = {
@@ -57,6 +57,7 @@ export default function StorePage() {
   const [checkoutOpen, setCheckoutOpen] = useState(false)
   const [checkoutLoading, setCheckoutLoading] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState('all')
+  const [searchQuery, setSearchQuery] = useState('')
   const [checkoutData, setCheckoutData] = useState({})
   const [productDetail, setProductDetail] = useState(null)
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('')
@@ -142,14 +143,27 @@ export default function StorePage() {
     return parseFloat(product.price)
   }
 
-  // Filter products
+  // Filter products by category and search
   const filteredProducts = useMemo(() => {
     if (!products) return []
-    if (selectedCategory === 'all') return products
-    if (selectedCategory === 'featured') return products.filter(p => p.is_featured)
-    if (selectedCategory === 'promo') return products.filter(p => p.promo_active)
-    return products.filter(p => p.category_id === selectedCategory)
-  }, [products, selectedCategory])
+    let filtered = [...products]
+    
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim()
+      filtered = filtered.filter(p => 
+        p.name.toLowerCase().includes(query) ||
+        (p.description && p.description.toLowerCase().includes(query)) ||
+        (p.categories?.name && p.categories.name.toLowerCase().includes(query))
+      )
+    }
+    
+    // Apply category filter
+    if (selectedCategory === 'all') return filtered
+    if (selectedCategory === 'featured') return filtered.filter(p => p.is_featured)
+    if (selectedCategory === 'promo') return filtered.filter(p => p.promo_active)
+    return filtered.filter(p => p.category_id === selectedCategory)
+  }, [products, selectedCategory, searchQuery])
 
   const featuredProducts = useMemo(() => {
     return products?.filter(p => p.is_featured) || []
@@ -457,6 +471,29 @@ export default function StorePage() {
       )}
 
       <main className="container mx-auto px-4 py-8">
+        {/* Search Bar */}
+        <div className="mb-8">
+          <div className="relative max-w-md mx-auto">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <Input
+              placeholder="Buscar productos..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-12 h-12 rounded-full border-2 bg-white/80 backdrop-blur focus:border-blue-400 shadow-lg"
+            />
+            {searchQuery && (
+              <Button
+                size="icon"
+                variant="ghost"
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full"
+                onClick={() => setSearchQuery('')}
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            )}
+          </div>
+        </div>
+
         {/* Featured Section */}
         {featuredProducts.length > 0 && (
           <section className="mb-10">
