@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -21,7 +21,13 @@ export default function App() {
   const [loading, setLoading] = useState(true)
   const [authLoading, setAuthLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
-  const [supabase] = useState(() => createClient())
+  const supabaseRef = useRef(null)
+  
+  // Get software settings from localStorage
+  const [softwareSettings, setSoftwareSettings] = useState({
+    name: 'WebBuilder',
+    logo_url: ''
+  })
 
   // Auth form state
   const [loginForm, setLoginForm] = useState({ email: '', password: '' })
@@ -36,6 +42,22 @@ export default function App() {
     businessType: 'ecommerce'
   })
 
+  // Initialize Supabase client once
+  if (!supabaseRef.current) {
+    supabaseRef.current = createClient()
+  }
+  const supabase = supabaseRef.current
+
+  // Load software settings
+  useEffect(() => {
+    const saved = localStorage.getItem('softwareSettings')
+    if (saved) {
+      try {
+        setSoftwareSettings(JSON.parse(saved))
+      } catch (e) {}
+    }
+  }, [])
+
   const fetchProfile = useCallback(async (userId) => {
     try {
       const res = await fetch('/api/auth/user')
@@ -43,42 +65,66 @@ export default function App() {
         const data = await res.json()
         if (data.profile) {
           setProfile(data.profile)
+          return data.profile
         }
       }
     } catch (error) {
       console.error('Profile fetch error:', error)
     }
+    return null
   }, [])
 
   useEffect(() => {
     let isMounted = true
     
-    const checkAuth = async () => {
+    const initAuth = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession()
-        if (isMounted && session?.user) {
+        // Get initial session
+        const { data: { session }, error } = await supabase.auth.getSession()
+        
+        if (error) {
+          console.error('Session error:', error)
+          if (isMounted) setLoading(false)
+          return
+        }
+        
+        if (session?.user && isMounted) {
           setUser(session.user)
-          await fetchProfile(session.user.id)
+          const profileData = await fetchProfile(session.user.id)
+          if (!profileData && isMounted) {
+            // If no profile, sign out
+            await supabase.auth.signOut()
+            setUser(null)
+            setProfile(null)
+          }
         }
       } catch (error) {
-        console.error('Auth check error:', error)
+        console.error('Auth init error:', error)
       } finally {
         if (isMounted) setLoading(false)
       }
     }
 
-    checkAuth()
+    initAuth()
     
+    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!isMounted) return
-      if (session?.user) {
-        setUser(session.user)
-        await fetchProfile(session.user.id)
-      } else {
+      
+      console.log('Auth event:', event)
+      
+      if (event === 'SIGNED_OUT') {
         setUser(null)
         setProfile(null)
+        return
       }
-      setLoading(false)
+      
+      if (session?.user) {
+        setUser(session.user)
+        if (!profile) {
+          await fetchProfile(session.user.id)
+        }
+      }
     })
 
     return () => {
@@ -99,9 +145,11 @@ export default function App() {
       
       if (authError) {
         toast.error(authError.message || 'Error al iniciar sesión')
+        setAuthLoading(false)
         return
       }
       
+      // Get profile from API
       const res = await fetch('/api/auth/signin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -112,6 +160,7 @@ export default function App() {
       
       if (!res.ok) {
         toast.error(data.error || 'Error al obtener perfil')
+        setAuthLoading(false)
         return
       }
       
@@ -119,6 +168,7 @@ export default function App() {
       setUser(authData.user)
       setProfile(data.profile)
     } catch (error) {
+      console.error('Login error:', error)
       toast.error('Error de conexión')
     } finally {
       setAuthLoading(false)
@@ -140,20 +190,21 @@ export default function App() {
       
       if (!res.ok) {
         toast.error(data.error || 'Error al registrarse')
+        setAuthLoading(false)
         return
       }
       
       toast.success('¡Cuenta creada exitosamente!')
-      setLoginForm({ email: registerForm.email, password: registerForm.password })
       
       // Auto login
-      const { data: authData } = await supabase.auth.signInWithPassword({
+      const { data: authData, error } = await supabase.auth.signInWithPassword({
         email: registerForm.email,
         password: registerForm.password
       })
       
-      if (authData?.user) {
+      if (!error && authData?.user) {
         setUser(authData.user)
+        // Fetch profile
         const profileRes = await fetch('/api/auth/signin', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -170,11 +221,14 @@ export default function App() {
   }
 
   const handleLogout = async () => {
-    await fetch('/api/auth/signout', { method: 'POST' })
-    await supabase.auth.signOut()
-    setUser(null)
-    setProfile(null)
-    toast.success('Sesión cerrada')
+    try {
+      await supabase.auth.signOut()
+      setUser(null)
+      setProfile(null)
+      toast.success('Sesión cerrada')
+    } catch (error) {
+      console.error('Logout error:', error)
+    }
   }
 
   if (loading) {
@@ -199,10 +253,18 @@ export default function App() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-primary rounded-2xl mb-4 shadow-lg">
-            <Store className="w-8 h-8 text-primary-foreground" />
-          </div>
-          <h1 className="text-3xl font-bold text-foreground">WebBuilder</h1>
+          {softwareSettings.logo_url ? (
+            <img 
+              src={softwareSettings.logo_url} 
+              alt="Logo" 
+              className="w-16 h-16 mx-auto mb-4 object-contain"
+            />
+          ) : (
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-primary rounded-2xl mb-4 shadow-lg">
+              <Store className="w-8 h-8 text-primary-foreground" />
+            </div>
+          )}
+          <h1 className="text-3xl font-bold text-foreground">{softwareSettings.name || 'WebBuilder'}</h1>
           <p className="text-muted-foreground mt-2">Crea tu página web en minutos</p>
         </div>
 
