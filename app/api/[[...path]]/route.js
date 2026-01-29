@@ -357,7 +357,12 @@ export async function POST(request, { params }) {
   const supabaseAdmin = createSupabaseAdmin()
 
   try {
-    const body = await request.json()
+    let body = {}
+    try {
+      body = await request.json()
+    } catch (e) {
+      // Body might be empty for some requests like signout
+    }
 
     // Sign up
     if (pathStr === 'auth/signup') {
