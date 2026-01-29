@@ -471,6 +471,13 @@ export default function StorePage() {
       )}
 
       <main className="container mx-auto px-4 py-8">
+        {/* Store Description */}
+        {settings?.store_description && (
+          <div className="mb-8 text-center max-w-2xl mx-auto">
+            <p className="text-gray-600 leading-relaxed">{settings.store_description}</p>
+          </div>
+        )}
+
         {/* Search Bar */}
         <div className="mb-8">
           <div className="relative max-w-md mx-auto">
