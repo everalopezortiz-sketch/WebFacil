@@ -407,6 +407,34 @@ export default function Dashboard({ user, profile, onLogout }) {
                       onChange={(e) => setSettings({ ...settings, logo_url: e.target.value })}
                     />
                   </div>
+                  <div>
+                    <Label>Imagen de Portada (URL)</Label>
+                    <Input
+                      placeholder="https://ejemplo.com/cover.jpg"
+                      value={settings?.cover_image_url || ''}
+                      onChange={(e) => setSettings({ ...settings, cover_image_url: e.target.value })}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Imagen que aparecerá en la parte superior de tu tienda</p>
+                  </div>
+                  <div>
+                    <Label>Patrón de Fondo</Label>
+                    <Select
+                      value={settings?.bg_pattern || 'dots'}
+                      onValueChange={(v) => setSettings({ ...settings, bg_pattern: v })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Sin patrón</SelectItem>
+                        <SelectItem value="dots">Puntos</SelectItem>
+                        <SelectItem value="lines">Líneas</SelectItem>
+                        <SelectItem value="waves">Ondas</SelectItem>
+                        <SelectItem value="zigzag">Zigzag</SelectItem>
+                        <SelectItem value="circuit">Circuito</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <div className="grid grid-cols-3 gap-4">
                     <div>
                       <Label>Color de fondo</Label>
