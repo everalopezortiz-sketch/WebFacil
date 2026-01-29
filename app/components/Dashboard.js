@@ -151,12 +151,16 @@ export default function Dashboard({ user, profile, onLogout }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(settings)
       })
+      const data = await res.json()
       if (res.ok) {
+        setSettings(data) // Update with returned data
         toast.success('Configuración guardada')
       } else {
-        toast.error('Error al guardar')
+        console.error('Settings error:', data)
+        toast.error(data.error || 'Error al guardar')
       }
     } catch (error) {
+      console.error('Settings save error:', error)
       toast.error('Error de conexión')
     } finally {
       setSaving(false)
@@ -204,12 +208,17 @@ export default function Dashboard({ user, profile, onLogout }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
       })
+      const result = await res.json()
       if (res.ok) {
         toast.success(isEdit ? 'Actualizado' : 'Creado')
         loadProducts()
         setProductDialog({ open: false, data: null })
+      } else {
+        console.error('Product save error:', result)
+        toast.error(result.error || 'Error al guardar')
       }
     } catch (error) {
+      console.error('Product save error:', error)
       toast.error('Error al guardar')
     } finally {
       setSaving(false)
