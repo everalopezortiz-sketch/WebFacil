@@ -507,18 +507,25 @@ export async function POST(request, { params }) {
       return handleCORS(NextResponse.json({ message: 'Signed out' }))
     }
 
-    // Update settings
+    // Update settings - use admin client to bypass RLS
     if (pathStr === 'settings') {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
       
-      const { data, error } = await supabase
+      // Remove any undefined or null values and ensure user_id
+      const cleanBody = { ...body, user_id: user.id }
+      delete cleanBody.id // Don't try to update the id
+      
+      const { data, error } = await supabaseAdmin
         .from('user_settings')
-        .upsert({ ...body, user_id: user.id })
+        .upsert(cleanBody, { onConflict: 'user_id' })
         .select()
         .single()
       
-      if (error) return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
+      if (error) {
+        console.error('Settings update error:', error)
+        return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
+      }
       return handleCORS(NextResponse.json(data))
     }
 
