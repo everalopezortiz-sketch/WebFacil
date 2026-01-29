@@ -73,7 +73,7 @@ export default function AdminPanel({ user, profile, onLogout }) {
   const loadUsers = async () => {
     const params = new URLSearchParams()
     if (searchQuery) params.set('search', searchQuery)
-    if (typeFilter) params.set('type', typeFilter)
+    if (typeFilter && typeFilter !== 'all') params.set('type', typeFilter)
     
     const res = await fetch(`/api/admin/users?${params}`)
     if (res.ok) setUsers(await res.json())
