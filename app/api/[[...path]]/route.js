@@ -565,12 +565,12 @@ export async function POST(request, { params }) {
       return handleCORS(NextResponse.json(data))
     }
 
-    // Create checkout field
+    // Create checkout field - use admin client
     if (pathStr === 'checkout-fields') {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
       
-      const { data, error } = await supabase
+      const { data, error } = await supabaseAdmin
         .from('checkout_fields')
         .insert({ ...body, user_id: user.id })
         .select()
@@ -816,10 +816,10 @@ export async function PUT(request, { params }) {
       return handleCORS(NextResponse.json(data))
     }
 
-    // Update checkout field
+    // Update checkout field - use admin client
     if (pathStr.startsWith('checkout-fields/')) {
       const id = path[1]
-      const { data, error } = await supabase
+      const { data, error } = await supabaseAdmin
         .from('checkout_fields')
         .update(body)
         .eq('id', id)
@@ -831,10 +831,10 @@ export async function PUT(request, { params }) {
       return handleCORS(NextResponse.json(data))
     }
 
-    // Update order status
+    // Update order status - use admin client
     if (pathStr.startsWith('orders/')) {
       const id = path[1]
-      const { data, error } = await supabase
+      const { data, error } = await supabaseAdmin
         .from('orders')
         .update(body)
         .eq('id', id)
@@ -858,15 +858,16 @@ export async function DELETE(request, { params }) {
   const path = params?.path || []
   const pathStr = path.join('/')
   const supabase = createSupabaseServer()
+  const supabaseAdmin = createSupabaseAdmin()
 
   try {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
 
-    // Delete category
+    // Delete category - use admin client
     if (pathStr.startsWith('categories/')) {
       const id = path[1]
-      const { error } = await supabase
+      const { error } = await supabaseAdmin
         .from('categories')
         .delete()
         .eq('id', id)
@@ -876,10 +877,10 @@ export async function DELETE(request, { params }) {
       return handleCORS(NextResponse.json({ success: true }))
     }
 
-    // Delete product
+    // Delete product - use admin client
     if (pathStr.startsWith('products/')) {
       const id = path[1]
-      const { error } = await supabase
+      const { error } = await supabaseAdmin
         .from('products')
         .delete()
         .eq('id', id)
@@ -889,10 +890,10 @@ export async function DELETE(request, { params }) {
       return handleCORS(NextResponse.json({ success: true }))
     }
 
-    // Delete checkout field
+    // Delete checkout field - use admin client
     if (pathStr.startsWith('checkout-fields/')) {
       const id = path[1]
-      const { error } = await supabase
+      const { error } = await supabaseAdmin
         .from('checkout_fields')
         .delete()
         .eq('id', id)
@@ -902,15 +903,49 @@ export async function DELETE(request, { params }) {
       return handleCORS(NextResponse.json({ success: true }))
     }
 
-    // Admin: Delete user
+    // Delete support message - use admin client
+    if (pathStr.startsWith('admin/messages/')) {
+      const { data: profile } = await supabaseAdmin.from('profiles').select('role').eq('id', user.id).single()
+      if (profile?.role !== 'DESARROLLADOR') {
+        return handleCORS(NextResponse.json({ error: 'Forbidden' }, { status: 403 }))
+      }
+      
+      const messageId = path[2]
+      const { error } = await supabaseAdmin
+        .from('support_messages')
+        .delete()
+        .eq('id', messageId)
+      
+      if (error) return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
+      return handleCORS(NextResponse.json({ success: true }))
+    }
+
+    // Delete info content - use admin client
+    if (pathStr.startsWith('admin/info-content/')) {
+      const { data: profile } = await supabaseAdmin.from('profiles').select('role').eq('id', user.id).single()
+      if (profile?.role !== 'DESARROLLADOR') {
+        return handleCORS(NextResponse.json({ error: 'Forbidden' }, { status: 403 }))
+      }
+      
+      const contentId = path[2]
+      const { error } = await supabaseAdmin
+        .from('info_content')
+        .delete()
+        .eq('id', contentId)
+      
+      if (error) return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
+      return handleCORS(NextResponse.json({ success: true }))
+    }
+
+    // Admin: Delete user - use admin client
     if (pathStr.startsWith('admin/users/')) {
-      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+      const { data: profile } = await supabaseAdmin.from('profiles').select('role').eq('id', user.id).single()
       if (profile?.role !== 'DESARROLLADOR') {
         return handleCORS(NextResponse.json({ error: 'Forbidden' }, { status: 403 }))
       }
       
       const userId = path[2]
-      const { error } = await supabase
+      const { error } = await supabaseAdmin
         .from('profiles')
         .delete()
         .eq('id', userId)

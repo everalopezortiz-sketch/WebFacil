@@ -48,14 +48,34 @@ export default function App() {
   }
   const supabase = supabaseRef.current
 
-  // Load software settings
+  // Load software settings from localStorage AND fetch global settings from API
   useEffect(() => {
-    const saved = localStorage.getItem('softwareSettings')
-    if (saved) {
+    const loadSoftwareSettings = async () => {
+      // First try localStorage
+      const saved = localStorage.getItem('softwareSettings')
+      if (saved) {
+        try {
+          setSoftwareSettings(JSON.parse(saved))
+        } catch (e) {}
+      }
+      
+      // Also fetch from API for latest global settings (for non-admin users)
       try {
-        setSoftwareSettings(JSON.parse(saved))
-      } catch (e) {}
+        const res = await fetch('/api/global-settings')
+        if (res.ok) {
+          const data = await res.json()
+          if (data && (data.name || data.logo_url)) {
+            setSoftwareSettings(prev => ({
+              ...prev,
+              ...data
+            }))
+          }
+        }
+      } catch (e) {
+        console.log('Could not fetch global settings')
+      }
     }
+    loadSoftwareSettings()
   }, [])
 
   const fetchProfile = useCallback(async (userId) => {
