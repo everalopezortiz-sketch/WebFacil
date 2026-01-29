@@ -527,10 +527,32 @@ export default function Dashboard({ user, profile, onLogout }) {
               <Card>
                 <CardHeader>
                   <CardTitle className="text-lg">Métodos de Pago</CardTitle>
+                  <CardDescription>Activa o desactiva métodos de pago</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div>
-                    <Label>Cuenta Bancaria</Label>
+                  {/* Cash */}
+                  <div className="flex items-center justify-between p-3 border rounded-lg">
+                    <div>
+                      <Label>Efectivo</Label>
+                      <p className="text-sm text-muted-foreground">Pago en efectivo al momento de entrega</p>
+                    </div>
+                    <Switch
+                      checked={settings?.payment_cash_enabled || false}
+                      onCheckedChange={(v) => setSettings({ ...settings, payment_cash_enabled: v })}
+                    />
+                  </div>
+
+                  {/* Bank Transfer */}
+                  <div className="p-3 border rounded-lg space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label>Transferencia Bancaria</Label>
+                      </div>
+                      <Switch
+                        checked={settings?.payment_bank_enabled !== false && !!settings?.payment_bank_account}
+                        onCheckedChange={(v) => setSettings({ ...settings, payment_bank_enabled: v })}
+                      />
+                    </div>
                     <Textarea
                       placeholder="Banco: ...&#10;Cuenta: ...&#10;Titular: ..."
                       value={settings?.payment_bank_account || ''}
@@ -538,16 +560,36 @@ export default function Dashboard({ user, profile, onLogout }) {
                       rows={3}
                     />
                   </div>
-                  <div>
-                    <Label>Link de Pago (PayPal, MercadoPago, etc)</Label>
+
+                  {/* Payment Link */}
+                  <div className="p-3 border rounded-lg space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label>Link de Pago (PayPal, MercadoPago, etc)</Label>
+                      </div>
+                      <Switch
+                        checked={settings?.payment_link_enabled !== false && !!settings?.payment_link}
+                        onCheckedChange={(v) => setSettings({ ...settings, payment_link_enabled: v })}
+                      />
+                    </div>
                     <Input
                       placeholder="https://..."
                       value={settings?.payment_link || ''}
                       onChange={(e) => setSettings({ ...settings, payment_link: e.target.value })}
                     />
                   </div>
-                  <div>
-                    <Label>QR de Pago (URL de imagen)</Label>
+
+                  {/* QR Payment */}
+                  <div className="p-3 border rounded-lg space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label>QR de Pago</Label>
+                      </div>
+                      <Switch
+                        checked={settings?.payment_qr_enabled !== false && !!settings?.payment_qr_url}
+                        onCheckedChange={(v) => setSettings({ ...settings, payment_qr_enabled: v })}
+                      />
+                    </div>
                     <Input
                       placeholder="https://ejemplo.com/qr.png"
                       value={settings?.payment_qr_url || ''}
