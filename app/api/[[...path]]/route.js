@@ -353,6 +353,7 @@ export async function POST(request, { params }) {
   const path = params?.path || []
   const pathStr = path.join('/')
   const supabase = createSupabaseServer()
+  const supabaseAdmin = createSupabaseAdmin()
 
   try {
     const body = await request.json()
@@ -374,16 +375,16 @@ export async function POST(request, { params }) {
         return handleCORS(NextResponse.json({ error: authError.message }, { status: 400 }))
       }
       
-      // Check if this is the first user (make them admin)
-      const { count } = await supabase.from('profiles').select('*', { count: 'exact', head: true })
+      // Check if this is the first user (make them admin) - use admin client
+      const { count } = await supabaseAdmin.from('profiles').select('*', { count: 'exact', head: true })
       const role = count === 0 ? 'DESARROLLADOR' : 'USER'
       
       // Generate unique slug
       const baseSlug = `${firstName}-${lastName}`.toLowerCase().replace(/[^a-z0-9]/g, '-')
       const slug = `${baseSlug}-${Date.now().toString(36)}`
       
-      // Create profile
-      const { error: profileError } = await supabase.from('profiles').insert({
+      // Create profile using admin client (bypasses RLS)
+      const { error: profileError } = await supabaseAdmin.from('profiles').insert({
         id: authData.user.id,
         email,
         first_name: firstName,
@@ -393,27 +394,29 @@ export async function POST(request, { params }) {
         phone,
         business_type: businessType,
         role,
-        slug
+        slug,
+        is_active: true
       })
       
       if (profileError) {
+        console.error('Profile creation error:', profileError)
         return handleCORS(NextResponse.json({ error: profileError.message }, { status: 400 }))
       }
       
-      // Create default settings
-      await supabase.from('user_settings').insert({
+      // Create default settings using admin client
+      await supabaseAdmin.from('user_settings').insert({
         user_id: authData.user.id,
         currency: 'USD'
       })
       
-      // Create default checkout fields
+      // Create default checkout fields using admin client
       const defaultFields = [
         { user_id: authData.user.id, field_name: 'name', field_label: 'Nombre completo', field_type: 'text', is_required: true, display_order: 1 },
         { user_id: authData.user.id, field_name: 'phone', field_label: 'Teléfono', field_type: 'phone', is_required: true, display_order: 2 },
         { user_id: authData.user.id, field_name: 'email', field_label: 'Email', field_type: 'email', is_required: false, display_order: 3 },
         { user_id: authData.user.id, field_name: 'address', field_label: 'Dirección', field_type: 'textarea', is_required: false, display_order: 4 }
       ]
-      await supabase.from('checkout_fields').insert(defaultFields)
+      await supabaseAdmin.from('checkout_fields').insert(defaultFields)
       
       return handleCORS(NextResponse.json({ user: authData.user, role, message: 'Account created successfully' }))
     }
