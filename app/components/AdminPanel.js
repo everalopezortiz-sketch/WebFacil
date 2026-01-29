@@ -117,8 +117,21 @@ export default function AdminPanel({ user, profile, onLogout }) {
     }
   }
 
-  const saveSoftwareSettings = () => {
+  const saveSoftwareSettings = async () => {
+    // Save to localStorage for immediate use
     localStorage.setItem('softwareSettings', JSON.stringify(softwareSettings))
+    
+    // Also try to save to API for persistence across sessions/users
+    try {
+      await fetch('/api/admin/global-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(softwareSettings)
+      })
+    } catch (e) {
+      console.log('Could not save to API, using localStorage only')
+    }
+    
     toast.success('Configuración del software guardada')
   }
 
