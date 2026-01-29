@@ -431,7 +431,8 @@ export async function POST(request, { params }) {
         return handleCORS(NextResponse.json({ error: error.message }, { status: 401 }))
       }
       
-      let { data: profile } = await supabase
+      // Use admin client to get profile (bypasses RLS)
+      let { data: profile } = await supabaseAdmin
         .from('profiles')
         .select('*')
         .eq('id', data.user.id)
@@ -440,14 +441,14 @@ export async function POST(request, { params }) {
       // If profile doesn't exist (user created from Supabase dashboard), create it
       if (!profile) {
         // Check if this is the first user (make them admin)
-        const { count } = await supabase.from('profiles').select('*', { count: 'exact', head: true })
+        const { count } = await supabaseAdmin.from('profiles').select('*', { count: 'exact', head: true })
         const role = count === 0 ? 'DESARROLLADOR' : 'USER'
         
         // Generate unique slug
         const baseSlug = `user-${Date.now().toString(36)}`
         
-        // Create profile with default values
-        const { data: newProfile, error: profileError } = await supabase.from('profiles').insert({
+        // Create profile with default values using admin client
+        const { data: newProfile, error: profileError } = await supabaseAdmin.from('profiles').insert({
           id: data.user.id,
           email: data.user.email,
           first_name: data.user.user_metadata?.first_name || 'Usuario',
@@ -469,20 +470,20 @@ export async function POST(request, { params }) {
         
         profile = newProfile
         
-        // Create default settings
-        await supabase.from('user_settings').insert({
+        // Create default settings using admin client
+        await supabaseAdmin.from('user_settings').insert({
           user_id: data.user.id,
           currency: 'USD'
         })
         
-        // Create default checkout fields
+        // Create default checkout fields using admin client
         const defaultFields = [
           { user_id: data.user.id, field_name: 'name', field_label: 'Nombre completo', field_type: 'text', is_required: true, display_order: 1 },
           { user_id: data.user.id, field_name: 'phone', field_label: 'Teléfono', field_type: 'phone', is_required: true, display_order: 2 },
           { user_id: data.user.id, field_name: 'email', field_label: 'Email', field_type: 'email', is_required: false, display_order: 3 },
           { user_id: data.user.id, field_name: 'address', field_label: 'Dirección', field_type: 'textarea', is_required: false, display_order: 4 }
         ]
-        await supabase.from('checkout_fields').insert(defaultFields)
+        await supabaseAdmin.from('checkout_fields').insert(defaultFields)
       }
       
       // Check if account is disabled
