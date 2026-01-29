@@ -976,14 +976,41 @@ export default function StorePage() {
 }
 
 // Product Card Component
-function ProductCard({ product, onAdd, onDetail, formatPrice, getProductPrice, buttonColor }) {
+function ProductCard({ product, onAdd, onDetail, formatPrice, getProductPrice, buttonColor, cardSize = 'medium' }) {
+  // Size classes based on cardSize setting
+  const sizeClasses = {
+    small: {
+      image: 'aspect-square',
+      padding: 'p-3',
+      title: 'text-sm',
+      price: 'text-base',
+      button: 'text-xs py-1'
+    },
+    medium: {
+      image: 'aspect-square',
+      padding: 'p-4',
+      title: 'text-base',
+      price: 'text-lg',
+      button: 'text-sm py-2'
+    },
+    large: {
+      image: 'aspect-[4/3]',
+      padding: 'p-5',
+      title: 'text-lg',
+      price: 'text-xl',
+      button: 'text-base py-3'
+    }
+  }
+  
+  const sizes = sizeClasses[cardSize] || sizeClasses.medium
+
   return (
     <Card 
       className="overflow-hidden group cursor-pointer hover:shadow-xl transition-all duration-300 border-0 shadow-md bg-white"
       onClick={() => onDetail(product)}
     >
       {product.image_url ? (
-        <div className="aspect-square bg-gray-100 relative overflow-hidden">
+        <div className={`${sizes.image} bg-gray-100 relative overflow-hidden`}>
           <img 
             src={product.image_url} 
             alt={product.name}
@@ -999,30 +1026,30 @@ function ProductCard({ product, onAdd, onDetail, formatPrice, getProductPrice, b
           )}
         </div>
       ) : (
-        <div className="aspect-square bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
+        <div className={`${sizes.image} bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center`}>
           <Store className="w-12 h-12 text-gray-300" />
         </div>
       )}
-      <CardContent className="p-4">
-        <h3 className="font-semibold truncate">{product.name}</h3>
+      <CardContent className={sizes.padding}>
+        <h3 className={`font-semibold truncate ${sizes.title}`}>{product.name}</h3>
         {product.description && (
           <p className="text-sm text-gray-500 truncate mt-1">{product.description}</p>
         )}
         <div className="flex items-center gap-2 mt-2">
           {product.promo_active && product.promo_price ? (
             <>
-              <span className="font-bold text-lg text-red-600">{formatPrice(product.promo_price)}</span>
+              <span className={`font-bold text-red-600 ${sizes.price}`}>{formatPrice(product.promo_price)}</span>
               <span className="text-sm text-gray-400 line-through">{formatPrice(product.price)}</span>
             </>
           ) : (
-            <span className="font-bold text-lg">{formatPrice(product.price)}</span>
+            <span className={`font-bold ${sizes.price}`}>{formatPrice(product.price)}</span>
           )}
         </div>
       </CardContent>
-      <CardFooter className="p-4 pt-0">
+      <CardFooter className={`${sizes.padding} pt-0`}>
         <Button 
           size="sm" 
-          className="w-full rounded-xl text-white font-medium shadow-md hover:shadow-lg transition-shadow"
+          className={`w-full rounded-xl text-white font-medium shadow-md hover:shadow-lg transition-shadow ${sizes.button}`}
           onClick={(e) => { e.stopPropagation(); onAdd(product) }}
           style={{ backgroundColor: buttonColor }}
         >
