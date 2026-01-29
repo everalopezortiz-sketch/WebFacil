@@ -583,10 +583,11 @@ export default function StorePage() {
             <div className="text-center py-16 text-gray-500 bg-white/50 rounded-2xl">
               <Store className="w-16 h-16 mx-auto mb-4 opacity-30" />
               <p className="text-lg">No hay productos disponibles</p>
+              {searchQuery && <p className="text-sm mt-2">No se encontraron resultados para "{searchQuery}"</p>}
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-              {filteredProducts.map(product => (
+            <div className={`grid gap-4 ${getGridClasses()}`}>
+              {filteredProducts.slice(0, settings?.products_per_page || 20).map(product => (
                 <ProductCard 
                   key={product.id} 
                   product={product} 
@@ -595,11 +596,70 @@ export default function StorePage() {
                   formatPrice={formatPrice}
                   getProductPrice={getProductPrice}
                   buttonColor="var(--store-button)"
+                  cardSize={settings?.card_size || 'medium'}
                 />
               ))}
             </div>
           )}
         </section>
+
+        {/* Additional Sections for Personal Pages */}
+        {profile?.business_type === 'personal' && (settings?.about_me || settings?.experience || settings?.skills) && (
+          <section className="mt-12 space-y-8">
+            {settings?.about_me && (
+              <div className="bg-white/80 backdrop-blur rounded-2xl p-6 shadow-lg">
+                <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+                  <User className="w-5 h-5" /> Sobre Mí
+                </h3>
+                <p className="text-gray-600 whitespace-pre-line">{settings.about_me}</p>
+              </div>
+            )}
+            
+            {settings?.experience && (
+              <div className="bg-white/80 backdrop-blur rounded-2xl p-6 shadow-lg">
+                <h3 className="text-xl font-bold mb-4">Experiencia</h3>
+                <p className="text-gray-600 whitespace-pre-line">{settings.experience}</p>
+              </div>
+            )}
+            
+            {settings?.skills && (
+              <div className="bg-white/80 backdrop-blur rounded-2xl p-6 shadow-lg">
+                <h3 className="text-xl font-bold mb-4">Habilidades</h3>
+                <p className="text-gray-600 whitespace-pre-line">{settings.skills}</p>
+              </div>
+            )}
+            
+            {settings?.contact_info && (
+              <div className="bg-white/80 backdrop-blur rounded-2xl p-6 shadow-lg">
+                <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+                  <Phone className="w-5 h-5" /> Contacto
+                </h3>
+                <p className="text-gray-600 whitespace-pre-line">{settings.contact_info}</p>
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* Business Hours & Shipping Info */}
+        {(settings?.business_hours || settings?.shipping_info) && (
+          <section className="mt-12 grid md:grid-cols-2 gap-6">
+            {settings?.business_hours && (
+              <div className="bg-white/80 backdrop-blur rounded-2xl p-6 shadow-lg">
+                <h3 className="text-xl font-bold mb-4">Horario de Atención</h3>
+                <p className="text-gray-600 whitespace-pre-line">{settings.business_hours}</p>
+              </div>
+            )}
+            
+            {settings?.shipping_info && (
+              <div className="bg-white/80 backdrop-blur rounded-2xl p-6 shadow-lg">
+                <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+                  <Truck className="w-5 h-5" /> Información de Envío
+                </h3>
+                <p className="text-gray-600 whitespace-pre-line">{settings.shipping_info}</p>
+              </div>
+            )}
+          </section>
+        )}
       </main>
 
       {/* Footer */}
