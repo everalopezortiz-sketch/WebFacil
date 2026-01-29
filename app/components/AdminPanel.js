@@ -19,13 +19,22 @@ import {
   Users, Settings, CreditCard, MessageSquare, LogOut,
   Loader2, Search, Trash2, Ban, CheckCircle, Mail,
   Key, AlertTriangle, Send, Link2, Calendar, Shield,
-  Store, User, Utensils, Eye, ExternalLink
+  Store, User, Utensils, Eye, ExternalLink, Pencil, Plus, Image
 } from 'lucide-react'
 
 const BUSINESS_TYPES = [
   { value: 'ecommerce', label: 'Tienda', icon: Store },
   { value: 'personal', label: 'Personal', icon: User },
   { value: 'restaurant', label: 'Restaurante', icon: Utensils }
+]
+
+const CURRENCIES = [
+  { value: 'USD', label: 'Dólar (USD)', symbol: '$' },
+  { value: 'PYG', label: 'Guaraní (PYG)', symbol: 'Gs' },
+  { value: 'EUR', label: 'Euro (EUR)', symbol: '€' },
+  { value: 'BRL', label: 'Real (BRL)', symbol: 'R$' },
+  { value: 'ARS', label: 'Peso Argentino (ARS)', symbol: '$' },
+  { value: 'MXN', label: 'Peso Mexicano (MXN)', symbol: '$' }
 ]
 
 export default function AdminPanel({ user, profile, onLogout }) {
@@ -36,6 +45,13 @@ export default function AdminPanel({ user, profile, onLogout }) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   
+  // Software settings
+  const [softwareSettings, setSoftwareSettings] = useState({
+    name: 'WebBuilder',
+    logo_url: '',
+    default_currency: 'USD'
+  })
+  
   // Filters
   const [searchQuery, setSearchQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
@@ -44,6 +60,7 @@ export default function AdminPanel({ user, profile, onLogout }) {
   const [userDialog, setUserDialog] = useState({ open: false, user: null })
   const [planDialog, setPlanDialog] = useState({ open: false, user: null })
   const [messageDialog, setMessageDialog] = useState({ open: false, user: null, isGlobal: false })
+  const [editPlanDialog, setEditPlanDialog] = useState({ open: false, plan: null })
   
   // Message form
   const [messageText, setMessageText] = useState('')
@@ -53,6 +70,7 @@ export default function AdminPanel({ user, profile, onLogout }) {
 
   useEffect(() => {
     loadData()
+    loadSoftwareSettings()
   }, [])
 
   useEffect(() => {
@@ -90,6 +108,18 @@ export default function AdminPanel({ user, profile, onLogout }) {
       const data = await res.json()
       setInfoContent(data[0] || { title: '', link_url: '', description: '' })
     }
+  }
+
+  const loadSoftwareSettings = () => {
+    const saved = localStorage.getItem('softwareSettings')
+    if (saved) {
+      setSoftwareSettings(JSON.parse(saved))
+    }
+  }
+
+  const saveSoftwareSettings = () => {
+    localStorage.setItem('softwareSettings', JSON.stringify(softwareSettings))
+    toast.success('Configuración del software guardada')
   }
 
   // Update user
@@ -147,6 +177,30 @@ export default function AdminPanel({ user, profile, onLogout }) {
         setPlanDialog({ open: false, user: null })
       } else {
         toast.error('Error al asignar plan')
+      }
+    } catch (error) {
+      toast.error('Error de conexión')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Update plan
+  const updatePlan = async () => {
+    if (!editPlanDialog.plan) return
+    setSaving(true)
+    try {
+      const res = await fetch('/api/admin/plans/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editPlanDialog.plan)
+      })
+      if (res.ok) {
+        toast.success('Plan actualizado')
+        loadPlans()
+        setEditPlanDialog({ open: false, plan: null })
+      } else {
+        toast.error('Error al actualizar plan')
       }
     } catch (error) {
       toast.error('Error de conexión')
@@ -229,6 +283,10 @@ export default function AdminPanel({ user, profile, onLogout }) {
     return { status: 'active', text: activePlan.plans?.name || 'Activo', variant: 'default' }
   }
 
+  const getCurrencySymbol = (code) => {
+    return CURRENCIES.find(c => c.value === code)?.symbol || '$'
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -243,12 +301,16 @@ export default function AdminPanel({ user, profile, onLogout }) {
       <header className="bg-slate-900 text-white sticky top-0 z-40">
         <div className="container mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-amber-500 rounded-lg flex items-center justify-center">
-              <Shield className="w-5 h-5 text-white" />
-            </div>
+            {softwareSettings.logo_url ? (
+              <img src={softwareSettings.logo_url} alt="Logo" className="w-10 h-10 rounded-lg object-contain" />
+            ) : (
+              <div className="w-10 h-10 bg-amber-500 rounded-lg flex items-center justify-center">
+                <Shield className="w-5 h-5 text-white" />
+              </div>
+            )}
             <div>
-              <h1 className="font-semibold">Panel de Administración</h1>
-              <p className="text-xs text-slate-400">Desarrollador</p>
+              <h1 className="font-semibold">{softwareSettings.name || 'WebBuilder'}</h1>
+              <p className="text-xs text-slate-400">Panel de Administración</p>
             </div>
           </div>
           
@@ -274,6 +336,9 @@ export default function AdminPanel({ user, profile, onLogout }) {
             </TabsTrigger>
             <TabsTrigger value="content" className="gap-2">
               <Link2 className="w-4 h-4" /> Contenido
+            </TabsTrigger>
+            <TabsTrigger value="software" className="gap-2">
+              <Settings className="w-4 h-4" /> Software
             </TabsTrigger>
           </TabsList>
 
@@ -408,19 +473,32 @@ export default function AdminPanel({ user, profile, onLogout }) {
           <TabsContent value="plans">
             <Card>
               <CardHeader>
-                <CardTitle>Planes Disponibles</CardTitle>
-                <CardDescription>Planes que se pueden asignar a los usuarios</CardDescription>
+                <CardTitle>Gestión de Planes</CardTitle>
+                <CardDescription>Edita los precios y configuración de los planes de suscripción</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   {plans.map(plan => (
-                    <Card key={plan.id}>
+                    <Card key={plan.id} className="relative">
+                      <Button 
+                        size="sm" 
+                        variant="ghost" 
+                        className="absolute top-2 right-2"
+                        onClick={() => setEditPlanDialog({ open: true, plan: { ...plan } })}
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </Button>
                       <CardHeader>
                         <CardTitle className="text-lg">{plan.name}</CardTitle>
                         <CardDescription>{plan.duration_days} días</CardDescription>
                       </CardHeader>
                       <CardContent>
-                        <p className="text-3xl font-bold">${plan.price}</p>
+                        <p className="text-3xl font-bold">
+                          {getCurrencySymbol(softwareSettings.default_currency)} {plan.price}
+                        </p>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {plan.is_active ? 'Activo' : 'Inactivo'}
+                        </p>
                       </CardContent>
                     </Card>
                   ))}
@@ -472,6 +550,76 @@ export default function AdminPanel({ user, profile, onLogout }) {
                 <Button onClick={saveInfoContent} disabled={saving}>
                   {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                   Guardar
+                </Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Software Settings Tab */}
+          <TabsContent value="software">
+            <Card>
+              <CardHeader>
+                <CardTitle>Configuración del Software</CardTitle>
+                <CardDescription>Personaliza el nombre y logo de la plataforma</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div className="space-y-4">
+                    <div>
+                      <Label>Nombre del Software</Label>
+                      <Input
+                        placeholder="WebBuilder"
+                        value={softwareSettings.name}
+                        onChange={(e) => setSoftwareSettings({ ...softwareSettings, name: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <Label>Logo (URL de imagen)</Label>
+                      <Input
+                        placeholder="https://ejemplo.com/logo.png"
+                        value={softwareSettings.logo_url}
+                        onChange={(e) => setSoftwareSettings({ ...softwareSettings, logo_url: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <Label>Moneda por defecto</Label>
+                      <Select
+                        value={softwareSettings.default_currency}
+                        onValueChange={(v) => setSoftwareSettings({ ...softwareSettings, default_currency: v })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {CURRENCIES.map(c => (
+                            <SelectItem key={c.value} value={c.value}>
+                              {c.label} ({c.symbol})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-center p-8 bg-slate-100 rounded-lg">
+                    <div className="text-center">
+                      {softwareSettings.logo_url ? (
+                        <img 
+                          src={softwareSettings.logo_url} 
+                          alt="Preview" 
+                          className="w-24 h-24 object-contain mx-auto mb-4"
+                        />
+                      ) : (
+                        <div className="w-24 h-24 bg-slate-300 rounded-xl flex items-center justify-center mx-auto mb-4">
+                          <Image className="w-12 h-12 text-slate-500" />
+                        </div>
+                      )}
+                      <h3 className="font-bold text-xl">{softwareSettings.name || 'WebBuilder'}</h3>
+                      <p className="text-sm text-muted-foreground">Vista previa</p>
+                    </div>
+                  </div>
+                </div>
+                <Button onClick={saveSoftwareSettings}>
+                  Guardar Configuración
                 </Button>
               </CardContent>
             </Card>
@@ -571,7 +719,7 @@ export default function AdminPanel({ user, profile, onLogout }) {
                   <SelectContent>
                     {plans.map(plan => (
                       <SelectItem key={plan.id} value={plan.id}>
-                        {plan.name} - ${plan.price} ({plan.duration_days} días)
+                        {plan.name} - {getCurrencySymbol(softwareSettings.default_currency)}{plan.price} ({plan.duration_days} días)
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -594,6 +742,57 @@ export default function AdminPanel({ user, profile, onLogout }) {
                 >
                   {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                   Asignar Plan
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Plan Dialog */}
+      <Dialog open={editPlanDialog.open} onOpenChange={(open) => setEditPlanDialog({ ...editPlanDialog, open })}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Plan</DialogTitle>
+          </DialogHeader>
+          {editPlanDialog.plan && (
+            <div className="space-y-4">
+              <div>
+                <Label>Nombre del Plan</Label>
+                <Input
+                  value={editPlanDialog.plan.name}
+                  onChange={(e) => setEditPlanDialog({ ...editPlanDialog, plan: { ...editPlanDialog.plan, name: e.target.value } })}
+                />
+              </div>
+              <div>
+                <Label>Duración (días)</Label>
+                <Input
+                  type="number"
+                  value={editPlanDialog.plan.duration_days}
+                  onChange={(e) => setEditPlanDialog({ ...editPlanDialog, plan: { ...editPlanDialog.plan, duration_days: parseInt(e.target.value) } })}
+                />
+              </div>
+              <div>
+                <Label>Precio</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={editPlanDialog.plan.price}
+                  onChange={(e) => setEditPlanDialog({ ...editPlanDialog, plan: { ...editPlanDialog.plan, price: parseFloat(e.target.value) } })}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={editPlanDialog.plan.is_active}
+                  onCheckedChange={(v) => setEditPlanDialog({ ...editPlanDialog, plan: { ...editPlanDialog.plan, is_active: v } })}
+                />
+                <Label>Plan activo</Label>
+              </div>
+              <div className="flex justify-end gap-2 pt-4">
+                <Button variant="outline" onClick={() => setEditPlanDialog({ open: false, plan: null })}>Cancelar</Button>
+                <Button onClick={updatePlan} disabled={saving}>
+                  {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                  Guardar
                 </Button>
               </div>
             </div>
