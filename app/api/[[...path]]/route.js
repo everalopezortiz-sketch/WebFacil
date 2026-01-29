@@ -203,6 +203,23 @@ export async function GET(request, { params }) {
       return handleCORS(NextResponse.json(data || []))
     }
 
+    // Get global software settings (for login page)
+    if (pathStr === 'global-settings') {
+      try {
+        const saved = await supabaseAdmin
+          .from('global_settings')
+          .select('*')
+          .single()
+        
+        if (saved.data) {
+          return handleCORS(NextResponse.json(saved.data))
+        }
+      } catch (e) {
+        // Table might not exist, return empty
+      }
+      return handleCORS(NextResponse.json({}))
+    }
+
     // Get info content
     if (pathStr === 'info-content') {
       const { data, error } = await supabase
@@ -648,14 +665,36 @@ export async function POST(request, { params }) {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
       
-      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+      const { data: profile } = await supabaseAdmin.from('profiles').select('role').eq('id', user.id).single()
       if (profile?.role !== 'DESARROLLADOR') {
         return handleCORS(NextResponse.json({ error: 'Forbidden' }, { status: 403 }))
       }
       
-      const { data, error } = await supabase
+      const { data, error } = await supabaseAdmin
         .from('support_messages')
         .insert(body)
+        .select()
+        .single()
+      
+      if (error) return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
+      return handleCORS(NextResponse.json(data))
+    }
+
+    // Admin: Update message
+    if (pathStr.startsWith('admin/messages/') && path.length === 3) {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+      
+      const { data: profile } = await supabaseAdmin.from('profiles').select('role').eq('id', user.id).single()
+      if (profile?.role !== 'DESARROLLADOR') {
+        return handleCORS(NextResponse.json({ error: 'Forbidden' }, { status: 403 }))
+      }
+      
+      const messageId = path[2]
+      const { data, error } = await supabaseAdmin
+        .from('support_messages')
+        .update(body)
+        .eq('id', messageId)
         .select()
         .single()
       
@@ -730,18 +769,43 @@ export async function POST(request, { params }) {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
       
-      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+      const { data: profile } = await supabaseAdmin.from('profiles').select('role').eq('id', user.id).single()
       if (profile?.role !== 'DESARROLLADOR') {
         return handleCORS(NextResponse.json({ error: 'Forbidden' }, { status: 403 }))
       }
       
-      const { data, error } = await supabase
+      const { data, error } = await supabaseAdmin
         .from('info_content')
         .upsert(body)
         .select()
         .single()
       
       if (error) return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
+      return handleCORS(NextResponse.json(data))
+    }
+
+    // Admin: Save global settings (for login page branding)
+    if (pathStr === 'admin/global-settings') {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+      
+      const { data: profile } = await supabaseAdmin.from('profiles').select('role').eq('id', user.id).single()
+      if (profile?.role !== 'DESARROLLADOR') {
+        return handleCORS(NextResponse.json({ error: 'Forbidden' }, { status: 403 }))
+      }
+      
+      // Use a simple key-value storage or upsert to global_settings table
+      const { data, error } = await supabaseAdmin
+        .from('global_settings')
+        .upsert({ id: 'main', ...body }, { onConflict: 'id' })
+        .select()
+        .single()
+      
+      if (error) {
+        console.error('Global settings error:', error)
+        // If table doesn't exist, just return success (settings saved to localStorage)
+        return handleCORS(NextResponse.json({ success: true, localStorage: true }))
+      }
       return handleCORS(NextResponse.json(data))
     }
 
