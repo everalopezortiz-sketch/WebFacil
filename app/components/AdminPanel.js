@@ -309,7 +309,7 @@ export default function AdminPanel({ user, profile, onLogout }) {
                       <SelectValue placeholder="Tipo de cuenta" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Todos</SelectItem>
+                      <SelectItem value="all">Todos</SelectItem>
                       {BUSINESS_TYPES.map(t => (
                         <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
                       ))}
