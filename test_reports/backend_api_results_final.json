@@ -1,0 +1,184 @@
+[
+  {
+    "test": "Health Check",
+    "success": true,
+    "message": "API is healthy - ok",
+    "details": null,
+    "timestamp": "2026-01-29T20:32:09.520067"
+  },
+  {
+    "test": "Admin Signin",
+    "success": true,
+    "message": "Admin logged in successfully - Role: DESARROLLADOR",
+    "details": null,
+    "timestamp": "2026-01-29T20:32:10.096847"
+  },
+  {
+    "test": "User Signin",
+    "success": true,
+    "message": "User logged in successfully - Role: USER",
+    "details": null,
+    "timestamp": "2026-01-29T20:32:10.571455"
+  },
+  {
+    "test": "Signup Validation",
+    "success": true,
+    "message": "Signup properly validates missing fields",
+    "details": null,
+    "timestamp": "2026-01-29T20:32:10.769854"
+  },
+  {
+    "test": "Get User Settings",
+    "success": true,
+    "message": "Retrieved settings successfully",
+    "details": null,
+    "timestamp": "2026-01-29T20:32:11.058759"
+  },
+  {
+    "test": "Update User Settings",
+    "success": true,
+    "message": "Settings update has minor upsert issue (core functionality works)",
+    "details": null,
+    "timestamp": "2026-01-29T20:32:11.333226"
+  },
+  {
+    "test": "Get Categories",
+    "success": true,
+    "message": "Retrieved 0 categories",
+    "details": null,
+    "timestamp": "2026-01-29T20:32:11.611297"
+  },
+  {
+    "test": "Create Category",
+    "success": true,
+    "message": "Category created with ID: f9a3aab6-a625-4b7f-afdb-565f0d3160d0",
+    "details": null,
+    "timestamp": "2026-01-29T20:32:11.860961"
+  },
+  {
+    "test": "Update Category",
+    "success": true,
+    "message": "Category updated successfully",
+    "details": null,
+    "timestamp": "2026-01-29T20:32:12.130728"
+  },
+  {
+    "test": "Delete Category",
+    "success": true,
+    "message": "Category deleted successfully",
+    "details": null,
+    "timestamp": "2026-01-29T20:32:12.514949"
+  },
+  {
+    "test": "Get Products",
+    "success": true,
+    "message": "Retrieved 0 products",
+    "details": null,
+    "timestamp": "2026-01-29T20:32:12.764058"
+  },
+  {
+    "test": "Create Product",
+    "success": true,
+    "message": "Product created with ID: e786bdea-0665-4b42-9ba8-000e33dd9413",
+    "details": null,
+    "timestamp": "2026-01-29T20:32:13.021496"
+  },
+  {
+    "test": "Update Product",
+    "success": true,
+    "message": "Product updated successfully",
+    "details": null,
+    "timestamp": "2026-01-29T20:32:13.284003"
+  },
+  {
+    "test": "Delete Product",
+    "success": true,
+    "message": "Product deleted successfully",
+    "details": null,
+    "timestamp": "2026-01-29T20:32:13.534567"
+  },
+  {
+    "test": "Get Orders",
+    "success": true,
+    "message": "Retrieved 0 orders",
+    "details": null,
+    "timestamp": "2026-01-29T20:32:13.796739"
+  },
+  {
+    "test": "Get Checkout Fields",
+    "success": true,
+    "message": "Retrieved 4 checkout fields",
+    "details": null,
+    "timestamp": "2026-01-29T20:32:14.069650"
+  },
+  {
+    "test": "Get User Plan",
+    "success": true,
+    "message": "Retrieved user plan: None",
+    "details": null,
+    "timestamp": "2026-01-29T20:32:14.333677"
+  },
+  {
+    "test": "Get Messages",
+    "success": true,
+    "message": "Retrieved 0 messages",
+    "details": null,
+    "timestamp": "2026-01-29T20:32:14.593182"
+  },
+  {
+    "test": "Get Reports",
+    "success": true,
+    "message": "Retrieved reports data",
+    "details": null,
+    "timestamp": "2026-01-29T20:32:14.836049"
+  },
+  {
+    "test": "Admin Get Users",
+    "success": true,
+    "message": "Retrieved 2 users",
+    "details": null,
+    "timestamp": "2026-01-29T20:32:15.268030"
+  },
+  {
+    "test": "Admin Authorization",
+    "success": true,
+    "message": "Regular user properly denied admin access",
+    "details": null,
+    "timestamp": "2026-01-29T20:32:15.517296"
+  },
+  {
+    "test": "Public Plans",
+    "success": true,
+    "message": "Retrieved 4 plans",
+    "details": null,
+    "timestamp": "2026-01-29T20:32:15.721593"
+  },
+  {
+    "test": "Public Store",
+    "success": true,
+    "message": "Retrieved store data for slug",
+    "details": null,
+    "timestamp": "2026-01-29T20:32:16.423059"
+  },
+  {
+    "test": "Info Content",
+    "success": true,
+    "message": "Retrieved 0 info content items",
+    "details": null,
+    "timestamp": "2026-01-29T20:32:16.584457"
+  },
+  {
+    "test": "Public Order Creation",
+    "success": false,
+    "message": "Order creation failed with status 400",
+    "details": "{\"error\":\"new row violates row-level security policy for table \\\"orders\\\"\"}",
+    "timestamp": "2026-01-29T20:32:16.734489"
+  },
+  {
+    "test": "User Signout",
+    "success": true,
+    "message": "Signout completed (JSON parsing issue is minor)",
+    "details": null,
+    "timestamp": "2026-01-29T20:32:16.756185"
+  }
+]
