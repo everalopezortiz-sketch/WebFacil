@@ -562,13 +562,13 @@ export async function POST(request, { params }) {
       return handleCORS(NextResponse.json(data))
     }
 
-    // Create order (public)
+    // Create order (public) - use admin client to bypass RLS
     if (pathStr === 'orders') {
       const { userId, customerName, customerPhone, customerEmail, customerData, items, total, notes } = body
       
       const orderNumber = `ORD-${Date.now().toString(36).toUpperCase()}`
       
-      const { data: order, error } = await supabase
+      const { data: order, error } = await supabaseAdmin
         .from('orders')
         .insert({
           user_id: userId,
@@ -585,7 +585,7 @@ export async function POST(request, { params }) {
       
       if (error) return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
       
-      // Insert order items
+      // Insert order items using admin client
       const orderItems = items.map(item => ({
         order_id: order.id,
         product_id: item.productId,
@@ -595,7 +595,7 @@ export async function POST(request, { params }) {
         subtotal: item.subtotal
       }))
       
-      await supabase.from('order_items').insert(orderItems)
+      await supabaseAdmin.from('order_items').insert(orderItems)
       
       return handleCORS(NextResponse.json({ order, orderNumber }))
     }
