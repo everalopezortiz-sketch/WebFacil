@@ -234,6 +234,19 @@ export default function StorePage() {
     return methods
   }, [settings])
 
+  // Get grid classes based on settings
+  const getGridClasses = () => {
+    const cols = settings?.grid_columns || 4
+    const colClasses = {
+      2: 'grid-cols-1 sm:grid-cols-2',
+      3: 'grid-cols-2 sm:grid-cols-3',
+      4: 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4',
+      5: 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5',
+      6: 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6'
+    }
+    return colClasses[cols] || colClasses[4]
+  }
+
   // Checkout
   const handleCheckout = async () => {
     // Validate required fields
