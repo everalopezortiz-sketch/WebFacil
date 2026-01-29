@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -21,7 +21,7 @@ export default function App() {
   const [loading, setLoading] = useState(true)
   const [authLoading, setAuthLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
-  const supabase = createClient()
+  const [supabase] = useState(() => createClient())
 
   // Auth form state
   const [loginForm, setLoginForm] = useState({ email: '', password: '' })
@@ -36,10 +36,41 @@ export default function App() {
     businessType: 'ecommerce'
   })
 
+  const fetchProfile = useCallback(async (userId) => {
+    try {
+      const res = await fetch('/api/auth/user')
+      if (res.ok) {
+        const data = await res.json()
+        if (data.profile) {
+          setProfile(data.profile)
+        }
+      }
+    } catch (error) {
+      console.error('Profile fetch error:', error)
+    }
+  }, [])
+
   useEffect(() => {
+    let isMounted = true
+    
+    const checkAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (isMounted && session?.user) {
+          setUser(session.user)
+          await fetchProfile(session.user.id)
+        }
+      } catch (error) {
+        console.error('Auth check error:', error)
+      } finally {
+        if (isMounted) setLoading(false)
+      }
+    }
+
     checkAuth()
     
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!isMounted) return
       if (session?.user) {
         setUser(session.user)
         await fetchProfile(session.user.id)
@@ -50,42 +81,17 @@ export default function App() {
       setLoading(false)
     })
 
-    return () => subscription.unsubscribe()
-  }, [])
-
-  const checkAuth = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session?.user) {
-        setUser(session.user)
-        await fetchProfile(session.user.id)
-      }
-    } catch (error) {
-      console.error('Auth check error:', error)
-    } finally {
-      setLoading(false)
+    return () => {
+      isMounted = false
+      subscription.unsubscribe()
     }
-  }
-
-  const fetchProfile = async (userId) => {
-    try {
-      const { data } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single()
-      setProfile(data)
-    } catch (error) {
-      console.error('Profile fetch error:', error)
-    }
-  }
+  }, [supabase, fetchProfile])
 
   const handleLogin = async (e) => {
     e.preventDefault()
     setAuthLoading(true)
     
     try {
-      // Use Supabase client directly for proper session handling
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: loginForm.email,
         password: loginForm.password
@@ -96,7 +102,6 @@ export default function App() {
         return
       }
       
-      // Fetch profile using API (which uses admin client)
       const res = await fetch('/api/auth/signin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -138,10 +143,25 @@ export default function App() {
         return
       }
       
-      toast.success('¡Cuenta creada exitosamente! Por favor revisa tu email para confirmar.')
-      // Auto login after signup
-      await handleLogin({ preventDefault: () => {}, target: { email: registerForm.email, password: registerForm.password } })
+      toast.success('¡Cuenta creada exitosamente!')
       setLoginForm({ email: registerForm.email, password: registerForm.password })
+      
+      // Auto login
+      const { data: authData } = await supabase.auth.signInWithPassword({
+        email: registerForm.email,
+        password: registerForm.password
+      })
+      
+      if (authData?.user) {
+        setUser(authData.user)
+        const profileRes = await fetch('/api/auth/signin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: registerForm.email, password: registerForm.password })
+        })
+        const profileData = await profileRes.json()
+        if (profileData.profile) setProfile(profileData.profile)
+      }
     } catch (error) {
       toast.error('Error de conexión')
     } finally {
@@ -157,7 +177,6 @@ export default function App() {
     toast.success('Sesión cerrada')
   }
 
-  // Loading state
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
@@ -169,7 +188,6 @@ export default function App() {
     )
   }
 
-  // Authenticated view
   if (user && profile) {
     if (profile.role === 'DESARROLLADOR') {
       return <AdminPanel user={user} profile={profile} onLogout={handleLogout} />
@@ -177,11 +195,9 @@ export default function App() {
     return <Dashboard user={user} profile={profile} onLogout={handleLogout} />
   }
 
-  // Auth view
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-4">
       <div className="w-full max-w-md">
-        {/* Logo */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-primary rounded-2xl mb-4 shadow-lg">
             <Store className="w-8 h-8 text-primary-foreground" />
@@ -197,7 +213,6 @@ export default function App() {
               <TabsTrigger value="register">Registrarse</TabsTrigger>
             </TabsList>
 
-            {/* Login Tab */}
             <TabsContent value="login">
               <form onSubmit={handleLogin}>
                 <CardHeader>
@@ -244,7 +259,6 @@ export default function App() {
               </form>
             </TabsContent>
 
-            {/* Register Tab */}
             <TabsContent value="register">
               <form onSubmit={handleRegister}>
                 <CardHeader>
