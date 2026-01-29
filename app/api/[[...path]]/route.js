@@ -286,11 +286,12 @@ export async function GET(request, { params }) {
 
     // ============ PUBLIC STORE ROUTES ============
     
-    // Get store by slug
+    // Get store by slug (use admin client to bypass RLS for public access)
     if (pathStr.startsWith('store/')) {
       const slug = path[1]
+      const supabaseAdmin = createSupabaseAdmin()
       
-      const { data: profile } = await supabase
+      const { data: profile } = await supabaseAdmin
         .from('profiles')
         .select('*')
         .eq('slug', slug)
@@ -305,27 +306,27 @@ export async function GET(request, { params }) {
         return handleCORS(NextResponse.json({ error: 'Store in maintenance', maintenance: true }, { status: 503 }))
       }
       
-      const { data: settings } = await supabase
+      const { data: settings } = await supabaseAdmin
         .from('user_settings')
         .select('*')
         .eq('user_id', profile.id)
         .single()
       
-      const { data: categories } = await supabase
+      const { data: categories } = await supabaseAdmin
         .from('categories')
         .select('*')
         .eq('user_id', profile.id)
         .eq('is_active', true)
         .order('display_order')
       
-      const { data: products } = await supabase
+      const { data: products } = await supabaseAdmin
         .from('products')
         .select('*, categories(name)')
         .eq('user_id', profile.id)
         .eq('is_active', true)
         .order('createdAt', { ascending: false })
       
-      const { data: checkoutFields } = await supabase
+      const { data: checkoutFields } = await supabaseAdmin
         .from('checkout_fields')
         .select('*')
         .eq('user_id', profile.id)
