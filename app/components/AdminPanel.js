@@ -42,6 +42,8 @@ export default function AdminPanel({ user, profile, onLogout }) {
   const [users, setUsers] = useState([])
   const [plans, setPlans] = useState([])
   const [infoContent, setInfoContent] = useState(null)
+  const [allInfoContent, setAllInfoContent] = useState([])
+  const [sentMessages, setSentMessages] = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   
