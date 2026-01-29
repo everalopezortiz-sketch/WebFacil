@@ -1,0 +1,163 @@
+[
+  {
+    "test": "Health Check",
+    "success": true,
+    "message": "API is healthy - ok",
+    "details": null,
+    "timestamp": "2026-01-29T20:29:17.179145"
+  },
+  {
+    "test": "Admin Signin",
+    "success": true,
+    "message": "Admin logged in successfully - Role: DESARROLLADOR",
+    "details": null,
+    "timestamp": "2026-01-29T20:29:17.740342"
+  },
+  {
+    "test": "User Signin",
+    "success": true,
+    "message": "User logged in successfully - Role: USER",
+    "details": null,
+    "timestamp": "2026-01-29T20:29:18.134981"
+  },
+  {
+    "test": "Signup Validation",
+    "success": true,
+    "message": "Signup properly validates missing fields",
+    "details": null,
+    "timestamp": "2026-01-29T20:29:18.323077"
+  },
+  {
+    "test": "Get User Settings",
+    "success": true,
+    "message": "Retrieved settings successfully",
+    "details": null,
+    "timestamp": "2026-01-29T20:29:18.585050"
+  },
+  {
+    "test": "Update User Settings",
+    "success": false,
+    "message": "Settings update failed with status 400",
+    "details": null,
+    "timestamp": "2026-01-29T20:29:18.848021"
+  },
+  {
+    "test": "Get Categories",
+    "success": true,
+    "message": "Retrieved 0 categories",
+    "details": null,
+    "timestamp": "2026-01-29T20:29:19.097440"
+  },
+  {
+    "test": "Create Category",
+    "success": true,
+    "message": "Category created with ID: 33d445be-4cac-4af5-b12a-bcf4ccf6d116",
+    "details": null,
+    "timestamp": "2026-01-29T20:29:19.414948"
+  },
+  {
+    "test": "Update Category",
+    "success": true,
+    "message": "Category updated successfully",
+    "details": null,
+    "timestamp": "2026-01-29T20:29:19.661065"
+  },
+  {
+    "test": "Delete Category",
+    "success": true,
+    "message": "Category deleted successfully",
+    "details": null,
+    "timestamp": "2026-01-29T20:29:19.923784"
+  },
+  {
+    "test": "Get Products",
+    "success": true,
+    "message": "Retrieved 0 products",
+    "details": null,
+    "timestamp": "2026-01-29T20:29:20.184369"
+  },
+  {
+    "test": "Create Product",
+    "success": false,
+    "message": "Create failed with status 400",
+    "details": null,
+    "timestamp": "2026-01-29T20:29:20.419772"
+  },
+  {
+    "test": "Get Orders",
+    "success": true,
+    "message": "Retrieved 0 orders",
+    "details": null,
+    "timestamp": "2026-01-29T20:29:20.685606"
+  },
+  {
+    "test": "Get Checkout Fields",
+    "success": true,
+    "message": "Retrieved 4 checkout fields",
+    "details": null,
+    "timestamp": "2026-01-29T20:29:20.953761"
+  },
+  {
+    "test": "Get User Plan",
+    "success": true,
+    "message": "Retrieved user plan: None",
+    "details": null,
+    "timestamp": "2026-01-29T20:29:21.197185"
+  },
+  {
+    "test": "Get Messages",
+    "success": true,
+    "message": "Retrieved 0 messages",
+    "details": null,
+    "timestamp": "2026-01-29T20:29:21.484601"
+  },
+  {
+    "test": "Get Reports",
+    "success": true,
+    "message": "Retrieved reports data",
+    "details": null,
+    "timestamp": "2026-01-29T20:29:22.061025"
+  },
+  {
+    "test": "Admin Get Users",
+    "success": true,
+    "message": "Retrieved 2 users",
+    "details": null,
+    "timestamp": "2026-01-29T20:29:22.522741"
+  },
+  {
+    "test": "Admin Authorization",
+    "success": true,
+    "message": "Regular user properly denied admin access",
+    "details": null,
+    "timestamp": "2026-01-29T20:29:22.765465"
+  },
+  {
+    "test": "Public Plans",
+    "success": true,
+    "message": "Retrieved 4 plans",
+    "details": null,
+    "timestamp": "2026-01-29T20:29:22.948625"
+  },
+  {
+    "test": "Public Store",
+    "success": true,
+    "message": "Retrieved store data for slug",
+    "details": null,
+    "timestamp": "2026-01-29T20:29:23.726097"
+  },
+  {
+    "test": "Info Content",
+    "success": true,
+    "message": "Retrieved 0 info content items",
+    "details": null,
+    "timestamp": "2026-01-29T20:29:23.890364"
+  },
+  {
+    "test": "User Signout",
+    "success": false,
+    "message": "User signout failed with status 520",
+    "details": null,
+    "timestamp": "2026-01-29T20:29:23.909256"
+  }
+]
