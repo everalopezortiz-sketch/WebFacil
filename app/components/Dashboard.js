@@ -627,7 +627,7 @@ export default function Dashboard({ user, profile, onLogout }) {
                 <div>
                   <CardTitle>{businessConfig.productLabel}</CardTitle>
                 </div>
-                <Button onClick={() => setProductDialog({ open: true, data: { name: '', description: '', price: '', image_url: '', category_id: '', promo_price: '', promo_active: false, is_featured: false, is_active: true } })}>
+                <Button onClick={() => setProductDialog({ open: true, data: { name: '', description: '', price: '', image_url: '', category_id: 'none', promo_price: '', promo_active: false, is_featured: false, is_active: true } })}>
                   <Plus className="w-4 h-4 mr-2" /> Nuevo
                 </Button>
               </CardHeader>
