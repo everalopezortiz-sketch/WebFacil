@@ -495,6 +495,19 @@ export default function Dashboard({ user, profile, onLogout }) {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div>
+                    <Label>Descripción de tu negocio</Label>
+                    <Textarea
+                      placeholder="Describe tu negocio o tienda..."
+                      value={settings?.store_description || ''}
+                      onChange={(e) => setSettings({ ...settings, store_description: e.target.value })}
+                      rows={3}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Esta descripción se mostrará en tu página pública
+                    </p>
+                  </div>
+
+                  <div>
                     <Label>Moneda</Label>
                     <Select
                       value={settings?.currency || 'USD'}
