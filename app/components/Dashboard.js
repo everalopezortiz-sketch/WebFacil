@@ -142,6 +142,25 @@ export default function Dashboard({ user, profile, onLogout }) {
     if (res.ok) setReports(await res.json())
   }
 
+  // Update order status
+  const updateOrderStatus = async (orderId, newStatus) => {
+    try {
+      const res = await fetch(`/api/orders/${orderId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      })
+      if (res.ok) {
+        toast.success('Estado actualizado')
+        loadOrders(orderDateFilter)
+      } else {
+        toast.error('Error al actualizar')
+      }
+    } catch (error) {
+      toast.error('Error de conexión')
+    }
+  }
+
   // Save settings
   const saveSettings = async () => {
     setSaving(true)
