@@ -897,7 +897,7 @@ export default function Dashboard({ user, profile, onLogout }) {
                       <Card key={product.id} className="overflow-hidden">
                         {product.image_url && (
                           <div className="aspect-video bg-slate-100 relative">
-                            <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
+                            <img src={normalizeImageSrc(product.image_url)} alt={product.name} className="w-full h-full object-cover" />
                             {product.promo_active && (
                               <Badge className="absolute top-2 right-2 bg-red-500">Promo</Badge>
                             )}
