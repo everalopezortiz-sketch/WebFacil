@@ -125,31 +125,9 @@ export default function StorePage() {
     
     if (selectedCategory === 'all') return filtered
     if (selectedCategory === 'promo') return filtered.filter(p => p.promo_active)
+    if (selectedCategory === 'featured') return filtered.filter(p => p.is_featured)
     return filtered.filter(p => p.category_id === selectedCategory)
   }, [products, selectedCategory, searchQuery])
-
-  // Group products by category
-  const groupedProducts = useMemo(() => {
-    const groups = {}
-    const featured = filteredProducts.filter(p => p.is_featured)
-    if (featured.length > 0) {
-      groups['Destacados'] = featured
-    }
-    
-    categories.forEach(cat => {
-      const catProducts = filteredProducts.filter(p => p.category_id === cat.id && !p.is_featured)
-      if (catProducts.length > 0) {
-        groups[cat.name] = catProducts
-      }
-    })
-    
-    const uncategorized = filteredProducts.filter(p => !p.category_id && !p.is_featured)
-    if (uncategorized.length > 0) {
-      groups['Otros'] = uncategorized
-    }
-    
-    return groups
-  }, [filteredProducts, categories])
 
   // Get available payment methods
   const availablePaymentMethods = useMemo(() => {
@@ -245,6 +223,10 @@ export default function StorePage() {
   const bgColor = settings?.theme_bg_color || '#f8f9fa'
   const textColor = settings?.theme_font_color || '#1a1a1a'
   const buttonColor = settings?.theme_button_color || '#f59e0b'
+  
+  // Grid configuration
+  const gridColumns = settings?.grid_columns || 4
+  const cardSize = settings?.card_size || 'medium'
 
   if (loading) {
     return (
@@ -272,66 +254,81 @@ export default function StorePage() {
       {/* Header with Cover */}
       <header className="relative">
         {settings?.cover_image_url ? (
-          <div className="h-32 md:h-40 relative overflow-hidden">
+          <div className="h-40 md:h-52 relative overflow-hidden">
             <img 
               src={settings.cover_image_url} 
               alt="Cover"
               className="w-full h-full object-cover"
+              onError={(e) => { e.target.style.display = 'none'; e.target.parentElement.style.backgroundColor = buttonColor }}
             />
-            <div className="absolute inset-0 bg-gradient-to-b from-black/20 to-black/60" />
+            <div className="absolute inset-0 bg-gradient-to-b from-black/10 to-black/50" />
           </div>
         ) : (
           <div 
-            className="h-32 md:h-40 relative"
-            style={{ backgroundColor: buttonColor, opacity: 0.9 }}
+            className="h-40 md:h-52 relative"
+            style={{ backgroundColor: buttonColor }}
           >
             <div className="absolute inset-0 flex items-center justify-center opacity-20">
-              <BusinessIcon className="w-24 h-24 text-white" />
+              <BusinessIcon className="w-32 h-32 text-white" />
             </div>
           </div>
         )}
         
-        {/* Logo and Info */}
+        {/* Logo and Info - overlapping the cover */}
         <div className="container mx-auto px-4">
-          <div className="flex items-end gap-4 -mt-12 relative z-10">
-            <div className="w-20 h-20 md:w-24 md:h-24 rounded-xl bg-white shadow-lg overflow-hidden border-4 border-white flex-shrink-0">
+          <div className="flex items-end gap-4 -mt-16 relative z-10">
+            <div className="w-24 h-24 md:w-28 md:h-28 rounded-2xl bg-white shadow-xl overflow-hidden border-4 border-white flex-shrink-0">
               {settings?.logo_url ? (
-                <img src={settings.logo_url} alt="Logo" className="w-full h-full object-cover" />
+                <img 
+                  src={settings.logo_url} 
+                  alt="Logo" 
+                  className="w-full h-full object-cover"
+                  onError={(e) => { e.target.style.display = 'none' }}
+                />
               ) : (
                 <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: buttonColor }}>
-                  <BusinessIcon className="w-10 h-10 text-white" />
+                  <BusinessIcon className="w-12 h-12 text-white" />
                 </div>
               )}
             </div>
-            <div className="pb-2 flex-1 min-w-0">
+            <div className="pb-3 flex-1 min-w-0">
               <h1 className="text-xl md:text-2xl font-bold truncate" style={{ color: textColor }}>
                 {profile.first_name} {profile.last_name}
               </h1>
               {settings?.store_description && (
-                <p className="text-sm opacity-70 line-clamp-2">{settings.store_description}</p>
+                <p className="text-sm opacity-70 line-clamp-2 mt-1">{settings.store_description}</p>
               )}
             </div>
           </div>
         </div>
       </header>
 
-      {/* Search and Actions */}
-      <div className="sticky top-0 z-30 bg-white/95 backdrop-blur shadow-sm">
+      {/* Search Bar - Sticky */}
+      <div className="sticky top-0 z-30 bg-white/95 backdrop-blur shadow-sm border-b">
         <div className="container mx-auto px-4 py-3">
           <div className="flex items-center gap-3">
-            <div className="relative flex-1">
+            <div className="relative flex-1 max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <Input
-                placeholder="Buscar productos..."
+                placeholder={`Buscar ${businessConfig.productLabel.toLowerCase()}...`}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 rounded-full border-gray-200 bg-gray-50"
+                className="pl-10 rounded-full border-gray-200 bg-gray-50 h-10"
               />
+              {searchQuery && (
+                <button 
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
             </div>
             {settings?.whatsapp_number && (
               <Button
+                size="sm"
                 variant="outline"
-                className="rounded-full border-green-500 text-green-600 hover:bg-green-50 gap-2"
+                className="rounded-full border-green-500 text-green-600 hover:bg-green-50 gap-1.5 h-10"
                 onClick={() => window.open(`https://wa.me/${settings.whatsapp_number.replace(/\D/g, '')}`, '_blank')}
               >
                 <Phone className="w-4 h-4" />
@@ -341,21 +338,32 @@ export default function StorePage() {
           </div>
           
           {/* Category Pills */}
-          <div className="flex gap-2 mt-3 overflow-x-auto pb-2 scrollbar-hide">
+          <div className="flex gap-2 mt-3 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
             <Button
               size="sm"
               variant={selectedCategory === 'all' ? 'default' : 'outline'}
-              className="rounded-full whitespace-nowrap flex-shrink-0"
+              className="rounded-full whitespace-nowrap flex-shrink-0 h-8"
               style={selectedCategory === 'all' ? { backgroundColor: buttonColor, color: 'white' } : {}}
               onClick={() => setSelectedCategory('all')}
             >
-              Todo
+              Todos
             </Button>
+            {products.some(p => p.is_featured) && (
+              <Button
+                size="sm"
+                variant={selectedCategory === 'featured' ? 'default' : 'outline'}
+                className="rounded-full whitespace-nowrap flex-shrink-0 h-8"
+                style={selectedCategory === 'featured' ? { backgroundColor: '#f59e0b', color: 'white' } : {}}
+                onClick={() => setSelectedCategory('featured')}
+              >
+                <Star className="w-3 h-3 mr-1" /> Destacados
+              </Button>
+            )}
             {products.some(p => p.promo_active) && (
               <Button
                 size="sm"
                 variant={selectedCategory === 'promo' ? 'default' : 'outline'}
-                className="rounded-full whitespace-nowrap flex-shrink-0"
+                className="rounded-full whitespace-nowrap flex-shrink-0 h-8"
                 style={selectedCategory === 'promo' ? { backgroundColor: '#ef4444', color: 'white' } : {}}
                 onClick={() => setSelectedCategory('promo')}
               >
@@ -367,7 +375,7 @@ export default function StorePage() {
                 key={cat.id}
                 size="sm"
                 variant={selectedCategory === cat.id ? 'default' : 'outline'}
-                className="rounded-full whitespace-nowrap flex-shrink-0"
+                className="rounded-full whitespace-nowrap flex-shrink-0 h-8"
                 style={selectedCategory === cat.id ? { backgroundColor: buttonColor, color: 'white' } : {}}
                 onClick={() => setSelectedCategory(cat.id)}
               >
@@ -379,26 +387,35 @@ export default function StorePage() {
       </div>
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-6 pb-24">
+      <main className="container mx-auto px-4 py-6 pb-28">
         {filteredProducts.length === 0 ? (
           <div className="text-center py-16">
             <Store className="w-16 h-16 mx-auto mb-4 opacity-30" />
-            <p className="text-lg opacity-60">No hay productos disponibles</p>
-            {searchQuery && <p className="text-sm opacity-40 mt-2">No se encontraron resultados para "{searchQuery}"</p>}
+            <p className="text-lg opacity-60">No hay {businessConfig.productLabel.toLowerCase()} disponibles</p>
+            {searchQuery && (
+              <p className="text-sm opacity-40 mt-2">
+                No se encontraron resultados para "{searchQuery}"
+              </p>
+            )}
           </div>
         ) : (
           <div className="space-y-8">
-            {Object.entries(groupedProducts).map(([groupName, groupProducts]) => (
-              <section key={groupName}>
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="w-1 h-6 rounded-full" style={{ backgroundColor: buttonColor }} />
-                  <h2 className="text-lg font-bold">{groupName}</h2>
-                </div>
-                
-                {/* Horizontal scroll for products */}
-                <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide -mx-4 px-4">
-                  {groupProducts.map(product => (
-                    <ProductCard 
+            {/* Featured Section */}
+            {selectedCategory === 'all' && products.some(p => p.is_featured) && (
+              <section>
+                <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
+                  <Star className="w-5 h-5" style={{ color: '#f59e0b' }} />
+                  Destacados
+                </h2>
+                <div className={`grid gap-4 ${
+                  gridColumns === 2 ? 'grid-cols-2' :
+                  gridColumns === 3 ? 'grid-cols-2 md:grid-cols-3' :
+                  gridColumns === 5 ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-5' :
+                  gridColumns === 6 ? 'grid-cols-2 md:grid-cols-4 lg:grid-cols-6' :
+                  'grid-cols-2 md:grid-cols-3 lg:grid-cols-4'
+                }`}>
+                  {products.filter(p => p.is_featured).map(product => (
+                    <ProductCard
                       key={product.id}
                       product={product}
                       onAdd={addToCart}
@@ -406,11 +423,104 @@ export default function StorePage() {
                       formatPrice={formatPrice}
                       getProductPrice={getProductPrice}
                       buttonColor={buttonColor}
+                      cardSize={cardSize}
                     />
                   ))}
                 </div>
               </section>
-            ))}
+            )}
+
+            {/* Products by Category or All */}
+            {selectedCategory === 'all' ? (
+              <>
+                {categories.map(cat => {
+                  const catProducts = products.filter(p => p.category_id === cat.id && !p.is_featured)
+                  if (catProducts.length === 0) return null
+                  
+                  return (
+                    <section key={cat.id}>
+                      <h2 className="text-lg font-bold mb-4">{cat.name}</h2>
+                      <div className={`grid gap-4 ${
+                        gridColumns === 2 ? 'grid-cols-2' :
+                        gridColumns === 3 ? 'grid-cols-2 md:grid-cols-3' :
+                        gridColumns === 5 ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-5' :
+                        gridColumns === 6 ? 'grid-cols-2 md:grid-cols-4 lg:grid-cols-6' :
+                        'grid-cols-2 md:grid-cols-3 lg:grid-cols-4'
+                      }`}>
+                        {catProducts.map(product => (
+                          <ProductCard
+                            key={product.id}
+                            product={product}
+                            onAdd={addToCart}
+                            onDetail={setProductDetail}
+                            formatPrice={formatPrice}
+                            getProductPrice={getProductPrice}
+                            buttonColor={buttonColor}
+                            cardSize={cardSize}
+                          />
+                        ))}
+                      </div>
+                    </section>
+                  )
+                })}
+                
+                {/* Uncategorized products */}
+                {products.filter(p => !p.category_id && !p.is_featured).length > 0 && (
+                  <section>
+                    <h2 className="text-lg font-bold mb-4">Otros</h2>
+                    <div className={`grid gap-4 ${
+                      gridColumns === 2 ? 'grid-cols-2' :
+                      gridColumns === 3 ? 'grid-cols-2 md:grid-cols-3' :
+                      gridColumns === 5 ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-5' :
+                      gridColumns === 6 ? 'grid-cols-2 md:grid-cols-4 lg:grid-cols-6' :
+                      'grid-cols-2 md:grid-cols-3 lg:grid-cols-4'
+                    }`}>
+                      {products.filter(p => !p.category_id && !p.is_featured).map(product => (
+                        <ProductCard
+                          key={product.id}
+                          product={product}
+                          onAdd={addToCart}
+                          onDetail={setProductDetail}
+                          formatPrice={formatPrice}
+                          getProductPrice={getProductPrice}
+                          buttonColor={buttonColor}
+                          cardSize={cardSize}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                )}
+              </>
+            ) : (
+              // Filtered Products
+              <section>
+                <h2 className="text-lg font-bold mb-4">
+                  {selectedCategory === 'promo' ? 'Ofertas' : 
+                   selectedCategory === 'featured' ? 'Destacados' :
+                   categories.find(c => c.id === selectedCategory)?.name || 'Productos'}
+                </h2>
+                <div className={`grid gap-4 ${
+                  gridColumns === 2 ? 'grid-cols-2' :
+                  gridColumns === 3 ? 'grid-cols-2 md:grid-cols-3' :
+                  gridColumns === 5 ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-5' :
+                  gridColumns === 6 ? 'grid-cols-2 md:grid-cols-4 lg:grid-cols-6' :
+                  'grid-cols-2 md:grid-cols-3 lg:grid-cols-4'
+                }`}>
+                  {filteredProducts.map(product => (
+                    <ProductCard
+                      key={product.id}
+                      product={product}
+                      onAdd={addToCart}
+                      onDetail={setProductDetail}
+                      formatPrice={formatPrice}
+                      getProductPrice={getProductPrice}
+                      buttonColor={buttonColor}
+                      cardSize={cardSize}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
           </div>
         )}
 
@@ -418,7 +528,7 @@ export default function StorePage() {
         {(settings?.business_hours || settings?.shipping_info) && (
           <div className="mt-10 grid md:grid-cols-2 gap-4">
             {settings?.business_hours && (
-              <Card className="bg-white/80">
+              <Card className="bg-white/80 border-0 shadow-sm">
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2 mb-2">
                     <Clock className="w-5 h-5" style={{ color: buttonColor }} />
@@ -429,7 +539,7 @@ export default function StorePage() {
               </Card>
             )}
             {settings?.shipping_info && (
-              <Card className="bg-white/80">
+              <Card className="bg-white/80 border-0 shadow-sm">
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2 mb-2">
                     <Truck className="w-5 h-5" style={{ color: buttonColor }} />
@@ -446,7 +556,7 @@ export default function StorePage() {
         {profile?.business_type === 'personal' && (settings?.about_me || settings?.experience || settings?.skills) && (
           <div className="mt-10 space-y-4">
             {settings?.about_me && (
-              <Card className="bg-white/80">
+              <Card className="bg-white/80 border-0 shadow-sm">
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2 mb-2">
                     <User className="w-5 h-5" style={{ color: buttonColor }} />
@@ -457,7 +567,7 @@ export default function StorePage() {
               </Card>
             )}
             {settings?.experience && (
-              <Card className="bg-white/80">
+              <Card className="bg-white/80 border-0 shadow-sm">
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2 mb-2">
                     <Star className="w-5 h-5" style={{ color: buttonColor }} />
@@ -468,7 +578,7 @@ export default function StorePage() {
               </Card>
             )}
             {settings?.skills && (
-              <Card className="bg-white/80">
+              <Card className="bg-white/80 border-0 shadow-sm">
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2 mb-2">
                     <Info className="w-5 h-5" style={{ color: buttonColor }} />
@@ -479,7 +589,7 @@ export default function StorePage() {
               </Card>
             )}
             {settings?.contact_info && (
-              <Card className="bg-white/80">
+              <Card className="bg-white/80 border-0 shadow-sm">
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2 mb-2">
                     <Phone className="w-5 h-5" style={{ color: buttonColor }} />
@@ -514,7 +624,12 @@ export default function StorePage() {
             <>
               {productDetail.image_url && (
                 <div className="aspect-video bg-gray-100">
-                  <img src={productDetail.image_url} alt={productDetail.name} className="w-full h-full object-cover" />
+                  <img 
+                    src={productDetail.image_url} 
+                    alt={productDetail.name} 
+                    className="w-full h-full object-cover"
+                    onError={(e) => { e.target.style.display = 'none' }}
+                  />
                 </div>
               )}
               <div className="p-6">
@@ -693,41 +808,61 @@ export default function StorePage() {
   )
 }
 
-// Product Card Component - New Design
-function ProductCard({ product, onAdd, onDetail, formatPrice, getProductPrice, buttonColor }) {
+// Product Card Component - Improved Design
+function ProductCard({ product, onAdd, onDetail, formatPrice, getProductPrice, buttonColor, cardSize }) {
+  const imageHeight = cardSize === 'small' ? 'h-28' : cardSize === 'large' ? 'h-48' : 'h-36'
+  
   return (
     <div 
-      className="w-40 flex-shrink-0 bg-white rounded-2xl shadow-md overflow-hidden cursor-pointer hover:shadow-lg transition-shadow"
+      className="bg-white rounded-xl shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition-all border border-gray-100"
       onClick={() => onDetail(product)}
     >
-      <div className="aspect-square bg-gray-100 relative">
+      <div className={`${imageHeight} bg-gray-100 relative`}>
         {product.image_url ? (
-          <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
+          <img 
+            src={product.image_url} 
+            alt={product.name} 
+            className="w-full h-full object-cover"
+            onError={(e) => { e.target.style.display = 'none' }}
+          />
         ) : (
           <div className="w-full h-full flex items-center justify-center bg-gray-50">
-            <Store className="w-8 h-8 text-gray-300" />
+            <Store className="w-10 h-10 text-gray-300" />
           </div>
         )}
         {product.promo_active && (
-          <Badge className="absolute top-2 right-2 bg-red-500 text-white text-xs">Oferta</Badge>
+          <Badge className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2">Oferta</Badge>
         )}
         {product.is_featured && !product.promo_active && (
-          <Badge className="absolute top-2 right-2 bg-amber-500 text-white text-xs">
+          <Badge className="absolute top-2 right-2 bg-amber-500 text-white text-xs px-1.5">
             <Star className="w-3 h-3" />
           </Badge>
         )}
       </div>
       <div className="p-3">
-        <h3 className="font-semibold text-sm truncate">{product.name}</h3>
-        <div className="mt-1">
-          {product.promo_active && product.promo_price ? (
-            <div className="flex items-center gap-1">
-              <span className="font-bold text-red-600">{formatPrice(product.promo_price)}</span>
-              <span className="text-xs text-gray-400 line-through">{formatPrice(product.price)}</span>
-            </div>
-          ) : (
-            <span className="font-bold" style={{ color: buttonColor }}>{formatPrice(product.price)}</span>
-          )}
+        <h3 className="font-semibold text-sm truncate mb-1">{product.name}</h3>
+        {product.description && (
+          <p className="text-xs text-gray-500 truncate mb-2">{product.description}</p>
+        )}
+        <div className="flex items-center justify-between">
+          <div>
+            {product.promo_active && product.promo_price ? (
+              <div className="flex flex-col">
+                <span className="font-bold text-red-600 text-sm">{formatPrice(product.promo_price)}</span>
+                <span className="text-xs text-gray-400 line-through">{formatPrice(product.price)}</span>
+              </div>
+            ) : (
+              <span className="font-bold text-sm" style={{ color: buttonColor }}>{formatPrice(product.price)}</span>
+            )}
+          </div>
+          <Button
+            size="sm"
+            className="h-8 w-8 rounded-full p-0 text-white"
+            style={{ backgroundColor: buttonColor }}
+            onClick={(e) => { e.stopPropagation(); onAdd(product) }}
+          >
+            <Plus className="w-4 h-4" />
+          </Button>
         </div>
       </div>
     </div>
