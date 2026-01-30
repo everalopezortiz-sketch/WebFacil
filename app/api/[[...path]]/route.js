@@ -583,13 +583,14 @@ export async function POST(request, { params }) {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
       
-      // Only include fields that exist in the database schema
+      // Include all fields that exist in the database schema
       const allowedFields = [
-        'user_id', 'logo_url', 'theme_bg_color', 'theme_font_color', 'theme_button_color',
+        'user_id', 'logo_url', 'cover_image_url', 'theme_bg_color', 'theme_font_color', 'theme_button_color',
         'bg_pattern', 'currency', 'business_mode', 'location_link', 'delivery_enabled',
         'payment_cash_enabled', 'payment_bank_account', 'payment_bank_enabled',
         'payment_link', 'payment_link_enabled', 'payment_qr_url', 'payment_qr_enabled',
-        'whatsapp_number'
+        'whatsapp_number', 'store_description', 'business_hours', 'shipping_info',
+        'card_size', 'grid_columns', 'products_per_page'
       ]
       
       const cleanBody = { user_id: user.id }
