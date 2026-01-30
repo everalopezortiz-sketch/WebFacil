@@ -161,6 +161,27 @@ export default function Dashboard({ user, profile, onLogout }) {
     }
   }
 
+  // Delete order
+  const deleteOrder = async (orderId) => {
+    if (!confirm('¿Eliminar este pedido? Esta acción no se puede deshacer.')) return
+    try {
+      const res = await fetch(`/api/orders/${orderId}`, {
+        method: 'DELETE'
+      })
+      if (res.ok) {
+        toast.success('Pedido eliminado')
+        loadOrders(orderDateFilter)
+      } else {
+        toast.error('Error al eliminar')
+      }
+    } catch (error) {
+      toast.error('Error de conexión')
+    }
+  }
+
+  // Order dialog for editing
+  const [orderDialog, setOrderDialog] = useState({ open: false, data: null })
+
   // Save settings
   const saveSettings = async () => {
     setSaving(true)
