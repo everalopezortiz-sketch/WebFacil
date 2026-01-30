@@ -32,6 +32,25 @@ const CURRENCIES = [
   { value: 'MXN', label: 'Peso MX ($)', symbol: '$' }
 ]
 
+// Order status constants (matching database constraint)
+const ORDER_STATUS = {
+  PENDING: 'pending',
+  CONFIRMED: 'confirmed',
+  PREPARING: 'preparing',
+  READY: 'ready',
+  DELIVERED: 'delivered',
+  CANCELLED: 'cancelled'
+}
+
+const ORDER_STATUS_LABELS = {
+  pending: { label: 'Nuevo', color: 'bg-yellow-500' },
+  confirmed: { label: 'Confirmado', color: 'bg-blue-500' },
+  preparing: { label: 'Preparando', color: 'bg-orange-500' },
+  ready: { label: 'Listo', color: 'bg-cyan-500' },
+  delivered: { label: 'Entregado', color: 'bg-green-500' },
+  cancelled: { label: 'Cancelado', color: 'bg-red-500' }
+}
+
 const BUSINESS_LABELS = {
   ecommerce: { label: 'Tienda', icon: Store, productLabel: 'Productos' },
   personal: { label: 'Personal', icon: Users, productLabel: 'Servicios' },
