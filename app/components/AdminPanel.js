@@ -303,9 +303,10 @@ export default function AdminPanel({ user, profile, onLogout }) {
       const res = await fetch(`/api/admin/user-messages/${user.id}`)
       if (res.ok) {
         const messages = await res.json()
-        setUserMessagesDialog({ open: true, user, messages })
+        // Filter only messages sent to this specific user (not global ones for the list)
+        const userSpecificMessages = messages.filter(m => m.user_id === user.id)
+        setUserMessagesDialog({ open: true, user, messages: userSpecificMessages })
       } else {
-        // No messages or endpoint not available
         setUserMessagesDialog({ open: true, user, messages: [] })
       }
     } catch (error) {
@@ -331,6 +332,40 @@ export default function AdminPanel({ user, profile, onLogout }) {
       }
     } catch (error) {
       toast.error('Error de conexión')
+    }
+  }
+
+  // Edit message state
+  const [editingMessage, setEditingMessage] = useState(null)
+  const [editMessageText, setEditMessageText] = useState('')
+
+  // Update/Edit message
+  const updateMessage = async (messageId, newText) => {
+    if (!newText.trim()) return
+    
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/admin/messages/${messageId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: newText })
+      })
+      if (res.ok) {
+        toast.success('Mensaje actualizado')
+        setEditingMessage(null)
+        setEditMessageText('')
+        // Refresh lists
+        if (userMessagesDialog.user) {
+          loadUserMessages(userMessagesDialog.user)
+        }
+        loadSentMessages()
+      } else {
+        toast.error('Error al actualizar')
+      }
+    } catch (error) {
+      toast.error('Error de conexión')
+    } finally {
+      setSaving(false)
     }
   }
 
