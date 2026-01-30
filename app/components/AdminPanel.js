@@ -984,6 +984,70 @@ export default function AdminPanel({ user, profile, onLogout }) {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* User Messages Dialog */}
+      <Dialog open={userMessagesDialog.open} onOpenChange={(open) => setUserMessagesDialog({ ...userMessagesDialog, open })}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Mensajes de {userMessagesDialog.user?.first_name} {userMessagesDialog.user?.last_name}</DialogTitle>
+            <DialogDescription>{userMessagesDialog.user?.email}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {userMessagesDialog.messages.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <MessageSquare className="w-12 h-12 mx-auto mb-2 opacity-30" />
+                <p>No hay mensajes para este usuario</p>
+              </div>
+            ) : (
+              <ScrollArea className="h-[400px]">
+                <div className="space-y-3">
+                  {userMessagesDialog.messages.map(msg => (
+                    <div key={msg.id} className="p-3 border rounded-lg bg-slate-50">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            {msg.is_global ? (
+                              <Badge variant="secondary">Global</Badge>
+                            ) : (
+                              <Badge variant="outline">Individual</Badge>
+                            )}
+                            <span className="text-xs text-muted-foreground">
+                              {msg.created_at ? new Date(msg.created_at).toLocaleDateString('es', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}
+                            </span>
+                          </div>
+                          <p className="text-sm">{msg.message}</p>
+                        </div>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="text-destructive shrink-0"
+                          onClick={() => deleteUserMessage(msg.id)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            )}
+            <div className="flex justify-between border-t pt-4">
+              <Button 
+                variant="outline"
+                onClick={() => {
+                  setUserMessagesDialog({ open: false, user: null, messages: [] })
+                  setMessageDialog({ open: true, user: userMessagesDialog.user, isGlobal: false })
+                }}
+              >
+                <Send className="w-4 h-4 mr-2" /> Nuevo Mensaje
+              </Button>
+              <Button variant="outline" onClick={() => setUserMessagesDialog({ open: false, user: null, messages: [] })}>
+                Cerrar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
