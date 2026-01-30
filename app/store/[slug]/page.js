@@ -76,7 +76,7 @@ export default function StorePage() {
   const [checkoutData, setCheckoutData] = useState({})
   const [productDetail, setProductDetail] = useState(null)
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('')
-  const [globalSettings, setGlobalSettings] = useState({ name: 'WebBuilder', whatsapp: '' })
+  const [globalSettings, setGlobalSettings] = useState({ name: 'webFácil', whatsapp: '' })
 
   // Load cart from localStorage
   useEffect(() => {
