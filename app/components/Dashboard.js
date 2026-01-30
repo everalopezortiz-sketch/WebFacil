@@ -561,6 +561,36 @@ export default function Dashboard({ user, profile, onLogout }) {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div>
+                    <Label>Descripción de tu negocio</Label>
+                    <Textarea
+                      placeholder="Describe tu negocio o tienda..."
+                      value={settings?.store_description || ''}
+                      onChange={(e) => setSettings({ ...settings, store_description: e.target.value })}
+                      rows={3}
+                    />
+                  </div>
+                  
+                  <div>
+                    <Label>Horario de Atención</Label>
+                    <Textarea
+                      placeholder="Lun-Vie: 9am-6pm, Sáb: 9am-1pm"
+                      value={settings?.business_hours || ''}
+                      onChange={(e) => setSettings({ ...settings, business_hours: e.target.value })}
+                      rows={2}
+                    />
+                  </div>
+                  
+                  <div>
+                    <Label>Políticas de Envío</Label>
+                    <Textarea
+                      placeholder="Información sobre entregas..."
+                      value={settings?.shipping_info || ''}
+                      onChange={(e) => setSettings({ ...settings, shipping_info: e.target.value })}
+                      rows={2}
+                    />
+                  </div>
+
+                  <div>
                     <Label>Moneda</Label>
                     <Select
                       value={settings?.currency || 'USD'}
