@@ -1002,15 +1002,24 @@ export async function PUT(request, { params }) {
     // Update order status - use admin client
     if (pathStr.startsWith('orders/')) {
       const id = path[1]
+      console.log('Updating order:', id, 'with body:', body)
+      
+      // Only update the status field
+      const updateData = {}
+      if (body.status) updateData.status = body.status
+      
       const { data, error } = await supabaseAdmin
         .from('orders')
-        .update(body)
+        .update(updateData)
         .eq('id', id)
         .eq('user_id', user.id)
         .select()
         .single()
       
-      if (error) return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
+      if (error) {
+        console.error('Order update error:', error)
+        return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
+      }
       return handleCORS(NextResponse.json(data))
     }
 
