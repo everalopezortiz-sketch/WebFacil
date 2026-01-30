@@ -239,9 +239,13 @@ export async function GET(request, { params }) {
       
       const { data, error } = await supabaseAdmin
         .from('support_messages')
-        .select('*, profiles(first_name, last_name, email)')
-        .order('createdAt', { ascending: false })
+        .select('*')
+        .order('created_at', { ascending: false })
       
+      if (error) {
+        console.error('Messages list error:', error)
+        return handleCORS(NextResponse.json([]))
+      }
       return handleCORS(NextResponse.json(data || []))
     }
 
