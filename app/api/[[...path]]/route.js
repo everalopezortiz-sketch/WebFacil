@@ -1034,6 +1034,26 @@ export async function DELETE(request, { params }) {
       return handleCORS(NextResponse.json({ success: true }))
     }
 
+    // Delete order - use admin client
+    if (pathStr.startsWith('orders/')) {
+      const id = path[1]
+      // First delete order items
+      await supabaseAdmin
+        .from('order_items')
+        .delete()
+        .eq('order_id', id)
+      
+      // Then delete the order
+      const { error } = await supabaseAdmin
+        .from('orders')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user.id)
+      
+      if (error) return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
+      return handleCORS(NextResponse.json({ success: true }))
+    }
+
     // Delete support message - use admin client
     if (pathStr.startsWith('admin/messages/')) {
       const { data: profile } = await supabaseAdmin.from('profiles').select('role').eq('id', user.id).single()
