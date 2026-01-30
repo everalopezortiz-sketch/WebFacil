@@ -547,7 +547,7 @@ export default function AdminPanel({ user, profile, onLogout }) {
                                 <Button size="sm" variant="ghost" title="Asignar plan" onClick={() => setPlanDialog({ open: true, user: u })}>
                                   <CreditCard className="w-4 h-4" />
                                 </Button>
-                                <Button size="sm" variant="ghost" title="Mensaje" onClick={() => setMessageDialog({ open: true, user: u, isGlobal: false })}>
+                                <Button size="sm" variant="ghost" title="Ver/Enviar Mensajes" onClick={() => loadUserMessages(u)}>
                                   <MessageSquare className="w-4 h-4" />
                                 </Button>
                                 <Button size="sm" variant="ghost" className="text-destructive" title="Eliminar" onClick={() => deleteUser(u.id)}>
