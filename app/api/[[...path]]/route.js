@@ -217,6 +217,30 @@ export async function GET(request, { params }) {
         if (data && data.description) {
           try {
             const settings = JSON.parse(data.description)
+            
+            // Get developer's WhatsApp number
+            try {
+              const { data: developerProfile } = await supabaseAdmin
+                .from('profiles')
+                .select('id')
+                .eq('role', 'DESARROLLADOR')
+                .single()
+              
+              if (developerProfile) {
+                const { data: developerSettings } = await supabaseAdmin
+                  .from('user_settings')
+                  .select('whatsapp_number')
+                  .eq('user_id', developerProfile.id)
+                  .single()
+                
+                if (developerSettings?.whatsapp_number) {
+                  settings.developer_whatsapp = developerSettings.whatsapp_number
+                }
+              }
+            } catch (e) {
+              // Developer WhatsApp not found, continue without it
+            }
+            
             return handleCORS(NextResponse.json(settings))
           } catch (e) {
             return handleCORS(NextResponse.json({ name: data.title, logo_url: data.link_url }))
