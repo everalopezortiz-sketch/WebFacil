@@ -122,10 +122,26 @@ export default function AdminPanel({ user, profile, onLogout }) {
     }
   }
 
-  const loadSoftwareSettings = () => {
+  const loadSoftwareSettings = async () => {
+    // First try localStorage for immediate display
     const saved = localStorage.getItem('softwareSettings')
     if (saved) {
-      setSoftwareSettings(JSON.parse(saved))
+      try { setSoftwareSettings(JSON.parse(saved)) } catch (e) {}
+    }
+    
+    // Then fetch from API for latest values
+    try {
+      const res = await fetch('/api/global-settings')
+      if (res.ok) {
+        const data = await res.json()
+        if (data && Object.keys(data).length > 0) {
+          setSoftwareSettings(prev => ({ ...prev, ...data }))
+          // Update localStorage too
+          localStorage.setItem('softwareSettings', JSON.stringify({ ...JSON.parse(saved || '{}'), ...data }))
+        }
+      }
+    } catch (e) {
+      console.log('Could not fetch global settings from API')
     }
   }
 
