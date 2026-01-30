@@ -1642,3 +1642,60 @@ export default function Dashboard({ user, profile, onLogout }) {
     </div>
   )
 }
+
+// Order Card Component
+function OrderCard({ order, formatPrice, onView, onDelete, actions }) {
+  const statusConfig = {
+    pending: { label: 'Nuevo', color: '#eab308', bgClass: 'bg-yellow-500' },
+    confirmed: { label: 'Confirmado', color: '#3b82f6', bgClass: 'bg-blue-500' },
+    preparing: { label: 'Preparando', color: '#f97316', bgClass: 'bg-orange-500' },
+    ready: { label: 'Listo', color: '#06b6d4', bgClass: 'bg-cyan-500' },
+    delivered: { label: 'Entregado', color: '#22c55e', bgClass: 'bg-green-500' },
+    cancelled: { label: 'Cancelado', color: '#ef4444', bgClass: 'bg-red-500' }
+  }
+  
+  const config = statusConfig[order.status] || statusConfig.pending
+
+  return (
+    <Card className="border-l-4" style={{ borderLeftColor: config.color }}>
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between mb-3">
+          <div>
+            <p className="font-mono text-sm text-muted-foreground">{order.order_number}</p>
+            <p className="font-medium">{order.customer_name}</p>
+            {order.customer_phone && <p className="text-sm text-muted-foreground">{order.customer_phone}</p>}
+          </div>
+          <div className="text-right flex items-start gap-2">
+            <Badge className={config.bgClass}>{config.label}</Badge>
+            <div className="flex gap-1">
+              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onView}>
+                <Eye className="w-3 h-3" />
+              </Button>
+              <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={onDelete}>
+                <Trash2 className="w-3 h-3" />
+              </Button>
+            </div>
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground mb-2">
+          {order.createdAt ? new Date(order.createdAt).toLocaleString('es', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}
+        </p>
+        <div className="border-t pt-3">
+          {order.order_items?.map((item, i) => (
+            <div key={i} className="flex justify-between text-sm py-1">
+              <span>{item.quantity}x {item.product_name}</span>
+              <span>{formatPrice(item.subtotal)}</span>
+            </div>
+          ))}
+          <div className="flex justify-between font-bold border-t pt-2 mt-2">
+            <span>Total</span>
+            <span>{formatPrice(order.total)}</span>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t">
+          {actions}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
