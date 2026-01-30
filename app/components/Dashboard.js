@@ -507,7 +507,7 @@ export default function Dashboard({ user, profile, onLogout }) {
                     {settings?.cover_image_url && (
                       <div className="mt-2 rounded-lg overflow-hidden">
                         <img 
-                          src={settings.cover_image_url} 
+                          src={normalizeImageSrc(settings.cover_image_url)} 
                           alt="Vista previa" 
                           className="h-20 w-full object-cover"
                           onError={(e) => { e.target.style.display = 'none' }}
