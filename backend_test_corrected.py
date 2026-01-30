@@ -11,7 +11,7 @@ import os
 from datetime import datetime
 
 # Get base URL from environment
-BASE_URL = "https://sitehub-47.preview.emergentagent.com/api"
+BASE_URL = "https://storefront-builder-1.preview.emergentagent.com/api"
 
 # Test credentials
 ADMIN_CREDENTIALS = {
