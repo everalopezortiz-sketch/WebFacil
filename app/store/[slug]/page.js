@@ -333,7 +333,7 @@ export default function StorePage() {
             <div className="w-24 h-24 md:w-28 md:h-28 rounded-2xl bg-white shadow-xl overflow-hidden border-4 border-white flex-shrink-0">
               {settings?.logo_url ? (
                 <img 
-                  src={settings.logo_url}
+                  src={normalizeImageSrc(settings.logo_url)}
                   alt="Logo"
                   className="w-full h-full object-cover"
                   onError={(e) => { 
