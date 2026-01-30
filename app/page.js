@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
 import { Loader2, Store, User, Utensils, Eye, EyeOff } from 'lucide-react'
+import { normalizeImageSrc } from '@/lib/imageUtils'
 
 // Dashboard imports
 import Dashboard from '@/app/components/Dashboard'
