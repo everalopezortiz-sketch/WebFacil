@@ -639,7 +639,7 @@ export default function StorePage() {
               {cart.map(item => (
                 <div key={item.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
                   {item.image_url && (
-                    <img src={item.image_url} alt={item.name} className="w-16 h-16 rounded-lg object-cover" onError={(e) => e.target.style.display = 'none'} />
+                    <img src={normalizeImageSrc(item.image_url)} alt={item.name} className="w-16 h-16 rounded-lg object-cover" onError={(e) => e.target.style.display = 'none'} />
                   )}
                   <div className="flex-1 min-w-0">
                     <h4 className="font-medium truncate">{item.name}</h4>
