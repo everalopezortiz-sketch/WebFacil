@@ -545,29 +545,32 @@ export default function StorePage() {
       </main>
 
       {/* Footer */}
-      <footer className="bg-gray-900 text-white py-6 mt-auto">
+      <footer className="bg-gray-900 text-white py-8 mt-auto">
         <div className="container mx-auto px-4">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="text-center md:text-left">
-              <p className="text-sm opacity-70">
-                Creado con <span className="font-semibold text-amber-400">{globalSettings.name || 'webFácil'}</span>
-              </p>
+          <div className="flex flex-col items-center text-center gap-4">
+            <div>
+              <p className="text-lg font-semibold text-amber-400">{globalSettings.name || 'webFácil'}</p>
               {settings?.delivery_enabled && (
-                <p className="text-xs text-green-400 flex items-center gap-1 justify-center md:justify-start mt-1">
+                <p className="text-xs text-green-400 flex items-center gap-1 justify-center mt-1">
                   <Truck className="w-3 h-3" /> Delivery disponible
                 </p>
               )}
             </div>
             {globalSettings.whatsapp && (
-              <Button
-                size="sm"
-                className="bg-green-600 hover:bg-green-700 text-white border-0"
-                onClick={() => window.open(`https://wa.me/${globalSettings.whatsapp.replace(/\D/g, '')}`, '_blank')}
-              >
-                <MessageCircle className="w-4 h-4 mr-2" /> Contactar Soporte
-              </Button>
+              <div className="flex flex-col items-center gap-2">
+                <p className="text-sm opacity-80">¿Querés tu web gratis? Escribinos</p>
+                <Button
+                  size="sm"
+                  className="bg-green-600 hover:bg-green-700 text-white border-0"
+                  onClick={() => window.open(`https://wa.me/${globalSettings.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent('Hola! Quiero mi web gratis')}`, '_blank')}
+                >
+                  <MessageCircle className="w-4 h-4 mr-2" /> Contactar
+                </Button>
+              </div>
             )}
           </div>
+        </div>
+      </footer>
         </div>
       </footer>
 
