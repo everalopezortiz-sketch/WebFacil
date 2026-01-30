@@ -476,6 +476,20 @@ export default function App() {
         <p className="text-center text-sm text-muted-foreground mt-6">
           Al registrarte, aceptas nuestros términos y condiciones
         </p>
+        
+        {/* Footer with Contact */}
+        {softwareSettings.whatsapp_number && (
+          <div className="text-center mt-8">
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-green-600 border-green-300 hover:bg-green-50"
+              onClick={() => window.open(`https://wa.me/${softwareSettings.whatsapp_number.replace(/\D/g, '')}`, '_blank')}
+            >
+              <span className="mr-2">💬</span> Contacto
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   )
