@@ -861,28 +861,43 @@ export async function POST(request, { params }) {
         return handleCORS(NextResponse.json({ error: 'Forbidden' }, { status: 403 }))
       }
       
-      // Store global settings in info_content with special type
+      // First try to find existing record
+      const { data: existing } = await supabaseAdmin
+        .from('info_content')
+        .select('id')
+        .eq('title', 'GLOBAL_SOFTWARE_SETTINGS')
+        .single()
+      
       const settingsData = {
-        id: 'global-software-settings',
-        title: body.name || 'WebBuilder',
+        title: 'GLOBAL_SOFTWARE_SETTINGS',
         link_url: body.logo_url || '',
         description: JSON.stringify(body),
-        content_type: 'software_settings',
         is_active: true
       }
       
-      const { data, error } = await supabaseAdmin
-        .from('info_content')
-        .upsert(settingsData, { onConflict: 'id' })
-        .select()
-        .single()
+      let result
+      if (existing) {
+        // Update existing
+        result = await supabaseAdmin
+          .from('info_content')
+          .update(settingsData)
+          .eq('id', existing.id)
+          .select()
+          .single()
+      } else {
+        // Insert new
+        result = await supabaseAdmin
+          .from('info_content')
+          .insert(settingsData)
+          .select()
+          .single()
+      }
       
-      if (error) {
-        console.error('Global settings save error:', error)
-        // Return success anyway since localStorage is the primary storage
+      if (result.error) {
+        console.error('Global settings save error:', result.error)
         return handleCORS(NextResponse.json({ success: true, localStorage: true }))
       }
-      return handleCORS(NextResponse.json(data))
+      return handleCORS(NextResponse.json(result.data))
     }
 
     return handleCORS(NextResponse.json({ error: 'Not found' }, { status: 404 }))
