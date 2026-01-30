@@ -251,6 +251,7 @@ export default function AdminPanel({ user, profile, onLogout }) {
         toast.success('Mensaje enviado')
         setMessageDialog({ open: false, user: null, isGlobal: false })
         setMessageText('')
+        loadSentMessages()
       } else {
         toast.error('Error al enviar')
       }
@@ -258,6 +259,40 @@ export default function AdminPanel({ user, profile, onLogout }) {
       toast.error('Error de conexión')
     } finally {
       setSaving(false)
+    }
+  }
+
+  // Delete message
+  const deleteMessage = async (messageId) => {
+    if (!confirm('¿Eliminar este mensaje?')) return
+    
+    try {
+      const res = await fetch(`/api/admin/messages/${messageId}`, { method: 'DELETE' })
+      if (res.ok) {
+        toast.success('Mensaje eliminado')
+        loadSentMessages()
+      } else {
+        toast.error('Error al eliminar')
+      }
+    } catch (error) {
+      toast.error('Error de conexión')
+    }
+  }
+
+  // Delete info content
+  const deleteInfoContent = async (contentId) => {
+    if (!confirm('¿Eliminar este contenido?')) return
+    
+    try {
+      const res = await fetch(`/api/admin/info-content/${contentId}`, { method: 'DELETE' })
+      if (res.ok) {
+        toast.success('Contenido eliminado')
+        loadInfoContent()
+      } else {
+        toast.error('Error al eliminar')
+      }
+    } catch (error) {
+      toast.error('Error de conexión')
     }
   }
 
