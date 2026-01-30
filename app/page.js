@@ -26,7 +26,8 @@ export default function App() {
   // Get software settings from localStorage
   const [softwareSettings, setSoftwareSettings] = useState({
     name: 'WebBuilder',
-    logo_url: ''
+    logo_url: '',
+    whatsapp_number: ''
   })
 
   // Auth form state
