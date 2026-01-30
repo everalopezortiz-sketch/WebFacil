@@ -593,7 +593,7 @@ export default function StorePage() {
               {productDetail.image_url && (
                 <div className="aspect-video bg-gray-100">
                   <img 
-                    src={productDetail.image_url}
+                    src={normalizeImageSrc(productDetail.image_url)}
                     alt={productDetail.name}
                     className="w-full h-full object-cover"
                     onError={(e) => { e.target.style.display = 'none' }}
