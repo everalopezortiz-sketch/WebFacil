@@ -59,6 +59,7 @@ export async function GET(request, { params }) {
   const path = params?.path || []
   const pathStr = path.join('/')
   const supabase = createSupabaseServer()
+  const supabaseAdmin = createSupabaseAdmin()
   const { searchParams } = new URL(request.url)
 
   try {
