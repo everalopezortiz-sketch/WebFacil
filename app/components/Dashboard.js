@@ -467,25 +467,6 @@ export default function Dashboard({ user, profile, onLogout }) {
                     )}
                   </div>
                   <div>
-                    <Label>Imagen de Portada (URL)</Label>
-                    <Input
-                      placeholder="https://ejemplo.com/cover.jpg"
-                      value={settings?.cover_image_url || ''}
-                      onChange={(e) => setSettings({ ...settings, cover_image_url: e.target.value })}
-                    />
-                    {settings?.cover_image_url && (
-                      <div className="mt-2 rounded-lg overflow-hidden">
-                        <img 
-                          src={settings.cover_image_url} 
-                          alt="Vista previa de portada" 
-                          className="h-24 w-full object-cover"
-                          onError={(e) => { e.target.style.display = 'none' }}
-                        />
-                      </div>
-                    )}
-                    <p className="text-xs text-muted-foreground mt-1">Imagen que aparecerá en la parte superior de tu tienda</p>
-                  </div>
-                  <div>
                     <Label>Patrón de Fondo</Label>
                     <Select
                       value={settings?.bg_pattern || 'none'}
