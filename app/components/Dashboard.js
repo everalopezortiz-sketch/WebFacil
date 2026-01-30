@@ -155,15 +155,9 @@ export default function Dashboard({ user, profile, onLogout }) {
   // Update order status
   const updateOrderStatus = async (orderId, newStatus) => {
     try {
-      // Get session token
-      const { data: { session } } = await supabase.auth.getSession()
-      
-      const res = await fetch(`/api/orders/${orderId}`, {
+      const res = await authFetch(supabase, `/api/orders/${orderId}`, {
         method: 'PUT',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token || ''}`
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus })
       })
       if (res.ok) {
@@ -182,13 +176,8 @@ export default function Dashboard({ user, profile, onLogout }) {
   const deleteOrder = async (orderId) => {
     if (!confirm('¿Eliminar este pedido? Esta acción no se puede deshacer.')) return
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      
-      const res = await fetch(`/api/orders/${orderId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${session?.access_token || ''}`
-        }
+      const res = await authFetch(supabase, `/api/orders/${orderId}`, {
+        method: 'DELETE'
       })
       if (res.ok) {
         toast.success('Pedido eliminado')
