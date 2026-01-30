@@ -1021,7 +1021,7 @@ export default function AdminPanel({ user, profile, onLogout }) {
       </Dialog>
 
       {/* User Messages Dialog */}
-      <Dialog open={userMessagesDialog.open} onOpenChange={(open) => setUserMessagesDialog({ ...userMessagesDialog, open })}>
+      <Dialog open={userMessagesDialog.open} onOpenChange={(open) => { setUserMessagesDialog({ ...userMessagesDialog, open }); setEditingMessage(null); }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Mensajes de {userMessagesDialog.user?.first_name} {userMessagesDialog.user?.last_name}</DialogTitle>
@@ -1031,36 +1031,62 @@ export default function AdminPanel({ user, profile, onLogout }) {
             {userMessagesDialog.messages.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <MessageSquare className="w-12 h-12 mx-auto mb-2 opacity-30" />
-                <p>No hay mensajes para este usuario</p>
+                <p>No hay mensajes enviados a este usuario</p>
               </div>
             ) : (
               <ScrollArea className="h-[400px]">
                 <div className="space-y-3">
                   {userMessagesDialog.messages.map(msg => (
                     <div key={msg.id} className="p-3 border rounded-lg bg-slate-50">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            {msg.is_global ? (
-                              <Badge variant="secondary">Global</Badge>
-                            ) : (
-                              <Badge variant="outline">Individual</Badge>
-                            )}
-                            <span className="text-xs text-muted-foreground">
-                              {msg.created_at ? new Date(msg.created_at).toLocaleDateString('es', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}
-                            </span>
+                      {editingMessage === msg.id ? (
+                        <div className="space-y-2">
+                          <Textarea
+                            value={editMessageText}
+                            onChange={(e) => setEditMessageText(e.target.value)}
+                            rows={3}
+                            className="w-full"
+                          />
+                          <div className="flex gap-2 justify-end">
+                            <Button size="sm" variant="outline" onClick={() => { setEditingMessage(null); setEditMessageText(''); }}>
+                              Cancelar
+                            </Button>
+                            <Button size="sm" onClick={() => updateMessage(msg.id, editMessageText)} disabled={saving}>
+                              {saving && <Loader2 className="w-3 h-3 mr-1 animate-spin" />}
+                              Guardar
+                            </Button>
                           </div>
-                          <p className="text-sm">{msg.message}</p>
                         </div>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="text-destructive shrink-0"
-                          onClick={() => deleteUserMessage(msg.id)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
+                      ) : (
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <Badge variant="outline">Individual</Badge>
+                              <span className="text-xs text-muted-foreground">
+                                {msg.created_at ? new Date(msg.created_at).toLocaleDateString('es', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}
+                              </span>
+                            </div>
+                            <p className="text-sm">{msg.message}</p>
+                          </div>
+                          <div className="flex gap-1 shrink-0">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8"
+                              onClick={() => { setEditingMessage(msg.id); setEditMessageText(msg.message); }}
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 text-destructive"
+                              onClick={() => deleteUserMessage(msg.id)}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
