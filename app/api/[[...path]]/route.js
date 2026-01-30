@@ -583,9 +583,21 @@ export async function POST(request, { params }) {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
       
-      // Remove any undefined or null values and ensure user_id
-      const cleanBody = { ...body, user_id: user.id }
-      delete cleanBody.id // Don't try to update the id
+      // Only include fields that exist in the database schema
+      const allowedFields = [
+        'user_id', 'logo_url', 'theme_bg_color', 'theme_font_color', 'theme_button_color',
+        'bg_pattern', 'currency', 'business_mode', 'location_link', 'delivery_enabled',
+        'payment_cash_enabled', 'payment_bank_account', 'payment_bank_enabled',
+        'payment_link', 'payment_link_enabled', 'payment_qr_url', 'payment_qr_enabled',
+        'whatsapp_number'
+      ]
+      
+      const cleanBody = { user_id: user.id }
+      allowedFields.forEach(field => {
+        if (body[field] !== undefined) {
+          cleanBody[field] = body[field]
+        }
+      })
       
       const { data, error } = await supabaseAdmin
         .from('user_settings')
