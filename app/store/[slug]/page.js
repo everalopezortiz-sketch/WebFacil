@@ -506,17 +506,23 @@ export default function StorePage() {
       <footer className="bg-gray-900 text-white py-6 mt-auto">
         <div className="container mx-auto px-4">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            <p className="text-sm opacity-70">
-              Creado con <span className="font-semibold text-white">{globalSettings.name}</span>
-            </p>
+            <div className="text-center md:text-left">
+              <p className="text-sm opacity-70">
+                Creado con <span className="font-semibold text-amber-400">{globalSettings.name || 'webFácil'}</span>
+              </p>
+              {settings?.delivery_enabled && (
+                <p className="text-xs text-green-400 flex items-center gap-1 justify-center md:justify-start mt-1">
+                  <Truck className="w-3 h-3" /> Delivery disponible
+                </p>
+              )}
+            </div>
             {globalSettings.whatsapp && (
               <Button
                 size="sm"
-                variant="outline"
-                className="border-white/30 text-white hover:bg-white/10"
+                className="bg-green-600 hover:bg-green-700 text-white border-0"
                 onClick={() => window.open(`https://wa.me/${globalSettings.whatsapp.replace(/\D/g, '')}`, '_blank')}
               >
-                <MessageCircle className="w-4 h-4 mr-2" /> Contacto
+                <MessageCircle className="w-4 h-4 mr-2" /> Contactar Soporte
               </Button>
             )}
           </div>
