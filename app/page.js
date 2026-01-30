@@ -25,7 +25,7 @@ export default function App() {
   
   // Get software settings from localStorage
   const [softwareSettings, setSoftwareSettings] = useState({
-    name: 'WebBuilder',
+    name: 'webFácil',
     logo_url: '',
     whatsapp_number: ''
   })
