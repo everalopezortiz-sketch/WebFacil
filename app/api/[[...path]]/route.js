@@ -206,16 +206,23 @@ export async function GET(request, { params }) {
     // Get global software settings (for login page)
     if (pathStr === 'global-settings') {
       try {
-        const saved = await supabaseAdmin
-          .from('global_settings')
+        // Try to get from info_content with special type
+        const { data } = await supabaseAdmin
+          .from('info_content')
           .select('*')
+          .eq('id', 'global-software-settings')
           .single()
         
-        if (saved.data) {
-          return handleCORS(NextResponse.json(saved.data))
+        if (data && data.description) {
+          try {
+            const settings = JSON.parse(data.description)
+            return handleCORS(NextResponse.json(settings))
+          } catch (e) {
+            return handleCORS(NextResponse.json({ name: data.title, logo_url: data.link_url }))
+          }
         }
       } catch (e) {
-        // Table might not exist, return empty
+        // No settings found
       }
       return handleCORS(NextResponse.json({}))
     }
