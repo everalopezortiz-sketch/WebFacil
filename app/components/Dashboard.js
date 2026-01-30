@@ -535,68 +535,6 @@ export default function Dashboard({ user, profile, onLogout }) {
                       </div>
                     </div>
                   </div>
-
-                  {/* Product Card Layout Configuration */}
-                  <div className="border-t pt-4 mt-4">
-                    <Label className="text-base font-semibold">Diseño de Tarjetas de {businessConfig.productLabel}</Label>
-                    <p className="text-sm text-muted-foreground mb-3">Configura cómo se muestran los productos en tu página</p>
-                    
-                    <div className="grid grid-cols-3 gap-4">
-                      <div>
-                        <Label>Tamaño de Tarjeta</Label>
-                        <Select
-                          value={settings?.card_size || 'medium'}
-                          onValueChange={(v) => setSettings({ ...settings, card_size: v })}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="small">Pequeño</SelectItem>
-                            <SelectItem value="medium">Mediano</SelectItem>
-                            <SelectItem value="large">Grande</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <Label>Columnas (Desktop)</Label>
-                        <Select
-                          value={String(settings?.grid_columns || '4')}
-                          onValueChange={(v) => setSettings({ ...settings, grid_columns: parseInt(v) })}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="2">2 columnas</SelectItem>
-                            <SelectItem value="3">3 columnas</SelectItem>
-                            <SelectItem value="4">4 columnas</SelectItem>
-                            <SelectItem value="5">5 columnas</SelectItem>
-                            <SelectItem value="6">6 columnas</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <Label>Productos por página</Label>
-                        <Select
-                          value={String(settings?.products_per_page || '20')}
-                          onValueChange={(v) => setSettings({ ...settings, products_per_page: parseInt(v) })}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="8">8 productos</SelectItem>
-                            <SelectItem value="12">12 productos</SelectItem>
-                            <SelectItem value="16">16 productos</SelectItem>
-                            <SelectItem value="20">20 productos</SelectItem>
-                            <SelectItem value="30">30 productos</SelectItem>
-                            <SelectItem value="50">50 productos</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                  </div>
                 </CardContent>
               </Card>
 
