@@ -38,6 +38,16 @@ const BUSINESS_LABELS = {
   restaurant: { label: 'Restaurante', icon: Package, productLabel: 'Menú' }
 }
 
+// Helper function for authenticated fetch
+async function authFetch(supabase, url, options = {}) {
+  const { data: { session } } = await supabase.auth.getSession()
+  const headers = {
+    ...options.headers,
+    'Authorization': `Bearer ${session?.access_token || ''}`
+  }
+  return fetch(url, { ...options, headers })
+}
+
 export default function Dashboard({ user, profile, onLogout }) {
   const [activeTab, setActiveTab] = useState('settings')
   const [settings, setSettings] = useState(null)
