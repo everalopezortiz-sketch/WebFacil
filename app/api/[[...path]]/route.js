@@ -897,11 +897,15 @@ export async function PUT(request, { params }) {
     // Update product
     if (pathStr.startsWith('products/')) {
       const id = path[1]
-      // Clean category_id if it's 'none'
+      // Clean category_id if it's 'none' and remove JOIN properties
       const productData = { ...body }
       if (productData.category_id === 'none' || productData.category_id === '') {
         productData.category_id = null
       }
+      // Remove properties that come from JOINs
+      delete productData.categories
+      delete productData.created_at
+      delete productData.updated_at
       
       const { data, error } = await supabaseAdmin
         .from('products')
