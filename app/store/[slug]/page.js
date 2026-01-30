@@ -307,7 +307,7 @@ export default function StorePage() {
         <div className="h-44 md:h-56 relative overflow-hidden">
           {settings?.cover_image_url ? (
             <img 
-              src={settings.cover_image_url}
+              src={normalizeImageSrc(settings.cover_image_url)}
               alt="Portada"
               className="w-full h-full object-cover"
               style={{ objectPosition: 'center' }}
