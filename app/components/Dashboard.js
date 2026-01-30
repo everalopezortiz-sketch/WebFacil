@@ -148,13 +148,15 @@ export default function Dashboard({ user, profile, onLogout }) {
       const res = await fetch(`/api/orders/${orderId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ status: newStatus })
       })
       if (res.ok) {
         toast.success('Estado actualizado')
         loadOrders(orderDateFilter)
       } else {
-        toast.error('Error al actualizar')
+        const error = await res.json()
+        toast.error(error.error || 'Error al actualizar')
       }
     } catch (error) {
       toast.error('Error de conexión')
@@ -166,7 +168,8 @@ export default function Dashboard({ user, profile, onLogout }) {
     if (!confirm('¿Eliminar este pedido? Esta acción no se puede deshacer.')) return
     try {
       const res = await fetch(`/api/orders/${orderId}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        credentials: 'include'
       })
       if (res.ok) {
         toast.success('Pedido eliminado')
