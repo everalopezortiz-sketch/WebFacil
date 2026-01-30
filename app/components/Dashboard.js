@@ -1547,6 +1547,81 @@ export default function Dashboard({ user, profile, onLogout }) {
           </ScrollArea>
         </DialogContent>
       </Dialog>
+
+      {/* Order Detail Dialog */}
+      <Dialog open={orderDialog.open} onOpenChange={(open) => setOrderDialog({ ...orderDialog, open })}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Detalle del Pedido</DialogTitle>
+            <DialogDescription>{orderDialog.data?.order_number}</DialogDescription>
+          </DialogHeader>
+          {orderDialog.data && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-xs text-muted-foreground">Cliente</Label>
+                  <p className="font-medium">{orderDialog.data.customer_name}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Teléfono</Label>
+                  <p className="font-medium">{orderDialog.data.customer_phone || '-'}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Email</Label>
+                  <p className="font-medium">{orderDialog.data.customer_email || '-'}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Fecha</Label>
+                  <p className="font-medium">
+                    {orderDialog.data.createdAt ? new Date(orderDialog.data.createdAt).toLocaleString('es') : '-'}
+                  </p>
+                </div>
+              </div>
+              
+              {orderDialog.data.customer_data && Object.keys(orderDialog.data.customer_data).length > 0 && (
+                <div>
+                  <Label className="text-xs text-muted-foreground">Datos Adicionales</Label>
+                  <div className="mt-1 p-2 bg-slate-50 rounded text-sm">
+                    {Object.entries(orderDialog.data.customer_data).map(([key, value]) => (
+                      <p key={key}><strong>{key}:</strong> {value}</p>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="border-t pt-3">
+                <Label className="text-xs text-muted-foreground">Productos</Label>
+                {orderDialog.data.order_items?.map((item, i) => (
+                  <div key={i} className="flex justify-between text-sm py-1">
+                    <span>{item.quantity}x {item.product_name}</span>
+                    <span>{formatPrice(item.subtotal)}</span>
+                  </div>
+                ))}
+                <div className="flex justify-between font-bold border-t pt-2 mt-2">
+                  <span>Total</span>
+                  <span>{formatPrice(orderDialog.data.total)}</span>
+                </div>
+              </div>
+
+              {orderDialog.data.notes && (
+                <div>
+                  <Label className="text-xs text-muted-foreground">Notas</Label>
+                  <p className="text-sm">{orderDialog.data.notes}</p>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-4 border-t">
+                <Button variant="destructive" onClick={() => { deleteOrder(orderDialog.data.id); setOrderDialog({ open: false, data: null }); }}>
+                  <Trash2 className="w-4 h-4 mr-2" /> Eliminar
+                </Button>
+                <Button variant="outline" onClick={() => setOrderDialog({ open: false, data: null })}>
+                  Cerrar
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
