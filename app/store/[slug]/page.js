@@ -6,18 +6,16 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Separator } from '@/components/ui/separator'
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { toast } from 'sonner'
 import {
-  ShoppingCart, Plus, Minus, Trash2, X, ArrowLeft,
-  Phone, MapPin, Store, User, Utensils, Loader2,
-  MessageCircle, CreditCard, QrCode, Building, ExternalLink,
-  Star, Tag, Truck, AlertTriangle, Banknote, Link2, Check, Search, Clock, Info
+  ShoppingCart, Plus, Minus, Trash2, X,
+  Phone, Store, User, Utensils, Loader2,
+  MessageCircle, QrCode, Building,
+  Star, Tag, Truck, Banknote, Link2, Search, Clock
 } from 'lucide-react'
 
 const CURRENCIES = {
@@ -35,6 +33,31 @@ const BUSINESS_CONFIG = {
   restaurant: { icon: Utensils, title: 'Menú', productLabel: 'Menú' }
 }
 
+// Image component with fallback
+function SafeImage({ src, alt, className, fallback }) {
+  const [error, setError] = useState(false)
+  const [loaded, setLoaded] = useState(false)
+  
+  if (!src || error) {
+    return fallback || null
+  }
+  
+  return (
+    <>
+      {!loaded && <div className={`${className} bg-gray-200 animate-pulse`} />}
+      <img 
+        src={src}
+        alt={alt || ''}
+        className={`${className} ${loaded ? '' : 'hidden'}`}
+        onLoad={() => setLoaded(true)}
+        onError={() => setError(true)}
+        referrerPolicy="no-referrer"
+        crossOrigin="anonymous"
+      />
+    </>
+  )
+}
+
 export default function StorePage() {
   const params = useParams()
   const slug = params.slug
@@ -48,26 +71,24 @@ export default function StorePage() {
   const [cart, setCart] = useState([])
   const [cartOpen, setCartOpen] = useState(false)
   const [checkoutOpen, setCheckoutOpen] = useState(false)
-  const [checkoutLoading, setCheckoutLoading] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [checkoutData, setCheckoutData] = useState({})
   const [productDetail, setProductDetail] = useState(null)
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('')
+  const [globalSettings, setGlobalSettings] = useState({ name: 'WebBuilder', whatsapp: '' })
 
   // Load cart from localStorage
   useEffect(() => {
     if (slug) {
       const savedCart = localStorage.getItem(`cart_${slug}`)
       if (savedCart) {
-        try {
-          setCart(JSON.parse(savedCart))
-        } catch (e) {}
+        try { setCart(JSON.parse(savedCart)) } catch (e) {}
       }
     }
   }, [slug])
 
-  // Save cart to localStorage
+  // Save cart
   useEffect(() => {
     if (slug && cart.length > 0) {
       localStorage.setItem(`cart_${slug}`, JSON.stringify(cart))
@@ -80,14 +101,26 @@ export default function StorePage() {
   useEffect(() => {
     const loadStore = async () => {
       try {
-        const res = await fetch(`/api/store/${slug}`)
-        if (res.ok) {
-          const data = await res.json()
+        const [storeRes, globalRes] = await Promise.all([
+          fetch(`/api/store/${slug}`),
+          fetch('/api/global-settings')
+        ])
+        
+        if (storeRes.ok) {
+          const data = await storeRes.json()
           setProfile(data.profile)
           setSettings(data.settings)
           setProducts(data.products || [])
           setCategories(data.categories || [])
           setCheckoutFields(data.checkoutFields || [])
+        }
+        
+        if (globalRes.ok) {
+          const global = await globalRes.json()
+          setGlobalSettings({
+            name: global.name || 'WebBuilder',
+            whatsapp: global.whatsapp_number || global.developer_whatsapp || ''
+          })
         }
       } catch (error) {
         console.error('Error loading store:', error)
@@ -110,7 +143,7 @@ export default function StorePage() {
     return `${currency.symbol} ${num.toFixed(2)}`
   }
 
-  // Filter products by category and search
+  // Filter products
   const filteredProducts = useMemo(() => {
     if (!products) return []
     let filtered = [...products]
@@ -129,22 +162,14 @@ export default function StorePage() {
     return filtered.filter(p => p.category_id === selectedCategory)
   }, [products, selectedCategory, searchQuery])
 
-  // Get available payment methods
+  // Payment methods
   const availablePaymentMethods = useMemo(() => {
     if (!settings) return []
     const methods = []
-    if (settings.payment_cash_enabled) {
-      methods.push({ id: 'cash', label: 'Efectivo', icon: Banknote })
-    }
-    if (settings.payment_bank_account && settings.payment_bank_enabled !== false) {
-      methods.push({ id: 'bank', label: 'Transferencia', icon: Building })
-    }
-    if (settings.payment_link && settings.payment_link_enabled !== false) {
-      methods.push({ id: 'link', label: 'Pago Online', icon: Link2 })
-    }
-    if (settings.payment_qr_url && settings.payment_qr_enabled !== false) {
-      methods.push({ id: 'qr', label: 'QR de Pago', icon: QrCode })
-    }
+    if (settings.payment_cash_enabled) methods.push({ id: 'cash', label: 'Efectivo', icon: Banknote })
+    if (settings.payment_bank_account) methods.push({ id: 'bank', label: 'Transferencia', icon: Building })
+    if (settings.payment_link) methods.push({ id: 'link', label: 'Pago Online', icon: Link2 })
+    if (settings.payment_qr_url) methods.push({ id: 'qr', label: 'QR de Pago', icon: QrCode })
     return methods
   }, [settings])
 
@@ -153,11 +178,7 @@ export default function StorePage() {
     setCart(prev => {
       const existing = prev.find(item => item.id === product.id)
       if (existing) {
-        return prev.map(item => 
-          item.id === product.id 
-            ? { ...item, quantity: item.quantity + 1 }
-            : item
-        )
+        return prev.map(item => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item)
       }
       return [...prev, { ...product, quantity: 1 }]
     })
@@ -193,16 +214,13 @@ export default function StorePage() {
     }
 
     let message = `🛒 *Nuevo Pedido*\n\n`
-    
     cart.forEach(item => {
       const price = getProductPrice(item)
       message += `• ${item.name} x${item.quantity} - ${formatPrice(price * item.quantity)}\n`
     })
-    
     message += `\n*Total: ${formatPrice(cartTotal)}*\n\n`
     message += `*Método de pago:* ${availablePaymentMethods.find(m => m.id === selectedPaymentMethod)?.label || 'No seleccionado'}\n\n`
     message += `*Datos del cliente:*\n`
-    
     checkoutFields.forEach(field => {
       if (checkoutData[field.field_name]) {
         message += `${field.field_label}: ${checkoutData[field.field_name]}\n`
@@ -210,21 +228,17 @@ export default function StorePage() {
     })
 
     const phone = settings.whatsapp_number.replace(/\D/g, '')
-    const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
-    window.open(url, '_blank')
-    
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank')
     setCart([])
     setCheckoutOpen(false)
     setCartOpen(false)
     toast.success('¡Pedido enviado!')
   }
 
-  // Theme colors
+  // Theme
   const bgColor = settings?.theme_bg_color || '#f8f9fa'
   const textColor = settings?.theme_font_color || '#1a1a1a'
   const buttonColor = settings?.theme_button_color || '#f59e0b'
-  
-  // Grid configuration
   const gridColumns = settings?.grid_columns || 4
   const cardSize = settings?.card_size || 'medium'
 
@@ -250,49 +264,57 @@ export default function StorePage() {
   const BusinessIcon = businessConfig.icon
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: bgColor, color: textColor }}>
+    <div className="min-h-screen flex flex-col" style={{ backgroundColor: bgColor, color: textColor }}>
       {/* Header with Cover */}
       <header className="relative">
-        {settings?.cover_image_url ? (
-          <div className="h-40 md:h-52 relative overflow-hidden">
+        <div className="h-44 md:h-56 relative overflow-hidden">
+          {settings?.cover_image_url ? (
             <img 
-              src={settings.cover_image_url} 
-              alt="Cover"
+              src={settings.cover_image_url}
+              alt="Portada"
               className="w-full h-full object-cover"
-              onError={(e) => { e.target.style.display = 'none'; e.target.parentElement.style.backgroundColor = buttonColor }}
+              style={{ objectPosition: 'center' }}
+              onError={(e) => { 
+                e.target.onerror = null
+                e.target.src = ''
+                e.target.parentElement.style.backgroundColor = buttonColor
+              }}
             />
-            <div className="absolute inset-0 bg-gradient-to-b from-black/10 to-black/50" />
-          </div>
-        ) : (
-          <div 
-            className="h-40 md:h-52 relative"
-            style={{ backgroundColor: buttonColor }}
-          >
-            <div className="absolute inset-0 flex items-center justify-center opacity-20">
-              <BusinessIcon className="w-32 h-32 text-white" />
+          ) : (
+            <div className="w-full h-full" style={{ backgroundColor: buttonColor }}>
+              <div className="absolute inset-0 flex items-center justify-center opacity-20">
+                <BusinessIcon className="w-32 h-32 text-white" />
+              </div>
             </div>
-          </div>
-        )}
+          )}
+          <div className="absolute inset-0 bg-gradient-to-b from-black/10 to-black/40" />
+        </div>
         
-        {/* Logo and Info - overlapping the cover */}
+        {/* Profile Info */}
         <div className="container mx-auto px-4">
-          <div className="flex items-end gap-4 -mt-16 relative z-10">
+          <div className="flex items-end gap-4 -mt-14 relative z-10">
             <div className="w-24 h-24 md:w-28 md:h-28 rounded-2xl bg-white shadow-xl overflow-hidden border-4 border-white flex-shrink-0">
               {settings?.logo_url ? (
                 <img 
-                  src={settings.logo_url} 
-                  alt="Logo" 
+                  src={settings.logo_url}
+                  alt="Logo"
                   className="w-full h-full object-cover"
-                  onError={(e) => { e.target.style.display = 'none' }}
+                  onError={(e) => { 
+                    e.target.onerror = null
+                    e.target.style.display = 'none'
+                    e.target.nextSibling.style.display = 'flex'
+                  }}
                 />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: buttonColor }}>
-                  <BusinessIcon className="w-12 h-12 text-white" />
-                </div>
-              )}
+              ) : null}
+              <div 
+                className={`w-full h-full items-center justify-center ${settings?.logo_url ? 'hidden' : 'flex'}`}
+                style={{ backgroundColor: buttonColor }}
+              >
+                <BusinessIcon className="w-12 h-12 text-white" />
+              </div>
             </div>
             <div className="pb-3 flex-1 min-w-0">
-              <h1 className="text-xl md:text-2xl font-bold truncate" style={{ color: textColor }}>
+              <h1 className="text-xl md:text-2xl font-bold truncate">
                 {profile.first_name} {profile.last_name}
               </h1>
               {settings?.store_description && (
@@ -303,7 +325,7 @@ export default function StorePage() {
         </div>
       </header>
 
-      {/* Search Bar - Sticky */}
+      {/* Search Bar */}
       <div className="sticky top-0 z-30 bg-white/95 backdrop-blur shadow-sm border-b">
         <div className="container mx-auto px-4 py-3">
           <div className="flex items-center gap-3">
@@ -316,10 +338,7 @@ export default function StorePage() {
                 className="pl-10 rounded-full border-gray-200 bg-gray-50 h-10"
               />
               {searchQuery && (
-                <button 
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                >
+                <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                   <X className="w-4 h-4" />
                 </button>
               )}
@@ -387,144 +406,74 @@ export default function StorePage() {
       </div>
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-6 pb-28">
+      <main className="container mx-auto px-4 py-6 pb-28 flex-1">
         {filteredProducts.length === 0 ? (
           <div className="text-center py-16">
             <Store className="w-16 h-16 mx-auto mb-4 opacity-30" />
             <p className="text-lg opacity-60">No hay {businessConfig.productLabel.toLowerCase()} disponibles</p>
-            {searchQuery && (
-              <p className="text-sm opacity-40 mt-2">
-                No se encontraron resultados para "{searchQuery}"
-              </p>
-            )}
+            {searchQuery && <p className="text-sm opacity-40 mt-2">No se encontraron resultados para "{searchQuery}"</p>}
           </div>
         ) : (
           <div className="space-y-8">
-            {/* Featured Section */}
-            {selectedCategory === 'all' && products.some(p => p.is_featured) && (
-              <section>
-                <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
-                  <Star className="w-5 h-5" style={{ color: '#f59e0b' }} />
-                  Destacados
-                </h2>
-                <div className={`grid gap-4 ${
-                  gridColumns === 2 ? 'grid-cols-2' :
-                  gridColumns === 3 ? 'grid-cols-2 md:grid-cols-3' :
-                  gridColumns === 5 ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-5' :
-                  gridColumns === 6 ? 'grid-cols-2 md:grid-cols-4 lg:grid-cols-6' :
-                  'grid-cols-2 md:grid-cols-3 lg:grid-cols-4'
-                }`}>
-                  {products.filter(p => p.is_featured).map(product => (
-                    <ProductCard
-                      key={product.id}
-                      product={product}
-                      onAdd={addToCart}
-                      onDetail={setProductDetail}
-                      formatPrice={formatPrice}
-                      getProductPrice={getProductPrice}
-                      buttonColor={buttonColor}
-                      cardSize={cardSize}
-                    />
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {/* Products by Category or All */}
+            {/* Show by category when "all" is selected */}
             {selectedCategory === 'all' ? (
               <>
+                {/* Featured */}
+                {products.some(p => p.is_featured) && (
+                  <section>
+                    <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
+                      <Star className="w-5 h-5 text-amber-500" /> Destacados
+                    </h2>
+                    <ProductGrid 
+                      products={products.filter(p => p.is_featured)} 
+                      {...{ addToCart, setProductDetail, formatPrice, getProductPrice, buttonColor, cardSize, gridColumns }}
+                    />
+                  </section>
+                )}
+                
+                {/* By Category */}
                 {categories.map(cat => {
                   const catProducts = products.filter(p => p.category_id === cat.id && !p.is_featured)
                   if (catProducts.length === 0) return null
-                  
                   return (
                     <section key={cat.id}>
                       <h2 className="text-lg font-bold mb-4">{cat.name}</h2>
-                      <div className={`grid gap-4 ${
-                        gridColumns === 2 ? 'grid-cols-2' :
-                        gridColumns === 3 ? 'grid-cols-2 md:grid-cols-3' :
-                        gridColumns === 5 ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-5' :
-                        gridColumns === 6 ? 'grid-cols-2 md:grid-cols-4 lg:grid-cols-6' :
-                        'grid-cols-2 md:grid-cols-3 lg:grid-cols-4'
-                      }`}>
-                        {catProducts.map(product => (
-                          <ProductCard
-                            key={product.id}
-                            product={product}
-                            onAdd={addToCart}
-                            onDetail={setProductDetail}
-                            formatPrice={formatPrice}
-                            getProductPrice={getProductPrice}
-                            buttonColor={buttonColor}
-                            cardSize={cardSize}
-                          />
-                        ))}
-                      </div>
+                      <ProductGrid 
+                        products={catProducts} 
+                        {...{ addToCart, setProductDetail, formatPrice, getProductPrice, buttonColor, cardSize, gridColumns }}
+                      />
                     </section>
                   )
                 })}
                 
-                {/* Uncategorized products */}
+                {/* Uncategorized */}
                 {products.filter(p => !p.category_id && !p.is_featured).length > 0 && (
                   <section>
                     <h2 className="text-lg font-bold mb-4">Otros</h2>
-                    <div className={`grid gap-4 ${
-                      gridColumns === 2 ? 'grid-cols-2' :
-                      gridColumns === 3 ? 'grid-cols-2 md:grid-cols-3' :
-                      gridColumns === 5 ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-5' :
-                      gridColumns === 6 ? 'grid-cols-2 md:grid-cols-4 lg:grid-cols-6' :
-                      'grid-cols-2 md:grid-cols-3 lg:grid-cols-4'
-                    }`}>
-                      {products.filter(p => !p.category_id && !p.is_featured).map(product => (
-                        <ProductCard
-                          key={product.id}
-                          product={product}
-                          onAdd={addToCart}
-                          onDetail={setProductDetail}
-                          formatPrice={formatPrice}
-                          getProductPrice={getProductPrice}
-                          buttonColor={buttonColor}
-                          cardSize={cardSize}
-                        />
-                      ))}
-                    </div>
+                    <ProductGrid 
+                      products={products.filter(p => !p.category_id && !p.is_featured)} 
+                      {...{ addToCart, setProductDetail, formatPrice, getProductPrice, buttonColor, cardSize, gridColumns }}
+                    />
                   </section>
                 )}
               </>
             ) : (
-              // Filtered Products
               <section>
                 <h2 className="text-lg font-bold mb-4">
                   {selectedCategory === 'promo' ? 'Ofertas' : 
                    selectedCategory === 'featured' ? 'Destacados' :
                    categories.find(c => c.id === selectedCategory)?.name || 'Productos'}
                 </h2>
-                <div className={`grid gap-4 ${
-                  gridColumns === 2 ? 'grid-cols-2' :
-                  gridColumns === 3 ? 'grid-cols-2 md:grid-cols-3' :
-                  gridColumns === 5 ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-5' :
-                  gridColumns === 6 ? 'grid-cols-2 md:grid-cols-4 lg:grid-cols-6' :
-                  'grid-cols-2 md:grid-cols-3 lg:grid-cols-4'
-                }`}>
-                  {filteredProducts.map(product => (
-                    <ProductCard
-                      key={product.id}
-                      product={product}
-                      onAdd={addToCart}
-                      onDetail={setProductDetail}
-                      formatPrice={formatPrice}
-                      getProductPrice={getProductPrice}
-                      buttonColor={buttonColor}
-                      cardSize={cardSize}
-                    />
-                  ))}
-                </div>
+                <ProductGrid 
+                  products={filteredProducts} 
+                  {...{ addToCart, setProductDetail, formatPrice, getProductPrice, buttonColor, cardSize, gridColumns }}
+                />
               </section>
             )}
           </div>
         )}
 
-        {/* Additional Info Sections */}
+        {/* Additional Info */}
         {(settings?.business_hours || settings?.shipping_info) && (
           <div className="mt-10 grid md:grid-cols-2 gap-4">
             {settings?.business_hours && (
@@ -551,61 +500,32 @@ export default function StorePage() {
             )}
           </div>
         )}
+      </main>
 
-        {/* Personal Page Sections */}
-        {profile?.business_type === 'personal' && (settings?.about_me || settings?.experience || settings?.skills) && (
-          <div className="mt-10 space-y-4">
-            {settings?.about_me && (
-              <Card className="bg-white/80 border-0 shadow-sm">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <User className="w-5 h-5" style={{ color: buttonColor }} />
-                    <h3 className="font-semibold">Sobre Mí</h3>
-                  </div>
-                  <p className="text-sm opacity-70 whitespace-pre-line">{settings.about_me}</p>
-                </CardContent>
-              </Card>
-            )}
-            {settings?.experience && (
-              <Card className="bg-white/80 border-0 shadow-sm">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Star className="w-5 h-5" style={{ color: buttonColor }} />
-                    <h3 className="font-semibold">Experiencia</h3>
-                  </div>
-                  <p className="text-sm opacity-70 whitespace-pre-line">{settings.experience}</p>
-                </CardContent>
-              </Card>
-            )}
-            {settings?.skills && (
-              <Card className="bg-white/80 border-0 shadow-sm">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Info className="w-5 h-5" style={{ color: buttonColor }} />
-                    <h3 className="font-semibold">Habilidades</h3>
-                  </div>
-                  <p className="text-sm opacity-70 whitespace-pre-line">{settings.skills}</p>
-                </CardContent>
-              </Card>
-            )}
-            {settings?.contact_info && (
-              <Card className="bg-white/80 border-0 shadow-sm">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Phone className="w-5 h-5" style={{ color: buttonColor }} />
-                    <h3 className="font-semibold">Contacto</h3>
-                  </div>
-                  <p className="text-sm opacity-70 whitespace-pre-line">{settings.contact_info}</p>
-                </CardContent>
-              </Card>
+      {/* Footer */}
+      <footer className="bg-gray-900 text-white py-6 mt-auto">
+        <div className="container mx-auto px-4">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+            <p className="text-sm opacity-70">
+              Creado con <span className="font-semibold text-white">{globalSettings.name}</span>
+            </p>
+            {globalSettings.whatsapp && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-white/30 text-white hover:bg-white/10"
+                onClick={() => window.open(`https://wa.me/${globalSettings.whatsapp.replace(/\D/g, '')}`, '_blank')}
+              >
+                <MessageCircle className="w-4 h-4 mr-2" /> Contacto
+              </Button>
             )}
           </div>
-        )}
-      </main>
+        </div>
+      </footer>
 
       {/* Floating Cart Button */}
       {cart.length > 0 && (
-        <div className="fixed bottom-4 left-4 right-4 z-40">
+        <div className="fixed bottom-20 left-4 right-4 z-40">
           <Button
             className="w-full py-6 rounded-2xl shadow-2xl text-white font-semibold text-lg"
             style={{ backgroundColor: buttonColor }}
@@ -625,8 +545,8 @@ export default function StorePage() {
               {productDetail.image_url && (
                 <div className="aspect-video bg-gray-100">
                   <img 
-                    src={productDetail.image_url} 
-                    alt={productDetail.name} 
+                    src={productDetail.image_url}
+                    alt={productDetail.name}
                     className="w-full h-full object-cover"
                     onError={(e) => { e.target.style.display = 'none' }}
                   />
@@ -648,11 +568,7 @@ export default function StorePage() {
                       <span className="text-2xl font-bold">{formatPrice(productDetail.price)}</span>
                     )}
                   </div>
-                  <Button
-                    style={{ backgroundColor: buttonColor }}
-                    className="text-white"
-                    onClick={() => { addToCart(productDetail); setProductDetail(null) }}
-                  >
+                  <Button style={{ backgroundColor: buttonColor }} className="text-white" onClick={() => { addToCart(productDetail); setProductDetail(null) }}>
                     <Plus className="w-4 h-4 mr-1" /> Agregar
                   </Button>
                 </div>
@@ -670,13 +586,12 @@ export default function StorePage() {
               <ShoppingCart className="w-5 h-5" /> Tu Carrito
             </DialogTitle>
           </DialogHeader>
-          
           <ScrollArea className="max-h-[50vh]">
             <div className="p-4 space-y-3">
               {cart.map(item => (
                 <div key={item.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
                   {item.image_url && (
-                    <img src={item.image_url} alt={item.name} className="w-16 h-16 rounded-lg object-cover" />
+                    <img src={item.image_url} alt={item.name} className="w-16 h-16 rounded-lg object-cover" onError={(e) => e.target.style.display = 'none'} />
                   )}
                   <div className="flex-1 min-w-0">
                     <h4 className="font-medium truncate">{item.name}</h4>
@@ -698,17 +613,12 @@ export default function StorePage() {
               ))}
             </div>
           </ScrollArea>
-
           <div className="p-4 border-t space-y-4">
             <div className="flex justify-between items-center">
               <span className="text-lg font-semibold">Total</span>
               <span className="text-2xl font-bold" style={{ color: buttonColor }}>{formatPrice(cartTotal)}</span>
             </div>
-            <Button
-              className="w-full py-6 text-white rounded-xl"
-              style={{ backgroundColor: buttonColor }}
-              onClick={() => { setCartOpen(false); setCheckoutOpen(true) }}
-            >
+            <Button className="w-full py-6 text-white rounded-xl" style={{ backgroundColor: buttonColor }} onClick={() => { setCartOpen(false); setCheckoutOpen(true) }}>
               Continuar al Pago
             </Button>
           </div>
@@ -721,10 +631,8 @@ export default function StorePage() {
           <DialogHeader className="p-4 border-b">
             <DialogTitle>Finalizar Pedido</DialogTitle>
           </DialogHeader>
-          
           <ScrollArea className="max-h-[60vh]">
             <div className="p-4 space-y-4">
-              {/* Payment Method */}
               {availablePaymentMethods.length > 0 && (
                 <div>
                   <Label className="text-sm font-semibold mb-2 block">Método de Pago</Label>
@@ -747,8 +655,6 @@ export default function StorePage() {
                   </div>
                 </div>
               )}
-
-              {/* Checkout Fields */}
               {checkoutFields.map(field => (
                 <div key={field.id}>
                   <Label className="text-sm">
@@ -769,9 +675,7 @@ export default function StorePage() {
                       onChange={(e) => setCheckoutData({ ...checkoutData, [field.field_name]: e.target.value })}
                     >
                       <option value="">Seleccionar...</option>
-                      {(field.options || []).map((opt, i) => (
-                        <option key={i} value={opt}>{opt}</option>
-                      ))}
+                      {(field.options || []).map((opt, i) => <option key={i} value={opt}>{opt}</option>)}
                     </select>
                   ) : (
                     <Input
@@ -786,20 +690,13 @@ export default function StorePage() {
               ))}
             </div>
           </ScrollArea>
-
           <div className="p-4 border-t">
             <div className="flex justify-between items-center mb-4">
               <span className="font-semibold">Total a Pagar</span>
               <span className="text-xl font-bold" style={{ color: buttonColor }}>{formatPrice(cartTotal)}</span>
             </div>
-            <Button
-              className="w-full py-6 text-white rounded-xl gap-2"
-              style={{ backgroundColor: '#25D366' }}
-              onClick={handleWhatsAppCheckout}
-              disabled={checkoutLoading}
-            >
-              <MessageCircle className="w-5 h-5" />
-              Enviar Pedido por WhatsApp
+            <Button className="w-full py-6 text-white rounded-xl gap-2" style={{ backgroundColor: '#25D366' }} onClick={handleWhatsAppCheckout}>
+              <MessageCircle className="w-5 h-5" /> Enviar Pedido por WhatsApp
             </Button>
           </div>
         </DialogContent>
@@ -808,63 +705,71 @@ export default function StorePage() {
   )
 }
 
-// Product Card Component - Improved Design
-function ProductCard({ product, onAdd, onDetail, formatPrice, getProductPrice, buttonColor, cardSize }) {
+// Product Grid Component
+function ProductGrid({ products, addToCart, setProductDetail, formatPrice, getProductPrice, buttonColor, cardSize, gridColumns }) {
   const imageHeight = cardSize === 'small' ? 'h-28' : cardSize === 'large' ? 'h-48' : 'h-36'
-  
+  const gridClass = gridColumns === 2 ? 'grid-cols-2' :
+                    gridColumns === 3 ? 'grid-cols-2 md:grid-cols-3' :
+                    gridColumns === 5 ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-5' :
+                    'grid-cols-2 md:grid-cols-3 lg:grid-cols-4'
+
   return (
-    <div 
-      className="bg-white rounded-xl shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition-all border border-gray-100"
-      onClick={() => onDetail(product)}
-    >
-      <div className={`${imageHeight} bg-gray-100 relative`}>
-        {product.image_url ? (
-          <img 
-            src={product.image_url} 
-            alt={product.name} 
-            className="w-full h-full object-cover"
-            onError={(e) => { e.target.style.display = 'none' }}
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center bg-gray-50">
-            <Store className="w-10 h-10 text-gray-300" />
-          </div>
-        )}
-        {product.promo_active && (
-          <Badge className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2">Oferta</Badge>
-        )}
-        {product.is_featured && !product.promo_active && (
-          <Badge className="absolute top-2 right-2 bg-amber-500 text-white text-xs px-1.5">
-            <Star className="w-3 h-3" />
-          </Badge>
-        )}
-      </div>
-      <div className="p-3">
-        <h3 className="font-semibold text-sm truncate mb-1">{product.name}</h3>
-        {product.description && (
-          <p className="text-xs text-gray-500 truncate mb-2">{product.description}</p>
-        )}
-        <div className="flex items-center justify-between">
-          <div>
-            {product.promo_active && product.promo_price ? (
-              <div className="flex flex-col">
-                <span className="font-bold text-red-600 text-sm">{formatPrice(product.promo_price)}</span>
-                <span className="text-xs text-gray-400 line-through">{formatPrice(product.price)}</span>
-              </div>
+    <div className={`grid gap-4 ${gridClass}`}>
+      {products.map(product => (
+        <div 
+          key={product.id}
+          className="bg-white rounded-xl shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition-all border border-gray-100"
+          onClick={() => setProductDetail(product)}
+        >
+          <div className={`${imageHeight} bg-gray-100 relative`}>
+            {product.image_url ? (
+              <img 
+                src={product.image_url}
+                alt={product.name}
+                className="w-full h-full object-cover"
+                loading="lazy"
+                onError={(e) => { e.target.onerror = null; e.target.src = ''; e.target.parentElement.innerHTML = '<div class="w-full h-full flex items-center justify-center bg-gray-50"><svg class="w-10 h-10 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg></div>' }}
+              />
             ) : (
-              <span className="font-bold text-sm" style={{ color: buttonColor }}>{formatPrice(product.price)}</span>
+              <div className="w-full h-full flex items-center justify-center bg-gray-50">
+                <Store className="w-10 h-10 text-gray-300" />
+              </div>
+            )}
+            {product.promo_active && (
+              <Badge className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2">Oferta</Badge>
+            )}
+            {product.is_featured && !product.promo_active && (
+              <Badge className="absolute top-2 right-2 bg-amber-500 text-white text-xs px-1.5">
+                <Star className="w-3 h-3" />
+              </Badge>
             )}
           </div>
-          <Button
-            size="sm"
-            className="h-8 w-8 rounded-full p-0 text-white"
-            style={{ backgroundColor: buttonColor }}
-            onClick={(e) => { e.stopPropagation(); onAdd(product) }}
-          >
-            <Plus className="w-4 h-4" />
-          </Button>
+          <div className="p-3">
+            <h3 className="font-semibold text-sm truncate mb-1">{product.name}</h3>
+            {product.description && <p className="text-xs text-gray-500 truncate mb-2">{product.description}</p>}
+            <div className="flex items-center justify-between">
+              <div>
+                {product.promo_active && product.promo_price ? (
+                  <div className="flex flex-col">
+                    <span className="font-bold text-red-600 text-sm">{formatPrice(product.promo_price)}</span>
+                    <span className="text-xs text-gray-400 line-through">{formatPrice(product.price)}</span>
+                  </div>
+                ) : (
+                  <span className="font-bold text-sm" style={{ color: buttonColor }}>{formatPrice(product.price)}</span>
+                )}
+              </div>
+              <Button
+                size="sm"
+                className="h-8 w-8 rounded-full p-0 text-white"
+                style={{ backgroundColor: buttonColor }}
+                onClick={(e) => { e.stopPropagation(); addToCart(product) }}
+              >
+                <Plus className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
         </div>
-      </div>
+      ))}
     </div>
   )
 }
