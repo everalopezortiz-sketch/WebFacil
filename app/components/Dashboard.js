@@ -551,6 +551,63 @@ export default function Dashboard({ user, profile, onLogout }) {
                       </div>
                     </div>
                   </div>
+                  
+                  {/* Diseño de Tarjetas */}
+                  <div className="border-t pt-4 mt-4">
+                    <Label className="text-base font-semibold">Diseño de Tarjetas</Label>
+                    <p className="text-sm text-muted-foreground mb-3">Configura cómo se muestran los productos</p>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <Label className="text-xs">Tamaño</Label>
+                        <Select
+                          value={settings?.card_size || 'medium'}
+                          onValueChange={(v) => setSettings({ ...settings, card_size: v })}
+                        >
+                          <SelectTrigger className="h-9">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="small">Pequeño</SelectItem>
+                            <SelectItem value="medium">Mediano</SelectItem>
+                            <SelectItem value="large">Grande</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-xs">Columnas</Label>
+                        <Select
+                          value={String(settings?.grid_columns || '4')}
+                          onValueChange={(v) => setSettings({ ...settings, grid_columns: parseInt(v) })}
+                        >
+                          <SelectTrigger className="h-9">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="2">2</SelectItem>
+                            <SelectItem value="3">3</SelectItem>
+                            <SelectItem value="4">4</SelectItem>
+                            <SelectItem value="5">5</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-xs">Por página</Label>
+                        <Select
+                          value={String(settings?.products_per_page || '20')}
+                          onValueChange={(v) => setSettings({ ...settings, products_per_page: parseInt(v) })}
+                        >
+                          <SelectTrigger className="h-9">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="12">12</SelectItem>
+                            <SelectItem value="20">20</SelectItem>
+                            <SelectItem value="30">30</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
 
