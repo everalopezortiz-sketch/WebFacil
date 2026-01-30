@@ -63,6 +63,7 @@ export default function AdminPanel({ user, profile, onLogout }) {
   const [planDialog, setPlanDialog] = useState({ open: false, user: null })
   const [messageDialog, setMessageDialog] = useState({ open: false, user: null, isGlobal: false })
   const [editPlanDialog, setEditPlanDialog] = useState({ open: false, plan: null })
+  const [userMessagesDialog, setUserMessagesDialog] = useState({ open: false, user: null, messages: [] })
   
   // Message form
   const [messageText, setMessageText] = useState('')
