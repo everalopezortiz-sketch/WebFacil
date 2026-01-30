@@ -253,7 +253,7 @@ export default function Dashboard({ user, profile, onLogout }) {
 
   const deleteCategory = async (id) => {
     if (!confirm('¿Eliminar esta categoría?')) return
-    const res = await fetch(`/api/categories/${id}`, { method: 'DELETE' })
+    const res = await authFetch(supabase, `/api/categories/${id}`, { method: 'DELETE' })
     if (res.ok) {
       toast.success('Categoría eliminada')
       loadCategories()
@@ -265,7 +265,7 @@ export default function Dashboard({ user, profile, onLogout }) {
     setSaving(true)
     try {
       const isEdit = !!data.id
-      const res = await fetch(isEdit ? `/api/products/${data.id}` : '/api/products', {
+      const res = await authFetch(supabase, isEdit ? `/api/products/${data.id}` : '/api/products', {
         method: isEdit ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
@@ -289,7 +289,7 @@ export default function Dashboard({ user, profile, onLogout }) {
 
   const deleteProduct = async (id) => {
     if (!confirm('¿Eliminar este elemento?')) return
-    const res = await fetch(`/api/products/${id}`, { method: 'DELETE' })
+    const res = await authFetch(supabase, `/api/products/${id}`, { method: 'DELETE' })
     if (res.ok) {
       toast.success('Eliminado')
       loadProducts()
@@ -301,7 +301,7 @@ export default function Dashboard({ user, profile, onLogout }) {
     setSaving(true)
     try {
       const isEdit = !!data.id
-      const res = await fetch(isEdit ? `/api/checkout-fields/${data.id}` : '/api/checkout-fields', {
+      const res = await authFetch(supabase, isEdit ? `/api/checkout-fields/${data.id}` : '/api/checkout-fields', {
         method: isEdit ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
@@ -320,7 +320,7 @@ export default function Dashboard({ user, profile, onLogout }) {
 
   const deleteCheckoutField = async (id) => {
     if (!confirm('¿Eliminar este campo?')) return
-    const res = await fetch(`/api/checkout-fields/${id}`, { method: 'DELETE' })
+    const res = await authFetch(supabase, `/api/checkout-fields/${id}`, { method: 'DELETE' })
     if (res.ok) {
       toast.success('Campo eliminado')
       loadCheckoutFields()
