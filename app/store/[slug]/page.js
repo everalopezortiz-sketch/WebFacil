@@ -772,7 +772,7 @@ function ProductGrid({ products, addToCart, setProductDetail, formatPrice, getPr
           <div className={`${imageHeight} bg-gray-100 relative`}>
             {product.image_url ? (
               <img 
-                src={product.image_url}
+                src={normalizeImageSrc(product.image_url)}
                 alt={product.name}
                 className="w-full h-full object-cover"
                 loading="lazy"
