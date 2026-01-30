@@ -241,7 +241,7 @@ export async function GET(request, { params }) {
       const { data, error } = await supabaseAdmin
         .from('support_messages')
         .select('*')
-        .order('created_at', { ascending: false })
+        .order('createdAt', { ascending: false })
       
       if (error) {
         console.error('Messages list error:', error)
@@ -265,7 +265,7 @@ export async function GET(request, { params }) {
         .from('support_messages')
         .select('*')
         .or(`user_id.eq.${userId},is_global.eq.true`)
-        .order('created_at', { ascending: false })
+        .order('createdAt', { ascending: false })
       
       if (error) {
         console.error('User messages error:', error)
