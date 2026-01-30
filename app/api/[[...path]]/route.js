@@ -220,6 +220,24 @@ export async function GET(request, { params }) {
       return handleCORS(NextResponse.json({}))
     }
 
+    // Admin: Get all sent messages
+    if (pathStr === 'admin/messages-list') {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+      
+      const { data: profile } = await supabaseAdmin.from('profiles').select('role').eq('id', user.id).single()
+      if (profile?.role !== 'DESARROLLADOR') {
+        return handleCORS(NextResponse.json({ error: 'Forbidden' }, { status: 403 }))
+      }
+      
+      const { data, error } = await supabaseAdmin
+        .from('support_messages')
+        .select('*, profiles(first_name, last_name, email)')
+        .order('createdAt', { ascending: false })
+      
+      return handleCORS(NextResponse.json(data || []))
+    }
+
     // Get info content
     if (pathStr === 'info-content') {
       const { data, error } = await supabase
