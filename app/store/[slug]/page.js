@@ -571,8 +571,6 @@ export default function StorePage() {
           </div>
         </div>
       </footer>
-        </div>
-      </footer>
 
       {/* Floating Cart Button */}
       {cart.length > 0 && (
