@@ -298,19 +298,21 @@ export default function AdminPanel({ user, profile, onLogout }) {
   }
 
   // Load messages for specific user
-  const loadUserMessages = async (user) => {
+  const loadUserMessages = async (targetUser) => {
     try {
-      const res = await fetch(`/api/admin/user-messages/${user.id}`)
+      // Get ALL messages sent to this user (not global ones)
+      const res = await fetch(`/api/admin/messages-list`)
       if (res.ok) {
-        const messages = await res.json()
-        // Filter only messages sent to this specific user (not global ones for the list)
-        const userSpecificMessages = messages.filter(m => m.user_id === user.id)
-        setUserMessagesDialog({ open: true, user, messages: userSpecificMessages })
+        const allMessages = await res.json()
+        // Filter only messages specifically sent to this user
+        const userMessages = allMessages.filter(m => m.user_id === targetUser.id && !m.is_global)
+        setUserMessagesDialog({ open: true, user: targetUser, messages: userMessages })
       } else {
-        setUserMessagesDialog({ open: true, user, messages: [] })
+        setUserMessagesDialog({ open: true, user: targetUser, messages: [] })
       }
     } catch (error) {
-      setUserMessagesDialog({ open: true, user, messages: [] })
+      console.error('Error loading messages:', error)
+      setUserMessagesDialog({ open: true, user: targetUser, messages: [] })
     }
   }
 
