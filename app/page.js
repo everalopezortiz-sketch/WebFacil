@@ -277,7 +277,7 @@ export default function App() {
         <div className="text-center mb-8">
           {softwareSettings.logo_url ? (
             <img 
-              src={softwareSettings.logo_url} 
+              src={normalizeImageSrc(softwareSettings.logo_url)} 
               alt="Logo" 
               className="w-16 h-16 mx-auto mb-4 object-contain"
             />
