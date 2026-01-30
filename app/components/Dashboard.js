@@ -989,48 +989,116 @@ export default function Dashboard({ user, profile, onLogout }) {
                 </div>
               </CardHeader>
               <CardContent>
-                {orders.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <ShoppingCart className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                    <p>No hay pedidos {orderDateFilter ? 'en esta fecha' : 'aún'}</p>
-                  </div>
-                ) : (
-                  <ScrollArea className="h-[500px]">
-                    <div className="space-y-4">
-                      {orders.map(order => (
-                        <Card key={order.id}>
-                          <CardContent className="p-4">
-                            <div className="flex items-start justify-between mb-3">
-                              <div>
-                                <p className="font-mono text-sm text-muted-foreground">{order.order_number}</p>
-                                <p className="font-medium">{order.customer_name}</p>
-                                {order.customer_phone && <p className="text-sm text-muted-foreground">{order.customer_phone}</p>}
-                              </div>
-                              <div className="text-right">
-                                <Badge>{order.status}</Badge>
-                                <p className="text-sm text-muted-foreground mt-1">
-                                  {new Date(order.createdAt).toLocaleString()}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="border-t pt-3">
-                              {order.order_items?.map((item, i) => (
-                                <div key={i} className="flex justify-between text-sm py-1">
-                                  <span>{item.quantity}x {item.product_name}</span>
-                                  <span>{formatPrice(item.subtotal)}</span>
-                                </div>
-                              ))}
-                              <div className="flex justify-between font-bold border-t pt-2 mt-2">
-                                <span>Total</span>
-                                <span>{formatPrice(order.total)}</span>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  </ScrollArea>
-                )}
+                {/* Order Status Tabs */}
+                <Tabs defaultValue="pending" className="w-full">
+                  <TabsList className="grid grid-cols-4 mb-4">
+                    <TabsTrigger value="pending" className="text-xs sm:text-sm">
+                      Nuevos
+                      {orders.filter(o => o.status === 'pending').length > 0 && (
+                        <Badge className="ml-1 bg-yellow-500">{orders.filter(o => o.status === 'pending').length}</Badge>
+                      )}
+                    </TabsTrigger>
+                    <TabsTrigger value="delivery" className="text-xs sm:text-sm">
+                      En Delivery
+                      {orders.filter(o => o.status === 'delivery').length > 0 && (
+                        <Badge className="ml-1 bg-blue-500">{orders.filter(o => o.status === 'delivery').length}</Badge>
+                      )}
+                    </TabsTrigger>
+                    <TabsTrigger value="completed" className="text-xs sm:text-sm">
+                      Entregados
+                    </TabsTrigger>
+                    <TabsTrigger value="paid" className="text-xs sm:text-sm">
+                      Pagados
+                    </TabsTrigger>
+                  </TabsList>
+
+                  {['pending', 'delivery', 'completed', 'paid'].map(status => (
+                    <TabsContent key={status} value={status}>
+                      {orders.filter(o => o.status === status).length === 0 ? (
+                        <div className="text-center py-8 text-muted-foreground">
+                          <ShoppingCart className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                          <p>No hay pedidos {status === 'pending' ? 'nuevos' : status === 'delivery' ? 'en delivery' : status === 'completed' ? 'entregados' : 'pagados'}</p>
+                        </div>
+                      ) : (
+                        <ScrollArea className="h-[400px]">
+                          <div className="space-y-4">
+                            {orders.filter(o => o.status === status).map(order => (
+                              <Card key={order.id} className="border-l-4" style={{ borderLeftColor: status === 'pending' ? '#eab308' : status === 'delivery' ? '#3b82f6' : status === 'completed' ? '#22c55e' : '#8b5cf6' }}>
+                                <CardContent className="p-4">
+                                  <div className="flex items-start justify-between mb-3">
+                                    <div>
+                                      <p className="font-mono text-sm text-muted-foreground">{order.order_number}</p>
+                                      <p className="font-medium">{order.customer_name}</p>
+                                      {order.customer_phone && <p className="text-sm text-muted-foreground">{order.customer_phone}</p>}
+                                    </div>
+                                    <div className="text-right">
+                                      <Badge className={
+                                        status === 'pending' ? 'bg-yellow-500' : 
+                                        status === 'delivery' ? 'bg-blue-500' : 
+                                        status === 'completed' ? 'bg-green-500' : 'bg-purple-500'
+                                      }>
+                                        {status === 'pending' ? 'Nuevo' : status === 'delivery' ? 'En Delivery' : status === 'completed' ? 'Entregado' : 'Pagado'}
+                                      </Badge>
+                                      <p className="text-sm text-muted-foreground mt-1">
+                                        {order.createdAt ? new Date(order.createdAt).toLocaleString('es', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div className="border-t pt-3">
+                                    {order.order_items?.map((item, i) => (
+                                      <div key={i} className="flex justify-between text-sm py-1">
+                                        <span>{item.quantity}x {item.product_name}</span>
+                                        <span>{formatPrice(item.subtotal)}</span>
+                                      </div>
+                                    ))}
+                                    <div className="flex justify-between font-bold border-t pt-2 mt-2">
+                                      <span>Total</span>
+                                      <span>{formatPrice(order.total)}</span>
+                                    </div>
+                                  </div>
+                                  {/* Action Buttons */}
+                                  <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t">
+                                    {status === 'pending' && (
+                                      <>
+                                        <Button size="sm" className="bg-blue-500 hover:bg-blue-600 text-white" onClick={() => updateOrderStatus(order.id, 'delivery')}>
+                                          <Truck className="w-4 h-4 mr-1" /> Enviar a Delivery
+                                        </Button>
+                                        <Button size="sm" className="bg-green-500 hover:bg-green-600 text-white" onClick={() => updateOrderStatus(order.id, 'completed')}>
+                                          <Check className="w-4 h-4 mr-1" /> Entregar
+                                        </Button>
+                                        <Button size="sm" className="bg-purple-500 hover:bg-purple-600 text-white" onClick={() => updateOrderStatus(order.id, 'paid')}>
+                                          <CreditCard className="w-4 h-4 mr-1" /> Marcar Pagado
+                                        </Button>
+                                      </>
+                                    )}
+                                    {status === 'delivery' && (
+                                      <>
+                                        <Button size="sm" className="bg-green-500 hover:bg-green-600 text-white" onClick={() => updateOrderStatus(order.id, 'completed')}>
+                                          <Check className="w-4 h-4 mr-1" /> Marcar Entregado
+                                        </Button>
+                                        <Button size="sm" className="bg-purple-500 hover:bg-purple-600 text-white" onClick={() => updateOrderStatus(order.id, 'paid')}>
+                                          <CreditCard className="w-4 h-4 mr-1" /> Marcar Pagado
+                                        </Button>
+                                      </>
+                                    )}
+                                    {status === 'completed' && (
+                                      <Button size="sm" className="bg-purple-500 hover:bg-purple-600 text-white" onClick={() => updateOrderStatus(order.id, 'paid')}>
+                                        <CreditCard className="w-4 h-4 mr-1" /> Marcar Pagado
+                                      </Button>
+                                    )}
+                                    {status === 'paid' && (
+                                      <Badge className="bg-purple-100 text-purple-700">✓ Completado y Pagado</Badge>
+                                    )}
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            ))}
+                          </div>
+                        </ScrollArea>
+                      )}
+                    </TabsContent>
+                  ))}
+                </Tabs>
               </CardContent>
             </Card>
           </TabsContent>
