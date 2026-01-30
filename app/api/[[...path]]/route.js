@@ -207,11 +207,11 @@ export async function GET(request, { params }) {
     // Get global software settings (for login page)
     if (pathStr === 'global-settings') {
       try {
-        // Try to get from info_content with special type
+        // Try to get from info_content by title
         const { data, error } = await supabaseAdmin
           .from('info_content')
           .select('*')
-          .eq('content_type', 'software_settings')
+          .eq('title', 'GLOBAL_SOFTWARE_SETTINGS')
           .single()
         
         if (data && data.description) {
@@ -219,11 +219,11 @@ export async function GET(request, { params }) {
             const settings = JSON.parse(data.description)
             return handleCORS(NextResponse.json(settings))
           } catch (e) {
-            return handleCORS(NextResponse.json({ name: data.title, logo_url: data.link_url }))
+            return handleCORS(NextResponse.json({ name: 'webFácil' }))
           }
         }
       } catch (e) {
-        console.log('Global settings not found, returning defaults')
+        console.log('Global settings not found')
       }
       return handleCORS(NextResponse.json({ name: 'webFácil' }))
     }
