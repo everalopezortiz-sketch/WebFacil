@@ -1055,7 +1055,21 @@ export async function DELETE(request, { params }) {
   const supabaseAdmin = createSupabaseAdmin()
 
   try {
-    const { data: { user } } = await supabase.auth.getUser()
+    // Try to get user from cookies first
+    let user = null
+    const { data: cookieAuth } = await supabase.auth.getUser()
+    user = cookieAuth?.user
+    
+    // If no user from cookies, try Authorization header
+    if (!user) {
+      const authHeader = request.headers.get('Authorization')
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.replace('Bearer ', '')
+        const { data: tokenAuth } = await supabaseAdmin.auth.getUser(token)
+        user = tokenAuth?.user
+      }
+    }
+    
     if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
 
     // Delete category - use admin client
