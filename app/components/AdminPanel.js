@@ -51,7 +51,8 @@ export default function AdminPanel({ user, profile, onLogout }) {
   const [softwareSettings, setSoftwareSettings] = useState({
     name: 'WebBuilder',
     logo_url: '',
-    default_currency: 'USD'
+    default_currency: 'USD',
+    whatsapp_number: ''
   })
   
   // Filters
