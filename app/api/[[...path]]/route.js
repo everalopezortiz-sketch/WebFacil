@@ -925,7 +925,10 @@ export async function PUT(request, { params }) {
 
   try {
     const body = await request.json()
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    
+    console.log('PUT request - path:', pathStr, 'user:', user?.id, 'authError:', authError)
+    
     if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
 
     // Update profile
