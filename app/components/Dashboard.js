@@ -459,8 +459,26 @@ export default function Dashboard({ user, profile, onLogout }) {
                       <div className="mt-2 p-2 bg-slate-50 rounded-lg inline-block">
                         <img 
                           src={settings.logo_url} 
-                          alt="Vista previa del logo" 
+                          alt="Vista previa" 
                           className="h-16 w-auto object-contain"
+                          onError={(e) => { e.target.style.display = 'none' }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <Label>Imagen de Portada (URL)</Label>
+                    <Input
+                      placeholder="https://ejemplo.com/cover.jpg"
+                      value={settings?.cover_image_url || ''}
+                      onChange={(e) => setSettings({ ...settings, cover_image_url: e.target.value })}
+                    />
+                    {settings?.cover_image_url && (
+                      <div className="mt-2 rounded-lg overflow-hidden">
+                        <img 
+                          src={settings.cover_image_url} 
+                          alt="Vista previa" 
+                          className="h-20 w-full object-cover"
                           onError={(e) => { e.target.style.display = 'none' }}
                         />
                       </div>
@@ -480,8 +498,6 @@ export default function Dashboard({ user, profile, onLogout }) {
                         <SelectItem value="dots">Puntos</SelectItem>
                         <SelectItem value="lines">Líneas</SelectItem>
                         <SelectItem value="waves">Ondas</SelectItem>
-                        <SelectItem value="zigzag">Zigzag</SelectItem>
-                        <SelectItem value="circuit">Circuito</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
