@@ -767,6 +767,15 @@ export default function AdminPanel({ user, profile, onLogout }) {
                       />
                     </div>
                     <div>
+                      <Label>WhatsApp de Contacto</Label>
+                      <Input
+                        placeholder="+595991234567"
+                        value={softwareSettings.whatsapp_number || ''}
+                        onChange={(e) => setSoftwareSettings({ ...softwareSettings, whatsapp_number: e.target.value })}
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">Aparecerá en el footer de las tiendas y en la pantalla de login</p>
+                    </div>
+                    <div>
                       <Label>Moneda por defecto</Label>
                       <Select
                         value={softwareSettings.default_currency}
