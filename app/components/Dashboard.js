@@ -455,6 +455,16 @@ export default function Dashboard({ user, profile, onLogout }) {
                       value={settings?.logo_url || ''}
                       onChange={(e) => setSettings({ ...settings, logo_url: e.target.value })}
                     />
+                    {settings?.logo_url && (
+                      <div className="mt-2 p-2 bg-slate-50 rounded-lg inline-block">
+                        <img 
+                          src={settings.logo_url} 
+                          alt="Vista previa del logo" 
+                          className="h-16 w-auto object-contain"
+                          onError={(e) => { e.target.style.display = 'none' }}
+                        />
+                      </div>
+                    )}
                   </div>
                   <div>
                     <Label>Imagen de Portada (URL)</Label>
@@ -463,6 +473,16 @@ export default function Dashboard({ user, profile, onLogout }) {
                       value={settings?.cover_image_url || ''}
                       onChange={(e) => setSettings({ ...settings, cover_image_url: e.target.value })}
                     />
+                    {settings?.cover_image_url && (
+                      <div className="mt-2 rounded-lg overflow-hidden">
+                        <img 
+                          src={settings.cover_image_url} 
+                          alt="Vista previa de portada" 
+                          className="h-24 w-full object-cover"
+                          onError={(e) => { e.target.style.display = 'none' }}
+                        />
+                      </div>
+                    )}
                     <p className="text-xs text-muted-foreground mt-1">Imagen que aparecerá en la parte superior de tu tienda</p>
                   </div>
                   <div>
