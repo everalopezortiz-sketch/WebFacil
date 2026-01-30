@@ -567,50 +567,103 @@ export default function AdminPanel({ user, profile, onLogout }) {
 
           {/* Content Tab */}
           <TabsContent value="content">
-            <Card>
-              <CardHeader>
-                <CardTitle>Contenido Informativo</CardTitle>
-                <CardDescription>Este contenido se muestra en el dashboard de todos los usuarios</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label>Título del anuncio</Label>
-                  <Input
-                    placeholder="Ej: Nueva función disponible"
-                    value={infoContent?.title || ''}
-                    onChange={(e) => setInfoContent({ ...infoContent, title: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <Label>Link explicativo (opcional)</Label>
-                  <Input
-                    placeholder="https://..."
-                    value={infoContent?.link_url || ''}
-                    onChange={(e) => setInfoContent({ ...infoContent, link_url: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <Label>Descripción (opcional)</Label>
-                  <Textarea
-                    placeholder="Más detalles..."
-                    value={infoContent?.description || ''}
-                    onChange={(e) => setInfoContent({ ...infoContent, description: e.target.value })}
-                    rows={3}
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <Switch
-                    checked={infoContent?.is_active !== false}
-                    onCheckedChange={(v) => setInfoContent({ ...infoContent, is_active: v })}
-                  />
-                  <Label>Mostrar a usuarios</Label>
-                </div>
-                <Button onClick={saveInfoContent} disabled={saving}>
-                  {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                  Guardar
-                </Button>
-              </CardContent>
-            </Card>
+            <div className="grid lg:grid-cols-2 gap-6">
+              {/* Info Content Card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Contenido Informativo</CardTitle>
+                  <CardDescription>Este contenido se muestra en el dashboard de todos los usuarios</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <Label>Título del anuncio</Label>
+                    <Input
+                      placeholder="Ej: Nueva función disponible"
+                      value={infoContent?.title || ''}
+                      onChange={(e) => setInfoContent({ ...infoContent, title: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label>Link explicativo (opcional)</Label>
+                    <Input
+                      placeholder="https://..."
+                      value={infoContent?.link_url || ''}
+                      onChange={(e) => setInfoContent({ ...infoContent, link_url: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label>Descripción (opcional)</Label>
+                    <Textarea
+                      placeholder="Más detalles..."
+                      value={infoContent?.description || ''}
+                      onChange={(e) => setInfoContent({ ...infoContent, description: e.target.value })}
+                      rows={3}
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={infoContent?.is_active !== false}
+                      onCheckedChange={(v) => setInfoContent({ ...infoContent, is_active: v })}
+                    />
+                    <Label>Mostrar a usuarios</Label>
+                  </div>
+                  <Button onClick={saveInfoContent} disabled={saving}>
+                    {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                    Guardar Contenido
+                  </Button>
+                </CardContent>
+              </Card>
+
+              {/* Sent Messages Card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Mensajes Enviados</CardTitle>
+                  <CardDescription>Historial de mensajes de soporte</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {sentMessages.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <MessageSquare className="w-12 h-12 mx-auto mb-2 opacity-30" />
+                      <p>No hay mensajes enviados</p>
+                    </div>
+                  ) : (
+                    <ScrollArea className="h-[400px]">
+                      <div className="space-y-3">
+                        {sentMessages.map(msg => (
+                          <div key={msg.id} className="p-3 border rounded-lg bg-slate-50">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                  {msg.is_global ? (
+                                    <Badge variant="secondary">Global</Badge>
+                                  ) : (
+                                    <Badge variant="outline">
+                                      {msg.profiles?.first_name} {msg.profiles?.last_name}
+                                    </Badge>
+                                  )}
+                                  <span className="text-xs text-muted-foreground">
+                                    {new Date(msg.createdAt).toLocaleDateString('es', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                  </span>
+                                </div>
+                                <p className="text-sm">{msg.message}</p>
+                              </div>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="text-destructive shrink-0"
+                                onClick={() => deleteMessage(msg.id)}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
 
           {/* Software Settings Tab */}
