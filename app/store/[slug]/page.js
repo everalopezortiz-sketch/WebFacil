@@ -17,6 +17,7 @@ import {
   MessageCircle, QrCode, Building,
   Star, Tag, Truck, Banknote, Link2, Search, Clock
 } from 'lucide-react'
+import { normalizeImageSrc } from '@/lib/imageUtils'
 
 const CURRENCIES = {
   USD: { symbol: '$', name: 'USD' },
