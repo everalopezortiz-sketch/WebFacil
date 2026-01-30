@@ -297,6 +297,43 @@ export default function AdminPanel({ user, profile, onLogout }) {
     }
   }
 
+  // Load messages for specific user
+  const loadUserMessages = async (user) => {
+    try {
+      const res = await fetch(`/api/admin/user-messages/${user.id}`)
+      if (res.ok) {
+        const messages = await res.json()
+        setUserMessagesDialog({ open: true, user, messages })
+      } else {
+        // No messages or endpoint not available
+        setUserMessagesDialog({ open: true, user, messages: [] })
+      }
+    } catch (error) {
+      setUserMessagesDialog({ open: true, user, messages: [] })
+    }
+  }
+
+  // Delete user message
+  const deleteUserMessage = async (messageId) => {
+    if (!confirm('¿Eliminar este mensaje?')) return
+    
+    try {
+      const res = await fetch(`/api/admin/messages/${messageId}`, { method: 'DELETE' })
+      if (res.ok) {
+        toast.success('Mensaje eliminado')
+        // Refresh messages
+        if (userMessagesDialog.user) {
+          loadUserMessages(userMessagesDialog.user)
+        }
+        loadSentMessages()
+      } else {
+        toast.error('Error al eliminar')
+      }
+    } catch (error) {
+      toast.error('Error de conexión')
+    }
+  }
+
   // Save info content
   const saveInfoContent = async () => {
     setSaving(true)
