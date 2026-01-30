@@ -637,12 +637,10 @@ export default function AdminPanel({ user, profile, onLogout }) {
                                   {msg.is_global ? (
                                     <Badge variant="secondary">Global</Badge>
                                   ) : (
-                                    <Badge variant="outline">
-                                      {msg.profiles?.first_name} {msg.profiles?.last_name}
-                                    </Badge>
+                                    <Badge variant="outline">Individual</Badge>
                                   )}
                                   <span className="text-xs text-muted-foreground">
-                                    {new Date(msg.createdAt).toLocaleDateString('es', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                    {msg.created_at ? new Date(msg.created_at).toLocaleDateString('es', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Sin fecha'}
                                   </span>
                                 </div>
                                 <p className="text-sm">{msg.message}</p>
