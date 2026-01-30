@@ -206,33 +206,69 @@ export default function StorePage() {
   const cartTotal = cart.reduce((sum, item) => sum + (getProductPrice(item) * item.quantity), 0)
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0)
 
-  // WhatsApp checkout
-  const handleWhatsAppCheckout = () => {
+  // WhatsApp checkout - Now saves order to database AND sends WhatsApp
+  const handleWhatsAppCheckout = async () => {
     if (!settings?.whatsapp_number) {
       toast.error('WhatsApp no configurado')
       return
     }
 
-    let message = `🛒 *Nuevo Pedido*\n\n`
-    cart.forEach(item => {
-      const price = getProductPrice(item)
-      message += `• ${item.name} x${item.quantity} - ${formatPrice(price * item.quantity)}\n`
-    })
-    message += `\n*Total: ${formatPrice(cartTotal)}*\n\n`
-    message += `*Método de pago:* ${availablePaymentMethods.find(m => m.id === selectedPaymentMethod)?.label || 'No seleccionado'}\n\n`
-    message += `*Datos del cliente:*\n`
-    checkoutFields.forEach(field => {
-      if (checkoutData[field.field_name]) {
-        message += `${field.field_label}: ${checkoutData[field.field_name]}\n`
+    try {
+      // First, save order to database
+      const orderData = {
+        userId: profile.id,
+        customerName: checkoutData.name || checkoutData.nombre || '',
+        customerPhone: checkoutData.phone || checkoutData.telefono || '',
+        customerEmail: checkoutData.email || '',
+        customerData: checkoutData,
+        items: cart.map(item => ({
+          productId: item.id,
+          productName: item.name,
+          quantity: item.quantity,
+          unitPrice: getProductPrice(item),
+          subtotal: getProductPrice(item) * item.quantity
+        })),
+        total: cartTotal,
+        notes: `Método de pago: ${availablePaymentMethods.find(m => m.id === selectedPaymentMethod)?.label || 'No seleccionado'}`
       }
-    })
 
-    const phone = settings.whatsapp_number.replace(/\D/g, '')
-    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank')
-    setCart([])
-    setCheckoutOpen(false)
-    setCartOpen(false)
-    toast.success('¡Pedido enviado!')
+      const res = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(orderData)
+      })
+
+      if (!res.ok) {
+        const error = await res.json()
+        console.error('Order save error:', error)
+        // Continue with WhatsApp even if save fails
+      }
+
+      // Then send WhatsApp message
+      let message = `🛒 *Nuevo Pedido*\n\n`
+      cart.forEach(item => {
+        const price = getProductPrice(item)
+        message += `• ${item.name} x${item.quantity} - ${formatPrice(price * item.quantity)}\n`
+      })
+      message += `\n*Total: ${formatPrice(cartTotal)}*\n\n`
+      message += `*Método de pago:* ${availablePaymentMethods.find(m => m.id === selectedPaymentMethod)?.label || 'No seleccionado'}\n\n`
+      message += `*Datos del cliente:*\n`
+      checkoutFields.forEach(field => {
+        if (checkoutData[field.field_name]) {
+          message += `${field.field_label}: ${checkoutData[field.field_name]}\n`
+        }
+      })
+
+      const phone = settings.whatsapp_number.replace(/\D/g, '')
+      window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank')
+      setCart([])
+      setCheckoutOpen(false)
+      setCartOpen(false)
+      toast.success('¡Pedido enviado!')
+    } catch (error) {
+      console.error('Checkout error:', error)
+      toast.error('Error al procesar pedido')
+    }
   }
 
   // Theme
