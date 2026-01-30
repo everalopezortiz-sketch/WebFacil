@@ -1071,7 +1071,7 @@ export default function Dashboard({ user, profile, onLogout }) {
                                       <p className="font-medium">{order.customer_name}</p>
                                       {order.customer_phone && <p className="text-sm text-muted-foreground">{order.customer_phone}</p>}
                                     </div>
-                                    <div className="text-right">
+                                    <div className="text-right flex items-start gap-2">
                                       <Badge className={
                                         status === 'pending' ? 'bg-yellow-500' : 
                                         status === 'delivery' ? 'bg-blue-500' : 
@@ -1079,11 +1079,20 @@ export default function Dashboard({ user, profile, onLogout }) {
                                       }>
                                         {status === 'pending' ? 'Nuevo' : status === 'delivery' ? 'En Delivery' : status === 'completed' ? 'Entregado' : 'Pagado'}
                                       </Badge>
-                                      <p className="text-sm text-muted-foreground mt-1">
-                                        {order.createdAt ? new Date(order.createdAt).toLocaleString('es', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}
-                                      </p>
+                                      {/* Edit & Delete buttons for all statuses */}
+                                      <div className="flex gap-1">
+                                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setOrderDialog({ open: true, data: order })}>
+                                          <Eye className="w-3 h-3" />
+                                        </Button>
+                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => deleteOrder(order.id)}>
+                                          <Trash2 className="w-3 h-3" />
+                                        </Button>
+                                      </div>
                                     </div>
                                   </div>
+                                  <p className="text-xs text-muted-foreground mb-2">
+                                    {order.createdAt ? new Date(order.createdAt).toLocaleString('es', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}
+                                  </p>
                                   <div className="border-t pt-3">
                                     {order.order_items?.map((item, i) => (
                                       <div key={i} className="flex justify-between text-sm py-1">
@@ -1096,34 +1105,26 @@ export default function Dashboard({ user, profile, onLogout }) {
                                       <span>{formatPrice(order.total)}</span>
                                     </div>
                                   </div>
-                                  {/* Action Buttons */}
+                                  {/* Action Buttons - Correct Flow */}
                                   <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t">
                                     {status === 'pending' && (
                                       <>
                                         <Button size="sm" className="bg-blue-500 hover:bg-blue-600 text-white" onClick={() => updateOrderStatus(order.id, 'delivery')}>
-                                          <Truck className="w-4 h-4 mr-1" /> Enviar a Delivery
-                                        </Button>
-                                        <Button size="sm" className="bg-green-500 hover:bg-green-600 text-white" onClick={() => updateOrderStatus(order.id, 'completed')}>
-                                          <Check className="w-4 h-4 mr-1" /> Entregar
+                                          <Truck className="w-4 h-4 mr-1" /> Enviar
                                         </Button>
                                         <Button size="sm" className="bg-purple-500 hover:bg-purple-600 text-white" onClick={() => updateOrderStatus(order.id, 'paid')}>
-                                          <CreditCard className="w-4 h-4 mr-1" /> Marcar Pagado
+                                          <CreditCard className="w-4 h-4 mr-1" /> Pagado
                                         </Button>
                                       </>
                                     )}
                                     {status === 'delivery' && (
-                                      <>
-                                        <Button size="sm" className="bg-green-500 hover:bg-green-600 text-white" onClick={() => updateOrderStatus(order.id, 'completed')}>
-                                          <Check className="w-4 h-4 mr-1" /> Marcar Entregado
-                                        </Button>
-                                        <Button size="sm" className="bg-purple-500 hover:bg-purple-600 text-white" onClick={() => updateOrderStatus(order.id, 'paid')}>
-                                          <CreditCard className="w-4 h-4 mr-1" /> Marcar Pagado
-                                        </Button>
-                                      </>
+                                      <Button size="sm" className="bg-green-500 hover:bg-green-600 text-white" onClick={() => updateOrderStatus(order.id, 'completed')}>
+                                        <Check className="w-4 h-4 mr-1" /> Entregado
+                                      </Button>
                                     )}
                                     {status === 'completed' && (
                                       <Button size="sm" className="bg-purple-500 hover:bg-purple-600 text-white" onClick={() => updateOrderStatus(order.id, 'paid')}>
-                                        <CreditCard className="w-4 h-4 mr-1" /> Marcar Pagado
+                                        <CreditCard className="w-4 h-4 mr-1" /> Pagado
                                       </Button>
                                     )}
                                     {status === 'paid' && (
