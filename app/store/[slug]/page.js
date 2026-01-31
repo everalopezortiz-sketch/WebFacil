@@ -242,10 +242,9 @@ export default function StorePage() {
       if (!res.ok) {
         const error = await res.json()
         console.error('Order save error:', error)
-        // Continue with WhatsApp even if save fails
       }
 
-      // Then send WhatsApp message
+      // Build WhatsApp message including ALL checkout fields
       let message = `🛒 *Nuevo Pedido*\n\n`
       cart.forEach(item => {
         const price = getProductPrice(item)
@@ -254,18 +253,26 @@ export default function StorePage() {
       message += `\n*Total: ${formatPrice(cartTotal)}*\n\n`
       message += `*Método de pago:* ${availablePaymentMethods.find(m => m.id === selectedPaymentMethod)?.label || 'No seleccionado'}\n\n`
       message += `*Datos del cliente:*\n`
+      
+      // Include ALL checkout fields (including custom ones like delivery/pickup)
       checkoutFields.forEach(field => {
-        if (checkoutData[field.field_name]) {
-          message += `${field.field_label}: ${checkoutData[field.field_name]}\n`
+        const value = checkoutData[field.field_name]
+        if (value) {
+          message += `${field.field_label}: ${value}\n`
         }
       })
 
       const phone = settings.whatsapp_number.replace(/\D/g, '')
-      window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank')
+      const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
+      
+      // Clear cart and close dialogs first
       setCart([])
       setCheckoutOpen(false)
       setCartOpen(false)
       toast.success('¡Pedido enviado!')
+      
+      // Use location.href for better mobile compatibility
+      window.location.href = whatsappUrl
     } catch (error) {
       console.error('Checkout error:', error)
       toast.error('Error al procesar pedido')
