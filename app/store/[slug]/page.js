@@ -459,17 +459,17 @@ export default function StorePage() {
           </div>
         ) : (
           <div className="space-y-8">
-            {/* Show by category when "all" is selected */}
-            {selectedCategory === 'all' ? (
+            {/* Show by category when "all" is selected and no search */}
+            {selectedCategory === 'all' && !searchQuery.trim() ? (
               <>
                 {/* Featured */}
-                {products.some(p => p.is_featured) && (
+                {filteredProducts.some(p => p.is_featured) && (
                   <section>
                     <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
                       <Star className="w-5 h-5 text-amber-500" /> Destacados
                     </h2>
                     <ProductGrid 
-                      products={products.filter(p => p.is_featured)} 
+                      products={filteredProducts.filter(p => p.is_featured)} 
                       {...{ addToCart, setProductDetail, formatPrice, getProductPrice, buttonColor, cardSize, gridColumns }}
                     />
                   </section>
@@ -477,7 +477,7 @@ export default function StorePage() {
                 
                 {/* By Category */}
                 {categories.map(cat => {
-                  const catProducts = products.filter(p => p.category_id === cat.id && !p.is_featured)
+                  const catProducts = filteredProducts.filter(p => p.category_id === cat.id && !p.is_featured)
                   if (catProducts.length === 0) return null
                   return (
                     <section key={cat.id}>
@@ -491,11 +491,11 @@ export default function StorePage() {
                 })}
                 
                 {/* Uncategorized */}
-                {products.filter(p => !p.category_id && !p.is_featured).length > 0 && (
+                {filteredProducts.filter(p => !p.category_id && !p.is_featured).length > 0 && (
                   <section>
                     <h2 className="text-lg font-bold mb-4">Otros</h2>
                     <ProductGrid 
-                      products={products.filter(p => !p.category_id && !p.is_featured)} 
+                      products={filteredProducts.filter(p => !p.category_id && !p.is_featured)} 
                       {...{ addToCart, setProductDetail, formatPrice, getProductPrice, buttonColor, cardSize, gridColumns }}
                     />
                   </section>
@@ -504,7 +504,8 @@ export default function StorePage() {
             ) : (
               <section>
                 <h2 className="text-lg font-bold mb-4">
-                  {selectedCategory === 'promo' ? 'Ofertas' : 
+                  {searchQuery.trim() ? `Resultados para "${searchQuery}"` :
+                   selectedCategory === 'promo' ? 'Ofertas' : 
                    selectedCategory === 'featured' ? 'Destacados' :
                    categories.find(c => c.id === selectedCategory)?.name || 'Productos'}
                 </h2>
