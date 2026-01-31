@@ -1168,7 +1168,7 @@ export default function Dashboard({ user, profile, onLogout }) {
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between flex-wrap gap-4">
-                  <CardTitle>Reportes</CardTitle>
+                  <CardTitle>Reportes de Ventas Entregadas</CardTitle>
                   <div className="flex items-center gap-2">
                     <Input
                       type="date"
@@ -1189,9 +1189,14 @@ export default function Dashboard({ user, profile, onLogout }) {
               </CardHeader>
               <CardContent>
                 {!reports ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <BarChart3 className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                    <p>Selecciona un rango de fechas y genera el reporte</p>
+                  <div className="text-center py-8">
+                    <Button onClick={loadReports} size="lg">
+                      <BarChart3 className="w-5 h-5 mr-2" />
+                      Cargar Reporte del Día
+                    </Button>
+                    <p className="text-sm text-muted-foreground mt-2">
+                      Haz clic para ver las ventas entregadas de hoy
+                    </p>
                   </div>
                 ) : (
                   <div className="space-y-6">
