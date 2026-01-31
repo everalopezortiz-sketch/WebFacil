@@ -292,14 +292,23 @@ export async function GET(request, { params }) {
       const startDate = searchParams.get('startDate')
       const endDate = searchParams.get('endDate')
       
+      // Only count delivered orders for reports
       let query = supabase
         .from('orders')
         .select('*, order_items(*)')
         .eq('user_id', user.id)
-        .neq('status', 'cancelled')
+        .eq('status', 'delivered')
       
-      if (startDate) query = query.gte('createdAt', startDate)
-      if (endDate) query = query.lte('createdAt', endDate)
+      if (startDate) {
+        const start = new Date(startDate)
+        start.setHours(0, 0, 0, 0)
+        query = query.gte('createdAt', start.toISOString())
+      }
+      if (endDate) {
+        const end = new Date(endDate)
+        end.setHours(23, 59, 59, 999)
+        query = query.lte('createdAt', end.toISOString())
+      }
       
       const { data: orders } = await query
       
