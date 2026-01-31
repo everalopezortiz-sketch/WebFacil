@@ -87,8 +87,9 @@ export default function Dashboard({ user, profile, onLogout }) {
   const [productDialog, setProductDialog] = useState({ open: false, data: null })
   const [fieldDialog, setFieldDialog] = useState({ open: false, data: null })
   
-  // Date filters
-  const [reportDateRange, setReportDateRange] = useState({ start: '', end: '' })
+  // Date filters - default to today
+  const today = new Date().toISOString().split('T')[0]
+  const [reportDateRange, setReportDateRange] = useState({ start: today, end: today })
   const [orderDateFilter, setOrderDateFilter] = useState('')
 
   const supabase = createClient()
