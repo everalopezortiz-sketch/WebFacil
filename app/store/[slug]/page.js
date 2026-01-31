@@ -364,11 +364,6 @@ export default function StorePage() {
               {settings?.store_description && (
                 <p className="text-sm opacity-70 line-clamp-2 mt-1">{settings.store_description}</p>
               )}
-              {settings?.delivery_enabled && (
-                <Badge className="mt-2 bg-green-600 text-white text-xs">
-                  <Truck className="w-3 h-3 mr-1" /> Delivery disponible
-                </Badge>
-              )}
             </div>
           </div>
         </div>
