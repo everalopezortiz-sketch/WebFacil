@@ -557,11 +557,6 @@ export default function StorePage() {
           <div className="flex flex-col items-center text-center gap-4">
             <div>
               <p className="text-lg font-semibold text-amber-400">{globalSettings.name || 'webFácil'}</p>
-              {settings?.delivery_enabled && (
-                <p className="text-xs text-green-400 flex items-center gap-1 justify-center mt-1">
-                  <Truck className="w-3 h-3" /> Delivery disponible
-                </p>
-              )}
             </div>
             {globalSettings.whatsapp && (
               <div className="flex flex-col items-center gap-2">
@@ -569,7 +564,7 @@ export default function StorePage() {
                 <Button
                   size="sm"
                   className="bg-green-600 hover:bg-green-700 text-white border-0"
-                  onClick={() => window.open(`https://wa.me/${globalSettings.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent('Hola! Quiero mi web gratis')}`, '_blank')}
+                  onClick={() => window.location.href = `https://wa.me/${globalSettings.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent('Hola! Quiero mi web gratis')}`}
                 >
                   <MessageCircle className="w-4 h-4 mr-2" /> Contactar
                 </Button>
