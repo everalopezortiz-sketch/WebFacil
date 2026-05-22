@@ -15,9 +15,10 @@ import {
   ShoppingCart, Plus, Minus, Trash2, X,
   Phone, Store, User, Utensils, Loader2,
   MessageCircle, QrCode, Building,
-  Star, Tag, Truck, Banknote, Link2, Search, Clock
+  Star, Tag, Truck, Banknote, Link2, Search, Clock,
+  ChevronLeft, ChevronRight, ZoomIn
 } from 'lucide-react'
-import { normalizeImageSrc } from '@/lib/imageUtils'
+import { normalizeImageSrc, parseImages } from '@/lib/imageUtils'
 
 const CURRENCIES = {
   USD: { symbol: '$', name: 'USD' },
@@ -76,6 +77,8 @@ export default function StorePage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [checkoutData, setCheckoutData] = useState({})
   const [productDetail, setProductDetail] = useState(null)
+  const [productImageIndex, setProductImageIndex] = useState(0)
+  const [lightbox, setLightbox] = useState({ open: false, images: [], index: 0 })
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('')
   const [globalSettings, setGlobalSettings] = useState({ name: 'webFácil', whatsapp: '' })
 
@@ -592,18 +595,75 @@ export default function StorePage() {
       )}
 
       {/* Product Detail Dialog */}
-      <Dialog open={!!productDetail} onOpenChange={() => setProductDetail(null)}>
+      <Dialog open={!!productDetail} onOpenChange={(open) => { if (!open) { setProductDetail(null); setProductImageIndex(0) } }}>
         <DialogContent className="max-w-md p-0 overflow-hidden">
-          {productDetail && (
+          {productDetail && (() => {
+            const detailImages = parseImages(productDetail.image_url)
+            const hasImages = detailImages.length > 0
+            const currentIdx = Math.min(productImageIndex, detailImages.length - 1)
+            const goNext = () => setProductImageIndex((currentIdx + 1) % detailImages.length)
+            const goPrev = () => setProductImageIndex((currentIdx - 1 + detailImages.length) % detailImages.length)
+            return (
             <>
-              {productDetail.image_url && (
-                <div className="aspect-video bg-gray-100">
+              {hasImages && (
+                <div className="aspect-square bg-gray-100 relative group">
                   <img 
-                    src={normalizeImageSrc(productDetail.image_url)}
+                    src={detailImages[currentIdx]}
                     alt={productDetail.name}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover cursor-zoom-in"
+                    onClick={() => setLightbox({ open: true, images: detailImages, index: currentIdx })}
                     onError={(e) => { e.target.style.display = 'none' }}
                   />
+                  <button
+                    type="button"
+                    onClick={() => setLightbox({ open: true, images: detailImages, index: currentIdx })}
+                    className="absolute top-3 right-3 bg-black/50 hover:bg-black/70 text-white rounded-full w-9 h-9 flex items-center justify-center transition"
+                    aria-label="Ver en pantalla completa"
+                  >
+                    <ZoomIn className="w-4 h-4" />
+                  </button>
+                  {detailImages.length > 1 && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={goPrev}
+                        className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white rounded-full w-9 h-9 flex items-center justify-center shadow-md transition"
+                      >
+                        <ChevronLeft className="w-5 h-5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={goNext}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white rounded-full w-9 h-9 flex items-center justify-center shadow-md transition"
+                      >
+                        <ChevronRight className="w-5 h-5" />
+                      </button>
+                      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
+                        {detailImages.map((_, i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={() => setProductImageIndex(i)}
+                            className={`h-2 rounded-full transition-all ${i === currentIdx ? 'bg-white w-6' : 'bg-white/60 w-2'}`}
+                          />
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+              {detailImages.length > 1 && (
+                <div className="px-4 pt-3 flex gap-2">
+                  {detailImages.map((img, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setProductImageIndex(i)}
+                      className={`relative w-16 h-16 rounded-lg overflow-hidden border-2 transition ${i === currentIdx ? 'border-primary' : 'border-transparent opacity-70 hover:opacity-100'}`}
+                    >
+                      <img src={img} alt={`${productDetail.name} ${i + 1}`} className="w-full h-full object-cover" />
+                    </button>
+                  ))}
                 </div>
               )}
               <div className="p-6">
@@ -622,12 +682,67 @@ export default function StorePage() {
                       <span className="text-2xl font-bold">{formatPrice(productDetail.price)}</span>
                     )}
                   </div>
-                  <Button style={{ backgroundColor: buttonColor }} className="text-white" onClick={() => { addToCart(productDetail); setProductDetail(null) }}>
+                  <Button style={{ backgroundColor: buttonColor }} className="text-white" onClick={() => { addToCart(productDetail); setProductDetail(null); setProductImageIndex(0) }}>
                     <Plus className="w-4 h-4 mr-1" /> Agregar
                   </Button>
                 </div>
               </div>
             </>
+            )
+          })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* Fullscreen Lightbox */}
+      <Dialog open={lightbox.open} onOpenChange={(open) => setLightbox({ ...lightbox, open })}>
+        <DialogContent className="max-w-[100vw] w-screen h-screen p-0 bg-black/95 border-0 rounded-none">
+          <DialogTitle className="sr-only">Vista de imagen</DialogTitle>
+          {lightbox.images.length > 0 && (
+            <div className="relative w-full h-full flex items-center justify-center">
+              <img
+                src={lightbox.images[lightbox.index]}
+                alt="Vista ampliada"
+                className="max-w-full max-h-full object-contain"
+              />
+              <button
+                type="button"
+                onClick={() => setLightbox({ open: false, images: [], index: 0 })}
+                className="absolute top-4 right-4 bg-white/10 hover:bg-white/20 text-white rounded-full w-11 h-11 flex items-center justify-center transition z-10"
+                aria-label="Cerrar"
+              >
+                <X className="w-6 h-6" />
+              </button>
+              {lightbox.images.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setLightbox({ ...lightbox, index: (lightbox.index - 1 + lightbox.images.length) % lightbox.images.length })}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/10 hover:bg-white/20 text-white rounded-full w-12 h-12 flex items-center justify-center transition"
+                    aria-label="Anterior"
+                  >
+                    <ChevronLeft className="w-7 h-7" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLightbox({ ...lightbox, index: (lightbox.index + 1) % lightbox.images.length })}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/10 hover:bg-white/20 text-white rounded-full w-12 h-12 flex items-center justify-center transition"
+                    aria-label="Siguiente"
+                  >
+                    <ChevronRight className="w-7 h-7" />
+                  </button>
+                  <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2">
+                    {lightbox.images.map((_, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => setLightbox({ ...lightbox, index: i })}
+                        className={`h-2.5 rounded-full transition-all ${i === lightbox.index ? 'bg-white w-8' : 'bg-white/40 w-2.5'}`}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
           )}
         </DialogContent>
       </Dialog>
@@ -644,8 +759,8 @@ export default function StorePage() {
             <div className="p-4 space-y-3">
               {cart.map(item => (
                 <div key={item.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-                  {item.image_url && (
-                    <img src={normalizeImageSrc(item.image_url)} alt={item.name} className="w-16 h-16 rounded-lg object-cover" onError={(e) => e.target.style.display = 'none'} />
+                  {parseImages(item.image_url)[0] && (
+                    <img src={parseImages(item.image_url)[0]} alt={item.name} className="w-16 h-16 rounded-lg object-cover" onError={(e) => e.target.style.display = 'none'} />
                   )}
                   <div className="flex-1 min-w-0">
                     <h4 className="font-medium truncate">{item.name}</h4>
@@ -769,16 +884,19 @@ function ProductGrid({ products, addToCart, setProductDetail, formatPrice, getPr
 
   return (
     <div className={`grid gap-4 ${gridClass}`}>
-      {products.map(product => (
+      {products.map(product => {
+        const imgs = parseImages(product.image_url)
+        const mainImg = imgs[0]
+        return (
         <div 
           key={product.id}
           className="bg-white rounded-xl shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition-all border border-gray-100"
           onClick={() => setProductDetail(product)}
         >
           <div className={`${imageHeight} bg-gray-100 relative`}>
-            {product.image_url ? (
+            {mainImg ? (
               <img 
-                src={normalizeImageSrc(product.image_url)}
+                src={mainImg}
                 alt={product.name}
                 className="w-full h-full object-cover"
                 loading="lazy"
@@ -788,6 +906,11 @@ function ProductGrid({ products, addToCart, setProductDetail, formatPrice, getPr
               <div className="w-full h-full flex items-center justify-center bg-gray-50">
                 <Store className="w-10 h-10 text-gray-300" />
               </div>
+            )}
+            {imgs.length > 1 && (
+              <Badge className="absolute bottom-2 left-2 bg-black/60 text-white text-[10px] px-1.5 py-0.5 backdrop-blur">
+                +{imgs.length - 1} fotos
+              </Badge>
             )}
             {product.promo_active && (
               <Badge className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2">Oferta</Badge>
@@ -823,7 +946,8 @@ function ProductGrid({ products, addToCart, setProductDetail, formatPrice, getPr
             </div>
           </div>
         </div>
-      ))}
+        )
+      })}
     </div>
   )
 }

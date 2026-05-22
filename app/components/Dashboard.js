@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
-import { normalizeImageSrc } from '@/lib/imageUtils'
+import { normalizeImageSrc, parseImages, serializeImages } from '@/lib/imageUtils'
 import ImageUpload from '@/components/ImageUpload'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -935,11 +935,13 @@ export default function Dashboard({ user, profile, onLogout }) {
                   </div>
                 ) : (
                   <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                    {products.map(product => (
+                    {products.map(product => {
+                      const mainImg = parseImages(product.image_url)[0]
+                      return (
                       <Card key={product.id} className="overflow-hidden">
-                        {product.image_url && (
+                        {mainImg && (
                           <div className="aspect-video bg-slate-100 relative">
-                            <img src={normalizeImageSrc(product.image_url)} alt={product.name} className="w-full h-full object-cover" />
+                            <img src={mainImg} alt={product.name} className="w-full h-full object-cover" />
                             {product.promo_active && (
                               <Badge className="absolute top-2 right-2 bg-red-500">Promo</Badge>
                             )}
@@ -974,7 +976,8 @@ export default function Dashboard({ user, profile, onLogout }) {
                           </div>
                         </CardContent>
                       </Card>
-                    ))}
+                      )
+                    })}
                   </div>
                 )}
               </CardContent>
@@ -1433,12 +1436,32 @@ export default function Dashboard({ user, profile, onLogout }) {
               </div>
 
               <div>
-                <ImageUpload
-                  label="Imagen del producto"
-                  value={productDialog.data?.image_url || ''}
-                  onChange={(v) => setProductDialog({ ...productDialog, data: { ...productDialog.data, image_url: v } })}
-                  aspect="square"
-                />
+                <Label className="text-base font-semibold">Imágenes del producto (hasta 3)</Label>
+                <p className="text-xs text-muted-foreground mb-2">La primera será la imagen principal</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {[0, 1, 2].map((idx) => {
+                    const currentImages = parseImages(productDialog.data?.image_url || '')
+                    const value = currentImages[idx] || ''
+                    return (
+                      <ImageUpload
+                        key={idx}
+                        label={idx === 0 ? 'Principal' : `Foto ${idx + 1}`}
+                        value={value}
+                        onChange={(v) => {
+                          const imgs = parseImages(productDialog.data?.image_url || '')
+                          while (imgs.length < 3) imgs.push('')
+                          imgs[idx] = v
+                          setProductDialog({
+                            ...productDialog,
+                            data: { ...productDialog.data, image_url: serializeImages(imgs) }
+                          })
+                        }}
+                        aspect="square"
+                        maxSizeMB={0.5}
+                      />
+                    )
+                  })}
+                </div>
               </div>
 
               <div className="grid sm:grid-cols-2 gap-4">
