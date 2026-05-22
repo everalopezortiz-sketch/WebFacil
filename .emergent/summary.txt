@@ -1,185 +1,200 @@
 <analysis>
-**original_problem_statement:**
-The user wants to develop a fully functional SaaS web application for creating websites for three types of businesses: Ecommerce/Store, Professional/Personal Page, and Gastronomic Local. The application has a user registration/login system,  and  roles, and allows users to configure their site's appearance, content (products/services), and checkout process. The public-facing websites should be generated based on these configurations.
+<original_problem_statement>
+The user wants to fix a series of bugs and implement several features in their SaaS web application.
 
-The agent has been in a multi-turn process of fixing bugs and adding features based on user feedback. The latest user requests included:
-- A complete redesign of the public store page based on an image.
-- A new order management system with status tabs (New, Delivery, Delivered, Paid).
-- Fixing several database errors (column not found) by updating the DB schema.
-- A way for the admin to view/edit/delete messages for specific users.
-- Fixing bugs related to saving product images and user profile/cover images.
+**Initial Problem Statement Summary:**
+- **Admin Panel:** Implement full CRUD for messages sent to users.
+- **Order Management:** Fix order status updates, add edit/delete for orders.
+- **Database/Saving Errors:** Fix saving issues for user settings (cover image, etc.).
+- **Image Handling:** Allow any image URL (including Google Drive), add preview/crop.
+- **Public Store UI/UX:** Fix crashes, display all products, implement search/filtering, fix image displays, add a configurable footer.
+- **Global Settings:** Ensure admin changes (logo, name) reflect on public pages.
+
+**Recent User Requests (during this session):**
+1.  **Orders Not Appearing:** When a customer places an order on the public store, it is not saved to the database and doesn't appear in the user's dashboard.
+2.  ** Error:** An error appeared when enabling cash payments, indicating a missing database column.
+3.  **UI/UX on Public Store:**
+    - The delivery enabled status was not showing. (Later requested to be removed from the footer).
+    - The footer was not showing the correct application name () and the admin's WhatsApp contact button.
+    - The product search was not working.
+4.  **Image URL Normalization:** A specific request to create a  function to handle base64, direct URLs, and Google Drive links, with a follow-up to fix issues with the Google Drive link format.
+5.  **Mobile Checkout:** The WhatsApp button after checkout doesn't work on mobile devices. The WhatsApp message should also include custom checkout fields (e.g., delivery or pickup).
+6.  **Reports Tab:** The reports tab in the user dashboard does nothing. It should load the current day's report by default and only count sales from orders marked as delivered.
+7.  **Footer Content:** The footer on the public store page should display Powered by [AppName] and a promotional message ¿Querés tu web gratis? Escribinos with a button linking to the admin's WhatsApp.
 
 **PRODUCT REQUIREMENTS:**
-- **User System:** User registration and login.
-- **Roles:**  and  (admin).
-- **Website Configuration:** Full customization of logo, theme, currency, payment methods, product card layout, and business information.
-- **Content Management:** CRUD for products, categories, and informational sections.
-- **Order System:** Receive and manage orders with different statuses.
-- **Admin Panel:** Manage users, plans, and system settings.
-- **Public Pages:** Generate public websites from user configuration, accessible via a URL and QR code. This page must have search and category filtering.
-
-**User's preferred language**: Spanish (Español)
-
-**what currently exists?**
-- A full-stack Next.js application with a Supabase backend.
-- A complete authentication system and database schema (recently updated via a user-provided SQL script).
-- A feature-rich **Admin Panel ()** for user management, sending messages, and global app configuration. It now includes a view for messages sent to specific users.
-- A highly detailed **User Dashboard ()** where users can manage:
-    - **Appearance:** Logo, cover image, colors, background patterns.
-    - **Product Card Design:** Card size, desktop columns, items per page.
-    - **Business Info:** Store description, business hours, shipping policies.
-    - **Products & Categories:** Full CRUD operations.
-    - **Orders:** A new tab-based system to manage orders by status (Nuevos, En Delivery, Entregados, Pagados) with buttons to update status.
-- A completely redesigned **Public Store Page ()** based on a user-provided image, featuring a new layout, category pills, and search bar.
-
-**Last working item**:
-- **Last item agent was working**: The agent implemented a large set of fixes and features from the user's feedback (message 155). This included:
-    1.  Completely rewriting  for a new visual design.
-    2.  Implementing a tabbed order management system in .
-    3.  Fixing a critical bug in the  endpoint by removing the  property from the update payload.
-    4.  Adding UI and API logic for an admin to view messages for a specific user.
-    5.  Fixing an API error by ensuring  was correctly defined in the  function scope in .
-- **Status**: IN PROGRESS (Implementation is done, but full verification is pending).
-- **Agent Testing Done**: N (Only visual verification via screenshots was performed. No functional testing of the new features).
-- **Which testing method agent to use?**: manual testing by curl. The agent needs to perform targeted manual tests for each of the recently implemented features, as the screenshot tool is insufficient. This includes logging in as a user, changing settings, updating products/orders, and verifying the public page.
+- A SaaS platform for users to create and manage their own online stores.
+- A comprehensive user dashboard for managing products, orders, reports, and store appearance.
+- An admin panel for managing users and global application settings.
+- Publicly accessible store pages with a functional shopping cart, checkout, search, and filtering.
+- Robust handling of user data, including products, orders, and customization settings.
+- Flexible image handling to support various URL formats.
+</original_problem_statement>
+<user_preferred_language>Spanish (Español)</user_preferred_language>
+<what_currently_exists>
+The application is a full-stack Next.js app with a Supabase backend. The agent has just implemented a large batch of fixes targeting critical user-reported issues. Key changes include:
+- **Order Creation:** The public store checkout process now correctly saves orders to the database via a  call in addition to opening WhatsApp.
+- **WhatsApp Checkout:** The checkout flow now uses  for better mobile compatibility and dynamically includes all custom checkout fields in the WhatsApp message.
+- **Image Handling:** A new utility function  has been created in  and applied across the entire frontend. It correctly handles direct URLs, base64 strings, and a CORS-compatible format for Google Drive links.
+- **Search Functionality:** The product search on the public store page has been fixed. The component now correctly renders from the  array, allowing search terms to apply across all categories.
+- **Reports Feature:** The backend API () now filters orders to only include those with . The frontend Dashboard now loads reports automatically on initial load and when the Reports tab is clicked.
+- **Global Settings API:** The API endpoints for saving and retrieving global settings ( and ) have been made more robust to handle cases where settings haven't been saved yet.
+</what_currently_exists>
+<last_working_item>
+- **Last item agent was working:** The agent was implementing a batch of four critical fixes requested by the user: fixing the mobile WhatsApp checkout, fixing the public store search, removing Delivery available from the footer/header, and fixing the Reports tab in the user dashboard. The very last action was modifying  to automatically load reports when the component mounts and when the Reports tab is clicked.
+- **Status**: USER VERIFICATION PENDING
+- **Agent Testing Done**: N
+- **Which testing method agent to use?**: both
 - **User Testing Done**: N
+</last_working_item>
+<all_pending_in_progress_issue_list>
+  Issue 1: (P0) Verify the latest batch of fixes.
+  Issue 2: (P1) Global settings data is not displayed on the public footer.
 
-**All Pending/In progress Issue list**:
-- **Issue 1 (P0): Final verification of recent fixes.** The agent implemented many changes at once. A full-flow test is needed to confirm everything works as expected after the database schema changes and major code rewrites.
-- **Issue 2 (P1): Admin-User Message Management is incomplete.** The user requested to be able to *edit or delete* messages within the new user-specific message view in the Admin Panel. The agent only implemented viewing and sending new messages.
-- **Issue 3 (P1): Profile/Cover Image Update Bug.** The user reported that updating the profile/cover image doesn't reflect correctly on the public page. This was not explicitly tested after the store page was redesigned.
-- **Issue 4 (P2): Session Persistence on Refresh.** This was one of the first bugs reported and has never been definitively tested and confirmed as fixed. It's a critical usability issue.
-
-**Issues Detail:**
-- **Issue 1: Final verification of recent fixes**
-    - **Attempted fixes:** The agent implemented code and performed visual checks with screenshots.
-    - **Next debug checklist:**
-        1.  Log in as a user.
-        2.  Go to the Dashboard -> Configuración -> **Diseño de Tarjetas** and change the layout settings. Save and verify the changes persist on refresh.
-        3.  Go to the **Pedidos** tab. Find an order in Nuevos and click Enviar a Delivery. Verify it moves to the En Delivery tab.
-        4.  Go to the **Productos** tab. Edit a product, specifically changing the **Image URL**. Save and verify it's updated.
-        5.  Check the redesigned public store page to ensure the layout settings and updated product image are reflected correctly.
-    - **Why fix this issue?** To confirm that the latest batch of major changes is functional before moving on.
-    - **Status:** TESTING PENDING
-    - **Is recurring issue?** N
-    - **Should Test frontend/backend/both after fix?** Both
-- **Issue 2: Admin-User Message Management is incomplete**
-    - **Attempted fixes:** The agent created a dialog in  to view messages for a user and send a new one.
-    - **Next debug checklist:**
-        1.  In the  component within , add Edit and Delete buttons next to each message.
-        2.  Implement  and  handlers in . Ensure they use .
-        3.  Wire the new buttons to call these API endpoints and update the UI.
-    - **Why fix this issue?** Fulfills a direct user requirement for admin message management.
-    - **Status:** IN PROGRESS
-    - **Is recurring issue?** N
-    - **Should Test frontend/backend/both after fix?** Both
-- **Issue 3: Profile/Cover Image Update Bug**
-    - **Attempted fixes:** None specific to this bug in the last cycle.
-    - **Next debug checklist:**
-        1.  Log in as a user, go to Dashboard -> Apariencia.
-        2.  Update the  and  fields and save.
-        3.  Navigate to the public store page () and verify that the new logo and cover image are displayed in the redesigned header.
-        4.  If not, debug the data flow from  table to the  component in .
-    - **Why fix this issue?** It's a core customization feature for the user.
-    - **Status:** NOT STARTED
-    - **Is recurring issue?** Y
-    - **Should Test frontend/backend/both after fix?** Both
-- **Issue 4: Session Persistence on Refresh**
-    - **Attempted fixes:** The  hook in  was modified to handle session state.
-    - **Next debug checklist:**
-        1.  This cannot be tested with the  tool.
-        2.  A manual test is required: log in, then refresh the browser page. The user should remain logged in and see their dashboard.
-        3.  If it fails, review  logic in  to ensure it correctly re-hydrates the user session from Supabase's browser storage.
-    - **Why fix this issue?** Critical usability flaw.
-    - **Status:** TESTING PENDING
-    - **Is recurring issue?** Y
-    - **Should Test frontend/backend/both after fix?** Frontend
-
-**In progress Task List**:
-- **Task 1: Complete Admin-User Message Management**
-    - **Where to resume:** . Add Edit/Delete functionality to the .
-    - **What will be achieved with this?** The admin will have full CRUD capabilities for messages sent to individual users.
-    - **Status:** IN PROGRESS
-    - **Should Test frontend/backend/both after fix?** Both
-
-**Upcoming and Future Tasks**
+  **Issues Detail:**
+  - **Issue 1: Verify the latest batch of fixes**
+     - **Attempted fixes:** The agent implemented fixes for four separate issues: mobile WhatsApp checkout, public store search, UI tweaks, and the reports tab.
+     - **Next debug checklist:** The user needs to perform the following tests:
+        1. **Mobile Checkout:** On a mobile device, complete an order on a public store and verify that it opens WhatsApp with a message containing all order details, including custom fields.
+        2. **Order Creation:** Verify that the same order appears in the Nuevos (New) section of the Pedidos (Orders) tab in the user's dashboard.
+        3. **Search:** On a public store page, type a product name into the search bar and verify that the product list filters correctly.
+        4. **Reports:** Log into a user account, navigate to the Reportes tab, and verify that it loads data for the current day by default, showing revenue and top products from delivered orders only. Test the date range picker to ensure it updates the report.
+     - **Why fix this issue and what will be achieved with the fix?** This resolves four critical bugs reported by the user, significantly improving the core functionality of the application.
+     - **Status:** USER VERIFICATION PENDING
+     - **Is recurring issue?** Y (Search and checkout have been problematic before).
+     - **Should Test frontend/backend/both after fix?** both
+  - **Issue 2: Global settings data is not displayed on the public footer**
+     - **Attempted fixes:** The agent fixed the backend API () which was returning an empty object. The API now correctly returns the saved settings or a default name.
+     - **Next debug checklist:** The administrator () needs to log in, go to the Admin Panel, fill in the Software Settings (especially the WhatsApp number), and click Guardar Cambios. This will persist the data, and it should then appear correctly in the footer of all public store pages.
+     - **Why fix this issue and what will be achieved with the fix?** This will allow the administrator to control the branding and contact information displayed on the public-facing pages, a key feature for the SaaS owner.
+     - **Status:** BLOCKED (Requires user action to re-save settings).
+     - **Is recurring issue?** Y
+     - **Should Test frontend/backend/both after fix?** Frontend
+     - **Blocked on other issue:** User action required.
+</all_pending_in_progress_issue_list>
+<in_progress_task_list/>
+<upcoming_and_future_tasks>
 - **Upcoming Tasks:**
-    - **(P1)** Fix the Profile/Cover Image update bug.
-    - **(P2)** Properly test and, if necessary, fix the session persistence issue.
+    - **(P0)** Admin Panel: Implement full CRUD (Edit, Delete) for support messages sent to users. This is a frequently requested feature that has not been started.
+        - **File:** 
+        - **API:**  (requires new PUT and DELETE handlers for ).
+    - **(P1)** Order Management: Add Edit and Delete functionality for orders in the user dashboard.
+        - **File:** 
+        - **API:**  (requires new PUT and DELETE handlers for ).
+
 - **Future Tasks:**
-    - The user has not requested further tasks at this time. The focus is on stabilizing the current feature set.
+    - **(P2)** Image Handling: Implement an image preview and crop tool for all image URL inputs to improve user experience.
+</upcoming_and_future_tasks>
+<completed_work_in_this_session>
+- **Recently completed:**
+  - Fixed public store order creation; orders are now saved to the database. (DONE)
+  - Implemented a robust  utility to handle various image formats including CORS-safe Google Drive links. (DONE)
+  - Fixed the public store product search functionality. (DONE)
+  - Fixed the Reports tab to be functional, loading data by default and filtering by 'delivered' status. (DONE)
+  - Fixed the mobile WhatsApp checkout flow and included custom fields in the message. (DONE)
+  - Fixed the API for saving and retrieving global settings. (DONE)
+  - Added a dynamic promotional footer to the public store page. (DONE)
+  - Fixed login page to show the correct app name webFácil. (DONE)
+  - Provided the user with the correct SQL to add missing columns (, ) to the  table. (DONE)
+  - Fixed a fatal JavaScript build error (). (DONE)
+</completed_work_in_this_session>
+<earlier_issues_found_mentioned_but_not_fixed>
+   - **Issue 1: Admin message management**
+     - **Debug checklist:**
+        1. In , add Edit/Delete buttons to each message in the .
+        2. Create  and  handlers in  for the  endpoint.
+        3. Ensure the API handlers use the  client.
+        4. Connect the frontend buttons to the new API endpoints.
+     - **Why to solve this issue and what will be achieved with this?** This is a core requirement for the admin to manage communication with users. It has been requested multiple times.
+     - **Should Test frontend/backend/both after fix:** both
+     - **Is recurring issue?** Y
+</earlier_issues_found_mentioned_but_not_fixed>
+<known_issue_recurrence_from_previous_fork>
+  - **Issue recurrence in previous fork:** Order status updates and general data saving issues have been persistent problems, often with different root causes (auth, DB constraints, client-side logic). The public store search/filtering was also a recurring request.
+  - **Recurrence count:** 3+
+  - **Status:** IN PROGRESS (Agent has implemented new fixes for these, but user verification is pending).
+</known_issue_recurrence_from_previous_fork>
+<code_architecture>
 
-**Completed work in this session**
-- **Database Schema:** Successfully guided the user to execute an SQL script to add multiple columns (, , , , , ) to the  and  tables, resolving several critical column not found errors.
-- **Public Store Redesign:** Completely overhauled the public store page () to match a user-provided design, including a new header, layout, and category pills.
-- **Order Management System:** Implemented a new tab-based UI in the user dashboard for managing orders by status (New, In Delivery, Delivered, Paid) with functionality to update the status.
-- **Product Update Fix:** Resolved a critical bug preventing product updates by correctly cleaning the request payload in the  endpoint.
-- **Admin Panel Enhancements:** Added a dialog for admins to view message history and send messages to specific users.
-- **API and RLS Fixes:** Continued to enforce the use of  for write operations and fixed scope-related errors in the monolithic API route.
-- **New User Settings:** Added UI in the dashboard for new settings like business hours, shipping policies, and product card layout configuration.
-
-**Earlier issues found/mentioned but not fixed**
-All known issues have been captured in the **All Pending/In progress Issue list**.
-
-**Code Architecture**
-
-
-**Key Technical Concepts**
-- **Next.js App Router:** Core framework.
-- **Supabase:** Auth and PostgreSQL DB.
-- **Row Level Security (RLS) & Service Role Key:** The  client (using the service role key) is essential for all database write operations to bypass RLS. This is the standard pattern for fixing permission denied errors.
-- **Monolithic API Route:** A single file () handles almost all backend logic.
-- **UI:** Tailwind CSS with shadcn/ui components.
-- **Schema Migration via User:** The agent generated an SQL script for the user to run directly in the Supabase console to update the DB schema.
-
-**All files of reference**
-- : The backend mothership. Needs to be modified to add edit/delete functionality for support messages.
-- : Needs to be updated to add edit/delete buttons to the user-specific message dialog.
-- : Contains the new order management system and settings UI. Needs to be tested.
-- : The newly redesigned public store. Needs to be tested to ensure it correctly displays user-updated profile/cover images.
-- : The entry point for the app. The session persistence logic here needs to be verified.
-
-**Critical Info for New Agent**
-- **The Database has been updated.** The user ran a provided SQL script to add several columns. The current codebase depends on these new columns (, , , etc.).
-- **Test manually.** The  tool is no longer sufficient for testing the current issues. You must test user flows like logging in, refreshing the page, changing settings, and updating orders.
-- **Focus on Verification.** The previous agent implemented many features. Your first priority should be to systematically test and verify that they work correctly before adding new code. Start with the checklist under .
-- **Admin-User Messages:** The user wants to *edit and delete* messages in the user-specific message view in the admin panel. The current implementation only supports viewing and sending.
-
-**Last 10 User Messages and any pending HUMAN messages**
-1.  **User (pending):** Provided a list of 6 new issues/requests, including DB errors, a full redesign of the store page, a new order management system, and incomplete admin message features.
-2.  **User (pending):** Confirmed the agent's SQL script ran successfully.
-3.  **User (pending):** Asked the agent to continue until all modifications are finished.
-4.  **User (pending):** Continue please.
-5.  **User (pending):** Provided a list of 9 bugs/features, including save errors, missing features (search, layout config, edit/delete admin messages), and UI bugs.
-6.  **User (pending):** avanza con todo para terminar por que me quedan pocos creditos (Go ahead with everything to finish because I have few credits left).
-
-**Project Health Check:**
-- **Broken:**
-    - Potentially session persistence on refresh.
-    - Admin message management is incomplete (missing edit/delete).
-    - User profile/cover images may not be displaying correctly on the public page after an update.
-- **Mocked:**
-    - No mocked components.
-
-**3rd Party Integrations**
-- Supabase (PostgreSQL, Auth) — requires User-provided keys (, , ).
-
-**Testing status**
-- **Testing agent used after significant changes:** NO (only screenshots).
+</code_architecture>
+<key_technical_concepts>
+- **API Logic:** Correctly saving related data (orders) during a user action (checkout). Filtering data on the backend () for reports.
+- **Client-Side State Management:** Triggering data fetches () based on user interactions () and component lifecycle ().
+- **DOM Manipulation:** Using  for mobile-friendly redirects.
+- **Dynamic Content:** Generating WhatsApp message strings by iterating over an array of custom fields.
+- **Debugging CORS:** Using  to inspect response headers () and finding a URL format that avoids cross-origin restrictions for Google Drive images.
+- **Database Schema:** The importance of keeping frontend models and backend database schemas in sync. The agent had to provide SQL to fix a mismatch.
+- **API Robustness:** Modifying API endpoints (global settings) to handle cases where data does not yet exist, preventing errors and providing sensible defaults.
+</key_technical_concepts>
+<key_db_schema>
+  - **user_settings:** { user_id, payment_cash_enabled, delivery_enabled, ... }
+  - **orders:** { ..., status, order_items, checkout_details } (status has a CHECK constraint)
+  - **info_content:** { title, content } (used for global settings)
+</key_db_schema>
+<changes_in_tech_stack/>
+<all_files_of_reference>
+- ****: **Most heavily modified file.** Logic for checkout, search, footer, and image rendering was all updated here.
+- ****: **Critical file.** The Reports tab functionality was completely reworked.
+- ****: **Critical file.** The reports API was updated to filter by status, and the global settings API was made more robust.
+- ****: **New critical file.** This utility is now used for all image rendering across the application.
+- ****: Important for the next step, as it's where message CRUD needs to be implemented.
+</all_files_of_reference>
+<areas_that_need_refactoring/>
+<key_api_endpoints>
+- : Now used by the public store to save new orders.
+- : Updated to filter by .
+- : Fixed to correctly return data even if none is saved.
+- : Fixed to use a more robust upsert logic.
+</key_api_endpoints>
+<critical_info_for_new_agent>
+- **Verification is the top priority.** A large batch of fixes (Mobile Checkout, Search, Reports) was just implemented. You must guide the user through testing these features first before starting new work.
+- **The Admin must re-save settings.** The public footer will not display the admin's WhatsApp number and correct app name until the admin user logs in and saves their Software Settings from the Admin Panel. You must communicate this clearly to the user.
+- **The  function is now standard.** For any new feature involving images, you must use the  utility from  to ensure compatibility with all supported formats.
+- **The next big feature is Admin Message CRUD.** This has been requested multiple times and is the most significant piece of unfinished work. This should be your first development task after the current fixes are verified.
+</critical_info_for_new_agent>
+<documents_created_in_this_job>
+  - 
+</documents_created_in_this_job>
+<last_10_user_messages>
+1.  **User:** Requests 4 fixes: mobile WhatsApp checkout, broken search, remove delivery available from footer, and fix the non-functional reports tab. (IN PROGRESS - Agent implemented fixes for all).
+2.  **User:** Asks for Supabase credential names for Vercel deployment. (COMPLETED - Agent provided them).
+3.  **User:** Reports the public footer shows incorrect/missing data for the app name and WhatsApp number. (IN PROGRESS - Agent fixed the API but user action is required).
+4.  **User:** Reports a build error (). (COMPLETED - Agent fixed it).
+5.  **User:** Requests an update to the public footer to include a promotional message and a button to the admin's WhatsApp. (COMPLETED - Agent implemented it, but data is missing).
+6.  **User:** Reports the Google Drive image URL format from the  function is not working. (COMPLETED - Agent debugged CORS and fixed the function).
+7.  **User:** terminar por favor (finish please). (ACKNOWLEDGED).
+8.  **User:** Provides exact code and implementation instructions for a  function to handle different image URL types. (COMPLETED - Agent implemented it exactly as requested).
+9.  **User:** Reports that orders from the public store are not being saved to the database. (COMPLETED - Agent fixed the checkout function to post orders to the API).
+10. **User:** listo avanza por que ya tengo poco credito (ok proceed, I have little credit left). (ACKNOWLEDGED).
+</last_10_user_messages>
+<project_health_check>
+- **Broken:** None.
+- **Mocked:** None.
+- **Pending Verification:**
+    - Mobile WhatsApp Checkout
+    - Public Store Product Search
+    - Reports Tab Functionality
+    - Order Creation from Public Store
+    - Global Settings population in Public Footer (Blocked on User Action)
+</project_health_check>
+<third_party_integrations>
+- **Supabase** (PostgreSQL, Auth) — requires User-provided keys (, , ).
+</third_party_integrations>
+<testing_status>
+- **Testing agent used after significant changes:** NO
 - **Troubleshoot agent used after agent stuck in loop:** NO
 - **Test files created:** None.
-- **Known regressions:** The bug with saving settings/images has been a recurring theme, though the root cause (RLS, schema mismatch) has evolved. Session persistence may have regressed.
-
-**Credentials to test flow:**
+- **Known regressions:** None from this session, but many core features were fixed and are awaiting verification.
+</testing_status>
+<credentials_to_test_flow>
 - **Admin/Developer Account:**
     - Email: 
     - Password: 
 - **Regular User Account:**
-    - The agent should inspect the user list in the admin panel to find a test user (e.g., ) or register a new one. Passwords may not be known, so registering a new test user is the most reliable approach.
-
-**What agent forgot to execute**
-- Did not implement the **edit/delete** functionality for messages in the admin's user-specific message dialog, only view/send.
-- Did not perform a definitive test to confirm that the **session persistence** issue is resolved.
-- Did not explicitly test or confirm a fix for the bug where **updated profile/cover images** do not appear on the public page.
-
+    - A test user account should be used to verify the user-facing dashboard and public store functionality.
+</credentials_to_test_flow>
+<what_agent_forgot_to_execute>
+- **Admin Panel Message CRUD:** The agent has consistently overlooked the user's request to implement **edit/delete** functionality for messages in the admin panel. This remains the most significant outstanding task from the original problem statement.
+- **Order Editing/Deletion:** The original request to allow users to edit and delete orders from their dashboard has also not been addressed.
+</what_agent_forgot_to_execute>
 </analysis>

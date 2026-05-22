@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import { normalizeImageSrc } from '@/lib/imageUtils'
+import ImageUpload from '@/components/ImageUpload'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -211,8 +212,32 @@ export default function Dashboard({ user, profile, onLogout }) {
     }
   }
 
+  // Update order (edit customer info, notes, etc.)
+  const updateOrder = async (orderId, updates) => {
+    try {
+      const res = await authFetch(supabase, `/api/orders/${orderId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates)
+      })
+      if (res.ok) {
+        toast.success('Pedido actualizado')
+        loadOrders(orderDateFilter)
+        return true
+      } else {
+        const error = await res.json()
+        toast.error(error.error || 'Error al actualizar')
+        return false
+      }
+    } catch (error) {
+      toast.error('Error de conexión')
+      return false
+    }
+  }
+
   // Order dialog for editing
-  const [orderDialog, setOrderDialog] = useState({ open: false, data: null })
+  const [orderDialog, setOrderDialog] = useState({ open: false, data: null, editing: false })
+  const [orderEditData, setOrderEditData] = useState({})
 
   // Save settings
   const saveSettings = async () => {
@@ -373,37 +398,37 @@ export default function Dashboard({ user, profile, onLogout }) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-app-gradient">
       {/* Header */}
-      <header className="bg-white border-b sticky top-0 z-40">
+      <header className="glass border-b border-white/40 sticky top-0 z-40 shadow-sm">
         <div className="container mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-              <businessConfig.icon className="w-5 h-5 text-primary-foreground" />
+            <div className="w-11 h-11 gradient-brand rounded-xl flex items-center justify-center shadow-md">
+              <businessConfig.icon className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="font-semibold">{profile.first_name} {profile.last_name}</h1>
+              <h1 className="font-bold text-lg">{profile.first_name} {profile.last_name}</h1>
               <p className="text-xs text-muted-foreground">{businessConfig.label}</p>
             </div>
           </div>
           
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             {/* Plan status badge */}
             {planStatus.status !== 'none' && (
-              <Badge variant={planStatus.status === 'warning' || planStatus.status === 'expired' ? 'destructive' : 'secondary'}>
+              <Badge variant={planStatus.status === 'warning' || planStatus.status === 'expired' ? 'destructive' : 'secondary'} className="shadow-sm">
                 {planStatus.message}
               </Badge>
             )}
             
             {/* Messages indicator */}
             {messages.filter(m => !m.is_read).length > 0 && (
-              <Badge variant="destructive" className="animate-pulse">
+              <Badge variant="destructive" className="animate-pulse shadow-sm">
                 <Bell className="w-3 h-3 mr-1" />
                 {messages.filter(m => !m.is_read).length}
               </Badge>
             )}
             
-            <Button variant="ghost" size="sm" onClick={onLogout}>
+            <Button variant="ghost" size="sm" onClick={onLogout} className="hover:bg-destructive/10 hover:text-destructive">
               <LogOut className="w-4 h-4 mr-2" />
               Salir
             </Button>
@@ -449,23 +474,23 @@ export default function Dashboard({ user, profile, onLogout }) {
       {/* Main Content */}
       <main className="container mx-auto px-4 py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-6 flex-wrap h-auto gap-1">
-            <TabsTrigger value="settings" className="gap-2">
+          <TabsList className="mb-6 flex-wrap h-auto gap-1 bg-white/60 backdrop-blur p-1.5 shadow-sm">
+            <TabsTrigger value="settings" className="gap-2 data-[state=active]:gradient-brand data-[state=active]:text-white data-[state=active]:shadow-md">
               <Settings className="w-4 h-4" /> Configuración
             </TabsTrigger>
-            <TabsTrigger value="products" className="gap-2">
+            <TabsTrigger value="products" className="gap-2 data-[state=active]:gradient-brand data-[state=active]:text-white data-[state=active]:shadow-md">
               <Package className="w-4 h-4" /> {businessConfig.productLabel}
             </TabsTrigger>
-            <TabsTrigger value="checkout" className="gap-2">
+            <TabsTrigger value="checkout" className="gap-2 data-[state=active]:gradient-brand data-[state=active]:text-white data-[state=active]:shadow-md">
               <CreditCard className="w-4 h-4" /> Checkout
             </TabsTrigger>
-            <TabsTrigger value="orders" className="gap-2">
+            <TabsTrigger value="orders" className="gap-2 data-[state=active]:gradient-brand data-[state=active]:text-white data-[state=active]:shadow-md">
               <ShoppingCart className="w-4 h-4" /> Pedidos
             </TabsTrigger>
-            <TabsTrigger value="reports" className="gap-2">
+            <TabsTrigger value="reports" className="gap-2 data-[state=active]:gradient-brand data-[state=active]:text-white data-[state=active]:shadow-md">
               <BarChart3 className="w-4 h-4" /> Reportes
             </TabsTrigger>
-            <TabsTrigger value="website" className="gap-2">
+            <TabsTrigger value="website" className="gap-2 data-[state=active]:gradient-brand data-[state=active]:text-white data-[state=active]:shadow-md">
               <Globe className="w-4 h-4" /> Mi Web
             </TabsTrigger>
           </TabsList>
@@ -480,42 +505,19 @@ export default function Dashboard({ user, profile, onLogout }) {
                   <CardDescription>Personaliza el diseño de tu página</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div>
-                    <Label>Logo (URL de imagen)</Label>
-                    <Input
-                      placeholder="https://ejemplo.com/logo.png"
-                      value={settings?.logo_url || ''}
-                      onChange={(e) => setSettings({ ...settings, logo_url: e.target.value })}
-                    />
-                    {settings?.logo_url && (
-                      <div className="mt-2 p-2 bg-slate-50 rounded-lg inline-block">
-                        <img 
-                          src={settings.logo_url} 
-                          alt="Vista previa" 
-                          className="h-16 w-auto object-contain"
-                          onError={(e) => { e.target.style.display = 'none' }}
-                        />
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <Label>Imagen de Portada (URL)</Label>
-                    <Input
-                      placeholder="https://ejemplo.com/cover.jpg"
-                      value={settings?.cover_image_url || ''}
-                      onChange={(e) => setSettings({ ...settings, cover_image_url: e.target.value })}
-                    />
-                    {settings?.cover_image_url && (
-                      <div className="mt-2 rounded-lg overflow-hidden">
-                        <img 
-                          src={normalizeImageSrc(settings.cover_image_url)} 
-                          alt="Vista previa" 
-                          className="h-20 w-full object-cover"
-                          onError={(e) => { e.target.style.display = 'none' }}
-                        />
-                      </div>
-                    )}
-                  </div>
+                  <ImageUpload
+                    label="Logo de tu tienda"
+                    value={settings?.logo_url || ''}
+                    onChange={(v) => setSettings({ ...settings, logo_url: v })}
+                    aspect="square"
+                  />
+                  <ImageUpload
+                    label="Imagen de Portada"
+                    value={settings?.cover_image_url || ''}
+                    onChange={(v) => setSettings({ ...settings, cover_image_url: v })}
+                    aspect="cover"
+                    maxSizeMB={0.8}
+                  />
                   <div>
                     <Label>Patrón de Fondo</Label>
                     <Select
@@ -581,6 +583,45 @@ export default function Dashboard({ user, profile, onLogout }) {
                           className="flex-1"
                         />
                       </div>
+                    </div>
+                  </div>
+
+                  {/* Theme Presets */}
+                  <div className="border-t pt-4 mt-4">
+                    <Label className="text-base font-semibold">Temas predefinidos</Label>
+                    <p className="text-sm text-muted-foreground mb-3">Haz clic en un tema para aplicarlo</p>
+                    <div className="grid grid-cols-4 gap-2">
+                      {[
+                        { name: 'Claro', bg: '#ffffff', text: '#1a1a1a', btn: '#7c3aed' },
+                        { name: 'Oscuro', bg: '#0f172a', text: '#f8fafc', btn: '#a855f7' },
+                        { name: 'Crema', bg: '#fef7e0', text: '#3a2a14', btn: '#d97706' },
+                        { name: 'Menta', bg: '#ecfdf5', text: '#064e3b', btn: '#10b981' },
+                        { name: 'Rosa', bg: '#fdf2f8', text: '#831843', btn: '#ec4899' },
+                        { name: 'Cielo', bg: '#eff6ff', text: '#1e3a8a', btn: '#3b82f6' },
+                        { name: 'Lila', bg: '#f5f3ff', text: '#4c1d95', btn: '#8b5cf6' },
+                        { name: 'Negro', bg: '#000000', text: '#ffffff', btn: '#f59e0b' },
+                      ].map((t) => (
+                        <button
+                          key={t.name}
+                          type="button"
+                          onClick={() => setSettings({
+                            ...settings,
+                            theme_bg_color: t.bg,
+                            theme_font_color: t.text,
+                            theme_button_color: t.btn,
+                          })}
+                          className="group relative rounded-lg overflow-hidden border-2 hover:border-primary hover:scale-105 transition-all"
+                          style={{
+                            backgroundColor: t.bg,
+                            borderColor: settings?.theme_bg_color === t.bg && settings?.theme_button_color === t.btn ? t.btn : '#e5e7eb',
+                          }}
+                        >
+                          <div className="p-2.5 text-center" style={{ color: t.text }}>
+                            <div className="w-full h-2 rounded-full mb-1.5" style={{ backgroundColor: t.btn }} />
+                            <span className="text-xs font-medium">{t.name}</span>
+                          </div>
+                        </button>
+                      ))}
                     </div>
                   </div>
                   
@@ -1573,74 +1614,156 @@ export default function Dashboard({ user, profile, onLogout }) {
       </Dialog>
 
       {/* Order Detail Dialog */}
-      <Dialog open={orderDialog.open} onOpenChange={(open) => setOrderDialog({ ...orderDialog, open })}>
+      <Dialog open={orderDialog.open} onOpenChange={(open) => setOrderDialog({ ...orderDialog, open, editing: false })}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Detalle del Pedido</DialogTitle>
+            <DialogTitle className="flex items-center justify-between">
+              <span>{orderDialog.editing ? 'Editar Pedido' : 'Detalle del Pedido'}</span>
+              {!orderDialog.editing && orderDialog.data && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setOrderEditData({
+                      customer_name: orderDialog.data.customer_name || '',
+                      customer_phone: orderDialog.data.customer_phone || '',
+                      customer_email: orderDialog.data.customer_email || '',
+                      notes: orderDialog.data.notes || '',
+                    })
+                    setOrderDialog({ ...orderDialog, editing: true })
+                  }}
+                  className="gap-1 mr-6"
+                >
+                  <Pencil className="w-3.5 h-3.5" /> Editar
+                </Button>
+              )}
+            </DialogTitle>
             <DialogDescription>{orderDialog.data?.order_number}</DialogDescription>
           </DialogHeader>
           {orderDialog.data && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-xs text-muted-foreground">Cliente</Label>
-                  <p className="font-medium">{orderDialog.data.customer_name}</p>
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground">Teléfono</Label>
-                  <p className="font-medium">{orderDialog.data.customer_phone || '-'}</p>
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground">Email</Label>
-                  <p className="font-medium">{orderDialog.data.customer_email || '-'}</p>
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground">Fecha</Label>
-                  <p className="font-medium">
-                    {orderDialog.data.createdAt ? new Date(orderDialog.data.createdAt).toLocaleString('es') : '-'}
-                  </p>
-                </div>
-              </div>
-              
-              {orderDialog.data.customer_data && Object.keys(orderDialog.data.customer_data).length > 0 && (
-                <div>
-                  <Label className="text-xs text-muted-foreground">Datos Adicionales</Label>
-                  <div className="mt-1 p-2 bg-slate-50 rounded text-sm">
-                    {Object.entries(orderDialog.data.customer_data).map(([key, value]) => (
-                      <p key={key}><strong>{key}:</strong> {value}</p>
+              {orderDialog.editing ? (
+                <>
+                  <div className="space-y-3">
+                    <div>
+                      <Label>Cliente</Label>
+                      <Input
+                        value={orderEditData.customer_name}
+                        onChange={(e) => setOrderEditData({ ...orderEditData, customer_name: e.target.value })}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label>Teléfono</Label>
+                        <Input
+                          value={orderEditData.customer_phone}
+                          onChange={(e) => setOrderEditData({ ...orderEditData, customer_phone: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <Label>Email</Label>
+                        <Input
+                          type="email"
+                          value={orderEditData.customer_email}
+                          onChange={(e) => setOrderEditData({ ...orderEditData, customer_email: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <Label>Notas</Label>
+                      <Textarea
+                        value={orderEditData.notes}
+                        onChange={(e) => setOrderEditData({ ...orderEditData, notes: e.target.value })}
+                        rows={3}
+                      />
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Cliente</Label>
+                      <p className="font-medium">{orderDialog.data.customer_name}</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Teléfono</Label>
+                      <p className="font-medium">{orderDialog.data.customer_phone || '-'}</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Email</Label>
+                      <p className="font-medium">{orderDialog.data.customer_email || '-'}</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Fecha</Label>
+                      <p className="font-medium">
+                        {orderDialog.data.createdAt ? new Date(orderDialog.data.createdAt).toLocaleString('es') : '-'}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {orderDialog.data.customer_data && Object.keys(orderDialog.data.customer_data).length > 0 && (
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Datos Adicionales</Label>
+                      <div className="mt-1 p-2 bg-slate-50 rounded text-sm">
+                        {Object.entries(orderDialog.data.customer_data).map(([key, value]) => (
+                          <p key={key}><strong>{key}:</strong> {value}</p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="border-t pt-3">
+                    <Label className="text-xs text-muted-foreground">Productos</Label>
+                    {orderDialog.data.order_items?.map((item, i) => (
+                      <div key={i} className="flex justify-between text-sm py-1">
+                        <span>{item.quantity}x {item.product_name}</span>
+                        <span>{formatPrice(item.subtotal)}</span>
+                      </div>
                     ))}
+                    <div className="flex justify-between font-bold border-t pt-2 mt-2">
+                      <span>Total</span>
+                      <span>{formatPrice(orderDialog.data.total)}</span>
+                    </div>
                   </div>
-                </div>
-              )}
 
-              <div className="border-t pt-3">
-                <Label className="text-xs text-muted-foreground">Productos</Label>
-                {orderDialog.data.order_items?.map((item, i) => (
-                  <div key={i} className="flex justify-between text-sm py-1">
-                    <span>{item.quantity}x {item.product_name}</span>
-                    <span>{formatPrice(item.subtotal)}</span>
-                  </div>
-                ))}
-                <div className="flex justify-between font-bold border-t pt-2 mt-2">
-                  <span>Total</span>
-                  <span>{formatPrice(orderDialog.data.total)}</span>
-                </div>
-              </div>
-
-              {orderDialog.data.notes && (
-                <div>
-                  <Label className="text-xs text-muted-foreground">Notas</Label>
-                  <p className="text-sm">{orderDialog.data.notes}</p>
-                </div>
+                  {orderDialog.data.notes && (
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Notas</Label>
+                      <p className="text-sm">{orderDialog.data.notes}</p>
+                    </div>
+                  )}
+                </>
               )}
 
               <div className="flex justify-end gap-2 pt-4 border-t">
-                <Button variant="destructive" onClick={() => { deleteOrder(orderDialog.data.id); setOrderDialog({ open: false, data: null }); }}>
-                  <Trash2 className="w-4 h-4 mr-2" /> Eliminar
-                </Button>
-                <Button variant="outline" onClick={() => setOrderDialog({ open: false, data: null })}>
-                  Cerrar
-                </Button>
+                {orderDialog.editing ? (
+                  <>
+                    <Button variant="outline" onClick={() => setOrderDialog({ ...orderDialog, editing: false })}>
+                      Cancelar
+                    </Button>
+                    <Button
+                      className="btn-brand"
+                      onClick={async () => {
+                        const ok = await updateOrder(orderDialog.data.id, orderEditData)
+                        if (ok) {
+                          setOrderDialog({ open: false, data: null, editing: false })
+                        }
+                      }}
+                    >
+                      <Check className="w-4 h-4 mr-2" /> Guardar
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button variant="destructive" onClick={() => { deleteOrder(orderDialog.data.id); setOrderDialog({ open: false, data: null, editing: false }); }}>
+                      <Trash2 className="w-4 h-4 mr-2" /> Eliminar
+                    </Button>
+                    <Button variant="outline" onClick={() => setOrderDialog({ open: false, data: null, editing: false })}>
+                      Cerrar
+                    </Button>
+                  </>
+                )}
               </div>
             </div>
           )}

@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { toast } from 'sonner'
+import ImageUpload from '@/components/ImageUpload'
 import {
   Users, Settings, CreditCard, MessageSquare, LogOut,
   Loader2, Search, Trash2, Ban, CheckCircle, Mail,
@@ -446,27 +447,27 @@ export default function AdminPanel({ user, profile, onLogout }) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-app-gradient">
       {/* Header */}
-      <header className="bg-slate-900 text-white sticky top-0 z-40">
+      <header className="bg-admin-gradient text-white sticky top-0 z-40 shadow-xl">
         <div className="container mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             {softwareSettings.logo_url ? (
-              <img src={softwareSettings.logo_url} alt="Logo" className="w-10 h-10 rounded-lg object-contain" />
+              <img src={softwareSettings.logo_url} alt="Logo" className="w-11 h-11 rounded-xl object-contain bg-white/10 p-1" />
             ) : (
-              <div className="w-10 h-10 bg-amber-500 rounded-lg flex items-center justify-center">
+              <div className="w-11 h-11 gradient-brand rounded-xl flex items-center justify-center shadow-lg">
                 <Shield className="w-5 h-5 text-white" />
               </div>
             )}
             <div>
-              <h1 className="font-semibold">{softwareSettings.name || 'WebBuilder'}</h1>
-              <p className="text-xs text-slate-400">Panel de Administración</p>
+              <h1 className="font-bold text-lg">{softwareSettings.name || 'webFácil'}</h1>
+              <p className="text-xs text-purple-200">Panel de Administración</p>
             </div>
           </div>
           
           <div className="flex items-center gap-4">
-            <span className="text-sm text-slate-400">{profile.email}</span>
-            <Button variant="ghost" size="sm" onClick={onLogout} className="text-slate-300 hover:text-white hover:bg-slate-800">
+            <span className="text-sm text-purple-200 hidden md:block">{profile.email}</span>
+            <Button variant="ghost" size="sm" onClick={onLogout} className="text-white hover:text-white hover:bg-white/10">
               <LogOut className="w-4 h-4 mr-2" />
               Salir
             </Button>
@@ -477,17 +478,17 @@ export default function AdminPanel({ user, profile, onLogout }) {
       {/* Main Content */}
       <main className="container mx-auto px-4 py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-6">
-            <TabsTrigger value="users" className="gap-2">
+          <TabsList className="mb-6 bg-white/60 backdrop-blur p-1.5 shadow-sm">
+            <TabsTrigger value="users" className="gap-2 data-[state=active]:gradient-brand data-[state=active]:text-white data-[state=active]:shadow-md">
               <Users className="w-4 h-4" /> Usuarios
             </TabsTrigger>
-            <TabsTrigger value="plans" className="gap-2">
+            <TabsTrigger value="plans" className="gap-2 data-[state=active]:gradient-brand data-[state=active]:text-white data-[state=active]:shadow-md">
               <CreditCard className="w-4 h-4" /> Planes
             </TabsTrigger>
-            <TabsTrigger value="content" className="gap-2">
+            <TabsTrigger value="content" className="gap-2 data-[state=active]:gradient-brand data-[state=active]:text-white data-[state=active]:shadow-md">
               <Link2 className="w-4 h-4" /> Contenido
             </TabsTrigger>
-            <TabsTrigger value="software" className="gap-2">
+            <TabsTrigger value="software" className="gap-2 data-[state=active]:gradient-brand data-[state=active]:text-white data-[state=active]:shadow-md">
               <Settings className="w-4 h-4" /> Software
             </TabsTrigger>
           </TabsList>
@@ -775,11 +776,12 @@ export default function AdminPanel({ user, profile, onLogout }) {
                       />
                     </div>
                     <div>
-                      <Label>Logo (URL de imagen)</Label>
-                      <Input
-                        placeholder="https://ejemplo.com/logo.png"
-                        value={softwareSettings.logo_url}
-                        onChange={(e) => setSoftwareSettings({ ...softwareSettings, logo_url: e.target.value })}
+                      <ImageUpload
+                        label="Logo del Software"
+                        value={softwareSettings.logo_url || ''}
+                        onChange={(v) => setSoftwareSettings({ ...softwareSettings, logo_url: v })}
+                        aspect="square"
+                        maxSizeMB={0.4}
                       />
                     </div>
                     <div>

@@ -255,9 +255,11 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
+      <div className="min-h-screen flex items-center justify-center bg-app-gradient">
         <div className="text-center">
-          <Loader2 className="w-12 h-12 animate-spin text-primary mx-auto mb-4" />
+          <div className="w-16 h-16 rounded-2xl gradient-brand mx-auto mb-4 flex items-center justify-center animate-float">
+            <Loader2 className="w-8 h-8 animate-spin text-white" />
+          </div>
           <p className="text-muted-foreground">Cargando...</p>
         </div>
       </div>
@@ -272,25 +274,30 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-4">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center bg-app-gradient p-4 relative overflow-hidden">
+      {/* Decorative blurs */}
+      <div className="absolute top-0 -left-32 w-96 h-96 bg-purple-300 rounded-full opacity-30 blur-3xl animate-float" />
+      <div className="absolute bottom-0 -right-32 w-96 h-96 bg-pink-300 rounded-full opacity-30 blur-3xl animate-float" style={{ animationDelay: '1s' }} />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-blue-200 rounded-full opacity-20 blur-3xl" />
+
+      <div className="w-full max-w-md relative z-10">
         <div className="text-center mb-8">
           {softwareSettings.logo_url ? (
             <img 
               src={normalizeImageSrc(softwareSettings.logo_url)} 
               alt="Logo" 
-              className="w-16 h-16 mx-auto mb-4 object-contain"
+              className="w-20 h-20 mx-auto mb-4 object-contain rounded-2xl shadow-xl"
             />
           ) : (
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-primary rounded-2xl mb-4 shadow-lg">
-              <Store className="w-8 h-8 text-primary-foreground" />
+            <div className="inline-flex items-center justify-center w-20 h-20 gradient-brand rounded-2xl mb-4 shadow-xl animate-float">
+              <Store className="w-10 h-10 text-white" />
             </div>
           )}
-          <h1 className="text-3xl font-bold text-foreground">{softwareSettings.name || 'WebBuilder'}</h1>
-          <p className="text-muted-foreground mt-2">Crea tu página web en minutos</p>
+          <h1 className="text-4xl font-bold gradient-text">{softwareSettings.name || 'webFácil'}</h1>
+          <p className="text-muted-foreground mt-2 text-lg">Crea tu página web en minutos</p>
         </div>
 
-        <Card className="shadow-xl border-0">
+        <Card className="shadow-2xl border-0 glass card-elevated">
           <Tabs defaultValue="login" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="login">Iniciar Sesión</TabsTrigger>
@@ -335,7 +342,7 @@ export default function App() {
                       </button>
                     </div>
                   </div>
-                  <Button type="submit" className="w-full" disabled={authLoading}>
+                  <Button type="submit" className="w-full btn-brand h-11 font-semibold" disabled={authLoading}>
                     {authLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                     Iniciar Sesión
                   </Button>
@@ -465,7 +472,7 @@ export default function App() {
                     />
                   </div>
 
-                  <Button type="submit" className="w-full" disabled={authLoading}>
+                  <Button type="submit" className="w-full btn-brand h-11 font-semibold" disabled={authLoading}>
                     {authLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                     Crear Cuenta
                   </Button>

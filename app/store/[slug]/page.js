@@ -548,21 +548,28 @@ export default function StorePage() {
       </main>
 
       {/* Footer */}
-      <footer className="bg-gray-900 text-white py-8 mt-auto">
-        <div className="container mx-auto px-4">
-          <div className="flex flex-col items-center text-center gap-4">
-            <div>
-              <p className="text-lg font-semibold text-amber-400">{globalSettings.name || 'webFácil'}</p>
+      <footer className="mt-auto relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #1e1b4b 0%, #4c1d95 50%, #831843 100%)' }}>
+        <div className="absolute inset-0 opacity-20 pattern-dots" />
+        <div className="container mx-auto px-4 py-10 relative z-10">
+          <div className="flex flex-col items-center text-center gap-5">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-white/10 backdrop-blur flex items-center justify-center">
+                <Store className="w-5 h-5 text-white" />
+              </div>
+              <div className="text-left">
+                <p className="text-xs uppercase tracking-wider text-white/60">Powered by</p>
+                <p className="text-xl font-bold text-white">{globalSettings.name || 'webFácil'}</p>
+              </div>
             </div>
             {globalSettings.whatsapp && (
-              <div className="flex flex-col items-center gap-2">
-                <p className="text-sm opacity-80">¿Querés tu web gratis? Escribinos</p>
+              <div className="flex flex-col items-center gap-3 max-w-md">
+                <p className="text-base text-white/90">¿Querés tu web gratis? Escribinos 👋</p>
                 <Button
-                  size="sm"
-                  className="bg-green-600 hover:bg-green-700 text-white border-0"
+                  size="lg"
+                  className="bg-green-500 hover:bg-green-600 text-white border-0 rounded-full shadow-lg hover:shadow-xl transition-all"
                   onClick={() => window.location.href = `https://wa.me/${globalSettings.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent('Hola! Quiero mi web gratis')}`}
                 >
-                  <MessageCircle className="w-4 h-4 mr-2" /> Contactar
+                  <MessageCircle className="w-5 h-5 mr-2" /> Contactar por WhatsApp
                 </Button>
               </div>
             )}
