@@ -1433,11 +1433,11 @@ export default function Dashboard({ user, profile, onLogout }) {
               </div>
 
               <div>
-                <Label>Imagen (URL)</Label>
-                <Input
-                  placeholder="https://ejemplo.com/imagen.jpg"
+                <ImageUpload
+                  label="Imagen del producto"
                   value={productDialog.data?.image_url || ''}
-                  onChange={(e) => setProductDialog({ ...productDialog, data: { ...productDialog.data, image_url: e.target.value } })}
+                  onChange={(v) => setProductDialog({ ...productDialog, data: { ...productDialog.data, image_url: v } })}
+                  aspect="square"
                 />
               </div>
 
