@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import { normalizeImageSrc, parseImages, serializeImages } from '@/lib/imageUtils'
 import ImageUpload from '@/components/ImageUpload'
+import OrderReceipt from '@/components/OrderReceipt'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -22,7 +23,7 @@ import {
   Plus, Pencil, Trash2, Loader2, Image, DollarSign, Tag,
   MessageSquare, Bell, QrCode, Link2, Copy, ExternalLink,
   Calendar, TrendingUp, Users, Store, AlertTriangle, X, Check,
-  Phone, Mail, MapPin, CreditCard, Truck, Eye
+  Phone, Mail, MapPin, CreditCard, Truck, Eye, FileText
 } from 'lucide-react'
 
 const CURRENCIES = [
@@ -238,6 +239,7 @@ export default function Dashboard({ user, profile, onLogout }) {
   // Order dialog for editing
   const [orderDialog, setOrderDialog] = useState({ open: false, data: null, editing: false })
   const [orderEditData, setOrderEditData] = useState({})
+  const [receiptOrder, setReceiptOrder] = useState(null)
 
   // Save settings
   const saveSettings = async () => {
@@ -1100,6 +1102,7 @@ export default function Dashboard({ user, profile, onLogout }) {
                               order={order} 
                               formatPrice={formatPrice}
                               onView={() => setOrderDialog({ open: true, data: order })}
+                              onReceipt={() => setReceiptOrder(order)}
                               onDelete={() => deleteOrder(order.id)}
                               actions={
                                 <>
@@ -1134,6 +1137,7 @@ export default function Dashboard({ user, profile, onLogout }) {
                               order={order} 
                               formatPrice={formatPrice}
                               onView={() => setOrderDialog({ open: true, data: order })}
+                              onReceipt={() => setReceiptOrder(order)}
                               onDelete={() => deleteOrder(order.id)}
                               actions={
                                 <Button size="sm" className="bg-cyan-500 hover:bg-cyan-600 text-white" onClick={() => updateOrderStatus(order.id, 'ready')}>
@@ -1163,6 +1167,7 @@ export default function Dashboard({ user, profile, onLogout }) {
                               order={order} 
                               formatPrice={formatPrice}
                               onView={() => setOrderDialog({ open: true, data: order })}
+                              onReceipt={() => setReceiptOrder(order)}
                               onDelete={() => deleteOrder(order.id)}
                               actions={
                                 <Button size="sm" className="bg-green-500 hover:bg-green-600 text-white" onClick={() => updateOrderStatus(order.id, 'delivered')}>
@@ -1192,6 +1197,7 @@ export default function Dashboard({ user, profile, onLogout }) {
                               order={order} 
                               formatPrice={formatPrice}
                               onView={() => setOrderDialog({ open: true, data: order })}
+                              onReceipt={() => setReceiptOrder(order)}
                               onDelete={() => deleteOrder(order.id)}
                               actions={
                                 <Badge className="bg-green-100 text-green-700">✓ Entregado</Badge>
@@ -1782,6 +1788,13 @@ export default function Dashboard({ user, profile, onLogout }) {
                     <Button variant="destructive" onClick={() => { deleteOrder(orderDialog.data.id); setOrderDialog({ open: false, data: null, editing: false }); }}>
                       <Trash2 className="w-4 h-4 mr-2" /> Eliminar
                     </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => setReceiptOrder(orderDialog.data)}
+                      className="border-primary text-primary hover:bg-primary/10"
+                    >
+                      <FileText className="w-4 h-4 mr-2" /> Recibo
+                    </Button>
                     <Button variant="outline" onClick={() => setOrderDialog({ open: false, data: null, editing: false })}>
                       Cerrar
                     </Button>
@@ -1792,12 +1805,21 @@ export default function Dashboard({ user, profile, onLogout }) {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Receipt Dialog */}
+      <OrderReceipt
+        order={receiptOrder}
+        settings={settings}
+        profile={profile}
+        open={!!receiptOrder}
+        onClose={() => setReceiptOrder(null)}
+      />
     </div>
   )
 }
 
 // Order Card Component
-function OrderCard({ order, formatPrice, onView, onDelete, actions }) {
+function OrderCard({ order, formatPrice, onView, onDelete, onReceipt, actions }) {
   const statusConfig = {
     pending: { label: 'Nuevo', color: '#eab308', bgClass: 'bg-yellow-500' },
     confirmed: { label: 'Confirmado', color: '#3b82f6', bgClass: 'bg-blue-500' },
@@ -1821,10 +1843,15 @@ function OrderCard({ order, formatPrice, onView, onDelete, actions }) {
           <div className="text-right flex items-start gap-2">
             <Badge className={config.bgClass}>{config.label}</Badge>
             <div className="flex gap-1">
-              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onView}>
+              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onView} title="Ver">
                 <Eye className="w-3 h-3" />
               </Button>
-              <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={onDelete}>
+              {onReceipt && (
+                <Button size="icon" variant="ghost" className="h-7 w-7 text-primary" onClick={onReceipt} title="Recibo PDF">
+                  <FileText className="w-3 h-3" />
+                </Button>
+              )}
+              <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={onDelete} title="Eliminar">
                 <Trash2 className="w-3 h-3" />
               </Button>
             </div>
