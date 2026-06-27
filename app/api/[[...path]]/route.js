@@ -647,6 +647,10 @@ export async function POST(request, { params }) {
       if (productData.category_id === 'none' || productData.category_id === '') {
         productData.category_id = null
       }
+      // Normalize stock_quantity: empty -> null (unlimited)
+      if (productData.stock_quantity === '' || productData.stock_quantity === undefined) {
+        productData.stock_quantity = null
+      }
       
       const { data, error } = await supabaseAdmin
         .from('products')
@@ -707,6 +711,27 @@ export async function POST(request, { params }) {
       }))
       
       await supabaseAdmin.from('order_items').insert(orderItems)
+      
+      // Deduct stock for products that track inventory (stock_quantity not null)
+      try {
+        for (const item of items) {
+          if (!item.productId) continue
+          const { data: prod } = await supabaseAdmin
+            .from('products')
+            .select('stock_quantity')
+            .eq('id', item.productId)
+            .single()
+          if (prod && prod.stock_quantity !== null && prod.stock_quantity !== undefined) {
+            const newStock = Math.max(0, prod.stock_quantity - (item.quantity || 0))
+            await supabaseAdmin
+              .from('products')
+              .update({ stock_quantity: newStock })
+              .eq('id', item.productId)
+          }
+        }
+      } catch (stockErr) {
+        console.error('Stock deduction error:', stockErr)
+      }
       
       return handleCORS(NextResponse.json({ order, orderNumber }))
     }
@@ -985,6 +1010,10 @@ export async function PUT(request, { params }) {
       delete productData.categories
       delete productData.created_at
       delete productData.updated_at
+      // Normalize stock_quantity: empty -> null (unlimited)
+      if (productData.stock_quantity === '') {
+        productData.stock_quantity = null
+      }
       
       const { data, error } = await supabaseAdmin
         .from('products')

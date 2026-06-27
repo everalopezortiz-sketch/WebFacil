@@ -23,7 +23,7 @@ import {
   Plus, Pencil, Trash2, Loader2, Image, DollarSign, Tag,
   MessageSquare, Bell, QrCode, Link2, Copy, ExternalLink,
   Calendar, TrendingUp, Users, Store, AlertTriangle, X, Check,
-  Phone, Mail, MapPin, CreditCard, Truck, Eye, FileText
+  Phone, Mail, MapPin, CreditCard, Truck, Eye, FileText, Boxes
 } from 'lucide-react'
 
 const CURRENCIES = [
@@ -324,8 +324,22 @@ export default function Dashboard({ user, profile, onLogout }) {
     }
   }
 
-  const deleteProduct = async (id) => {
-    if (!confirm('¿Eliminar este elemento?')) return
+  const updateStock = async (product, newStock) => {
+    const stockVal = newStock === '' || newStock === null ? null : Math.max(0, parseInt(newStock))
+    const res = await authFetch(supabase, `/api/products/${product.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...product, stock_quantity: stockVal })
+    })
+    if (res.ok) {
+      toast.success('Stock actualizado')
+      loadProducts()
+    } else {
+      toast.error('Error al actualizar stock')
+    }
+  }
+
+  const deleteProduct = async (id) => {    if (!confirm('¿Eliminar este elemento?')) return
     const res = await authFetch(supabase, `/api/products/${id}`, { method: 'DELETE' })
     if (res.ok) {
       toast.success('Eliminado')
@@ -482,6 +496,9 @@ export default function Dashboard({ user, profile, onLogout }) {
             </TabsTrigger>
             <TabsTrigger value="products" className="gap-2 data-[state=active]:gradient-brand data-[state=active]:text-white data-[state=active]:shadow-md">
               <Package className="w-4 h-4" /> {businessConfig.productLabel}
+            </TabsTrigger>
+            <TabsTrigger value="stock" className="gap-2 data-[state=active]:gradient-brand data-[state=active]:text-white data-[state=active]:shadow-md">
+              <Boxes className="w-4 h-4" /> Stock
             </TabsTrigger>
             <TabsTrigger value="checkout" className="gap-2 data-[state=active]:gradient-brand data-[state=active]:text-white data-[state=active]:shadow-md">
               <CreditCard className="w-4 h-4" /> Checkout
@@ -925,7 +942,7 @@ export default function Dashboard({ user, profile, onLogout }) {
                 <div>
                   <CardTitle>{businessConfig.productLabel}</CardTitle>
                 </div>
-                <Button onClick={() => setProductDialog({ open: true, data: { name: '', description: '', price: '', image_url: '', category_id: 'none', promo_price: '', promo_active: false, is_featured: false, is_active: true } })}>
+                <Button onClick={() => setProductDialog({ open: true, data: { name: '', description: '', price: '', image_url: '', category_id: 'none', promo_price: '', promo_active: false, is_featured: false, is_active: true, stock_quantity: '' } })}>
                   <Plus className="w-4 h-4 mr-2" /> Nuevo
                 </Button>
               </CardHeader>
@@ -968,6 +985,11 @@ export default function Dashboard({ user, profile, onLogout }) {
                           {product.categories?.name && (
                             <Badge variant="outline" className="mt-2">{product.categories.name}</Badge>
                           )}
+                          {product.stock_quantity !== null && product.stock_quantity !== undefined && (
+                            <Badge variant="outline" className={`mt-2 ml-1 ${product.stock_quantity <= 0 ? 'bg-red-100 text-red-700 border-red-200' : product.stock_quantity <= 5 ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-green-100 text-green-700 border-green-200'}`}>
+                              <Boxes className="w-3 h-3 mr-1" /> {product.stock_quantity <= 0 ? 'Agotado' : `${product.stock_quantity} en stock`}
+                            </Badge>
+                          )}
                           <div className="flex gap-2 mt-3">
                             <Button size="sm" variant="outline" className="flex-1" onClick={() => setProductDialog({ open: true, data: product })}>
                               <Pencil className="w-3 h-3 mr-1" /> Editar
@@ -982,6 +1004,91 @@ export default function Dashboard({ user, profile, onLogout }) {
                     })}
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Stock Tab */}
+          <TabsContent value="stock">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Boxes className="w-5 h-5" /> Inventario / Stock</CardTitle>
+                <CardDescription>Controla la cantidad disponible de cada {businessConfig.productLabel.toLowerCase()}. El stock se descuenta automáticamente con cada pedido.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {(() => {
+                  const tracked = products.filter(p => p.stock_quantity !== null && p.stock_quantity !== undefined)
+                  const outOfStock = tracked.filter(p => p.stock_quantity <= 0).length
+                  const lowStock = tracked.filter(p => p.stock_quantity > 0 && p.stock_quantity <= 5).length
+                  return (
+                    <div className="grid grid-cols-3 gap-3 mb-6">
+                      <div className="rounded-xl bg-green-50 border border-green-100 p-4 text-center">
+                        <p className="text-2xl font-bold text-green-700">{tracked.length}</p>
+                        <p className="text-xs text-green-600">Con control de stock</p>
+                      </div>
+                      <div className="rounded-xl bg-amber-50 border border-amber-100 p-4 text-center">
+                        <p className="text-2xl font-bold text-amber-700">{lowStock}</p>
+                        <p className="text-xs text-amber-600">Stock bajo (≤5)</p>
+                      </div>
+                      <div className="rounded-xl bg-red-50 border border-red-100 p-4 text-center">
+                        <p className="text-2xl font-bold text-red-700">{outOfStock}</p>
+                        <p className="text-xs text-red-600">Agotados</p>
+                      </div>
+                    </div>
+                  )
+                })()}
+
+                {products.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Boxes className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                    <p>No hay {businessConfig.productLabel.toLowerCase()} aún</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {products.map(product => {
+                      const mainImg = parseImages(product.image_url)[0]
+                      const stock = product.stock_quantity
+                      const hasStock = stock !== null && stock !== undefined
+                      return (
+                        <div key={product.id} className="flex items-center gap-3 p-3 rounded-xl border bg-white/60 hover:bg-white transition">
+                          <div className="w-12 h-12 rounded-lg bg-slate-100 overflow-hidden flex-shrink-0">
+                            {mainImg ? (
+                              <img src={mainImg} alt={product.name} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-slate-300"><Package className="w-5 h-5" /></div>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium truncate">{product.name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {hasStock ? (
+                                stock <= 0 ? <span className="text-red-600 font-semibold">Agotado</span>
+                                : stock <= 5 ? <span className="text-amber-600 font-semibold">Stock bajo: {stock}</span>
+                                : <span className="text-green-600 font-semibold">{stock} disponibles</span>
+                              ) : <span className="text-slate-400">Stock ilimitado</span>}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Input
+                              type="number"
+                              min="0"
+                              className="w-20 h-9"
+                              defaultValue={hasStock ? stock : ''}
+                              placeholder="∞"
+                              onKeyDown={(e) => { if (e.key === 'Enter') updateStock(product, e.target.value) }}
+                              onBlur={(e) => {
+                                const v = e.target.value
+                                const current = hasStock ? String(stock) : ''
+                                if (v !== current) updateStock(product, v)
+                              }}
+                            />
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground mt-4">Escribe la cantidad y presiona Enter (o haz clic fuera) para guardar. Deja vacío para stock ilimitado.</p>
               </CardContent>
             </Card>
           </TabsContent>
@@ -1488,6 +1595,21 @@ export default function Dashboard({ user, profile, onLogout }) {
                     value={productDialog.data?.promo_price || ''}
                     onChange={(e) => setProductDialog({ ...productDialog, data: { ...productDialog.data, promo_price: e.target.value } })}
                   />
+                </div>
+              </div>
+
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div>
+                  <Label>Cantidad en stock</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="1"
+                    placeholder="Deja vacío para stock ilimitado"
+                    value={productDialog.data?.stock_quantity ?? ''}
+                    onChange={(e) => setProductDialog({ ...productDialog, data: { ...productDialog.data, stock_quantity: e.target.value === '' ? '' : parseInt(e.target.value) } })}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">Se descuenta automáticamente con cada venta</p>
                 </div>
               </div>
 

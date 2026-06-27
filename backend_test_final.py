@@ -12,7 +12,7 @@ from datetime import datetime
 import uuid
 
 # Get base URL from environment
-BASE_URL = "https://store-checkout-v2.preview.emergentagent.com/api"
+BASE_URL = "https://inventory-mgmt-78.preview.emergentagent.com/api"
 
 # Test credentials
 ADMIN_CREDENTIALS = {

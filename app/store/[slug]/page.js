@@ -179,9 +179,19 @@ export default function StorePage() {
 
   // Cart functions
   const addToCart = (product) => {
+    const stock = product.stock_quantity
+    const tracked = stock !== null && stock !== undefined
+    if (tracked && stock <= 0) {
+      toast.error('Producto agotado')
+      return
+    }
     setCart(prev => {
       const existing = prev.find(item => item.id === product.id)
       if (existing) {
+        if (tracked && existing.quantity >= stock) {
+          toast.error(`Solo quedan ${stock} unidades`)
+          return prev
+        }
         return prev.map(item => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item)
       }
       return [...prev, { ...product, quantity: 1 }]
@@ -193,6 +203,11 @@ export default function StorePage() {
     setCart(prev => prev.map(item => {
       if (item.id === productId) {
         const newQty = item.quantity + delta
+        const stock = item.stock_quantity
+        if (delta > 0 && stock !== null && stock !== undefined && newQty > stock) {
+          toast.error(`Solo quedan ${stock} unidades`)
+          return item
+        }
         return newQty > 0 ? { ...item, quantity: newQty } : item
       }
       return item
@@ -682,9 +697,18 @@ export default function StorePage() {
                       <span className="text-2xl font-bold">{formatPrice(productDetail.price)}</span>
                     )}
                   </div>
-                  <Button style={{ backgroundColor: buttonColor }} className="text-white" onClick={() => { addToCart(productDetail); setProductDetail(null); setProductImageIndex(0) }}>
-                    <Plus className="w-4 h-4 mr-1" /> Agregar
-                  </Button>
+                  {(() => {
+                    const out = productDetail.stock_quantity !== null && productDetail.stock_quantity !== undefined && productDetail.stock_quantity <= 0
+                    const low = productDetail.stock_quantity !== null && productDetail.stock_quantity !== undefined && productDetail.stock_quantity > 0
+                    return (
+                      <div className="flex flex-col items-end gap-1">
+                        {low && <span className="text-xs text-gray-500">{productDetail.stock_quantity} disponibles</span>}
+                        <Button disabled={out} style={{ backgroundColor: buttonColor }} className="text-white disabled:opacity-40" onClick={() => { addToCart(productDetail); setProductDetail(null); setProductImageIndex(0) }}>
+                          <Plus className="w-4 h-4 mr-1" /> {out ? 'Agotado' : 'Agregar'}
+                        </Button>
+                      </div>
+                    )
+                  })()}
                 </div>
               </div>
             </>
@@ -887,6 +911,7 @@ function ProductGrid({ products, addToCart, setProductDetail, formatPrice, getPr
       {products.map(product => {
         const imgs = parseImages(product.image_url)
         const mainImg = imgs[0]
+        const isOutOfStock = product.stock_quantity !== null && product.stock_quantity !== undefined && product.stock_quantity <= 0
         return (
         <div 
           key={product.id}
@@ -898,13 +923,18 @@ function ProductGrid({ products, addToCart, setProductDetail, formatPrice, getPr
               <img 
                 src={mainImg}
                 alt={product.name}
-                className="w-full h-full object-cover"
+                className={`w-full h-full object-cover ${isOutOfStock ? 'opacity-50 grayscale' : ''}`}
                 loading="lazy"
                 onError={(e) => { e.target.onerror = null; e.target.style.display = 'none' }}
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center bg-gray-50">
                 <Store className="w-10 h-10 text-gray-300" />
+              </div>
+            )}
+            {isOutOfStock && (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Badge className="bg-gray-900/80 text-white text-xs px-3 py-1">Agotado</Badge>
               </div>
             )}
             {imgs.length > 1 && (
@@ -937,7 +967,8 @@ function ProductGrid({ products, addToCart, setProductDetail, formatPrice, getPr
               </div>
               <Button
                 size="sm"
-                className="h-8 w-8 rounded-full p-0 text-white"
+                disabled={isOutOfStock}
+                className="h-8 w-8 rounded-full p-0 text-white disabled:opacity-40"
                 style={{ backgroundColor: buttonColor }}
                 onClick={(e) => { e.stopPropagation(); addToCart(product) }}
               >
