@@ -192,11 +192,38 @@ export default function Dashboard({ user, profile, onLogout }) {
   }
 
   // Manual sale
-  const [manualSale, setManualSale] = useState({ open: false, customerName: '', description: '', total: '', saleDate: today })
+  const [manualSale, setManualSale] = useState({ open: false, customerName: '', saleDate: today, items: [] })
+  const [saleLine, setSaleLine] = useState({ productId: '', quantity: 1 })
   const [savingSale, setSavingSale] = useState(false)
+
+  const getUnitPrice = (p) => (p?.promo_active && p?.promo_price ? parseFloat(p.promo_price) : parseFloat(p?.price || 0))
+
+  const addSaleLine = () => {
+    if (!saleLine.productId) { toast.error('Selecciona un producto'); return }
+    const product = products.find(p => p.id === saleLine.productId)
+    if (!product) return
+    const qty = Math.max(1, parseInt(saleLine.quantity) || 1)
+    const unit = getUnitPrice(product)
+    const existing = manualSale.items.find(i => i.productId === product.id)
+    let newItems
+    if (existing) {
+      newItems = manualSale.items.map(i => i.productId === product.id ? { ...i, quantity: i.quantity + qty, subtotal: (i.quantity + qty) * unit } : i)
+    } else {
+      newItems = [...manualSale.items, { productId: product.id, productName: product.name, quantity: qty, unitPrice: unit, subtotal: unit * qty }]
+    }
+    setManualSale({ ...manualSale, items: newItems })
+    setSaleLine({ productId: '', quantity: 1 })
+  }
+
+  const removeSaleLine = (productId) => {
+    setManualSale({ ...manualSale, items: manualSale.items.filter(i => i.productId !== productId) })
+  }
+
+  const manualSaleTotal = manualSale.items.reduce((s, i) => s + (i.subtotal || 0), 0)
+
   const saveManualSale = async () => {
-    if (!manualSale.total || parseFloat(manualSale.total) <= 0) {
-      toast.error('Ingresa el monto de la venta')
+    if (manualSale.items.length === 0) {
+      toast.error('Agrega al menos un producto')
       return
     }
     setSavingSale(true)
@@ -206,16 +233,19 @@ export default function Dashboard({ user, profile, onLogout }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customerName: manualSale.customerName || 'Venta directa',
-          description: manualSale.description,
-          total: manualSale.total,
+          description: manualSale.items.map(i => `${i.quantity}x ${i.productName}`).join(', '),
+          total: manualSaleTotal,
           saleDate: manualSale.saleDate,
-          items: manualSale.description ? [{ productName: manualSale.description, quantity: 1, unitPrice: parseFloat(manualSale.total), subtotal: parseFloat(manualSale.total) }] : []
+          deductStock: true,
+          items: manualSale.items
         })
       })
       if (res.ok) {
         toast.success('Venta registrada')
-        setManualSale({ open: false, customerName: '', description: '', total: '', saleDate: today })
+        setManualSale({ open: false, customerName: '', saleDate: today, items: [] })
+        setSaleLine({ productId: '', quantity: 1 })
         loadOrders(orderDateFilter)
+        loadProducts()
         loadStats()
       } else {
         const err = await res.json()
@@ -1359,7 +1389,7 @@ export default function Dashboard({ user, profile, onLogout }) {
                 <div className="flex items-center justify-between flex-wrap gap-3">
                   <CardTitle>Pedidos y Ventas</CardTitle>
                   <div className="flex items-center gap-2">
-                    <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => setManualSale({ open: true, customerName: '', description: '', total: '', saleDate: today })}>
+                    <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => { setManualSale({ open: true, customerName: '', saleDate: today, items: [] }); setSaleLine({ productId: '', quantity: 1 }) }}>
                       <Plus className="w-4 h-4 mr-1" /> Cargar venta
                     </Button>
                     <Input
@@ -1660,43 +1690,81 @@ export default function Dashboard({ user, profile, onLogout }) {
             <DialogTitle>Cargar venta del día</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 p-1">
-            <div>
-              <Label>Monto de la venta *</Label>
-              <Input
-                type="number"
-                step="0.01"
-                placeholder="0"
-                value={manualSale.total}
-                onChange={(e) => setManualSale({ ...manualSale, total: e.target.value })}
-              />
+            {/* Product + quantity selector */}
+            <div className="p-3 border rounded-lg bg-muted/30 space-y-3">
+              <Label className="text-sm">Agregar producto</Label>
+              <div className="flex gap-2">
+                <Select value={saleLine.productId} onValueChange={(v) => setSaleLine({ ...saleLine, productId: v })}>
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder="Selecciona un producto" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {products.length === 0 && <div className="px-2 py-2 text-sm text-muted-foreground">No hay productos</div>}
+                    {products.map(p => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name} · {formatPrice(getUnitPrice(p))}
+                        {p.stock_quantity !== null && p.stock_quantity !== undefined ? ` (stock: ${p.stock_quantity})` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  type="number"
+                  min="1"
+                  className="w-20"
+                  value={saleLine.quantity}
+                  onChange={(e) => setSaleLine({ ...saleLine, quantity: e.target.value })}
+                />
+                <Button type="button" onClick={addSaleLine}>
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </div>
             </div>
-            <div>
-              <Label>Descripción / producto</Label>
-              <Input
-                placeholder="Ej: Venta mostrador, 2 camisas..."
-                value={manualSale.description}
-                onChange={(e) => setManualSale({ ...manualSale, description: e.target.value })}
-              />
+
+            {/* Items list */}
+            {manualSale.items.length > 0 && (
+              <div className="space-y-2">
+                {manualSale.items.map(item => (
+                  <div key={item.productId} className="flex items-center justify-between gap-2 p-2 rounded-lg border bg-white">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{item.productName}</p>
+                      <p className="text-xs text-muted-foreground">{item.quantity} x {formatPrice(item.unitPrice)}</p>
+                    </div>
+                    <span className="text-sm font-semibold">{formatPrice(item.subtotal)}</span>
+                    <Button size="sm" variant="ghost" className="text-red-500 h-8 w-8 p-0" onClick={() => removeSaleLine(item.productId)}>
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ))}
+                <div className="flex items-center justify-between pt-2 border-t">
+                  <span className="font-semibold">Total</span>
+                  <span className="text-lg font-extrabold text-emerald-600">{formatPrice(manualSaleTotal)}</span>
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Cliente (opcional)</Label>
+                <Input
+                  placeholder="Venta directa"
+                  value={manualSale.customerName}
+                  onChange={(e) => setManualSale({ ...manualSale, customerName: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Fecha</Label>
+                <Input
+                  type="date"
+                  value={manualSale.saleDate}
+                  onChange={(e) => setManualSale({ ...manualSale, saleDate: e.target.value })}
+                />
+              </div>
             </div>
-            <div>
-              <Label>Cliente (opcional)</Label>
-              <Input
-                placeholder="Venta directa"
-                value={manualSale.customerName}
-                onChange={(e) => setManualSale({ ...manualSale, customerName: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label>Fecha de la venta</Label>
-              <Input
-                type="date"
-                value={manualSale.saleDate}
-                onChange={(e) => setManualSale({ ...manualSale, saleDate: e.target.value })}
-              />
-            </div>
+
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setManualSale({ ...manualSale, open: false })}>Cancelar</Button>
-              <Button onClick={saveManualSale} disabled={savingSale} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+              <Button onClick={saveManualSale} disabled={savingSale || manualSale.items.length === 0} className="bg-emerald-600 hover:bg-emerald-700 text-white">
                 {savingSale && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                 Registrar venta
               </Button>
