@@ -5,27 +5,34 @@ import { cookies } from 'next/headers'
 import { v4 as uuidv4 } from 'uuid'
 
 // Create Supabase client for server-side operations (with user context)
-function createSupabaseServer() {
+function createSupabaseServer(authHeader) {
   const cookieStore = cookies()
+  const options = {
+    cookies: {
+      getAll() {
+        return cookieStore.getAll()
+      },
+      setAll(cookiesToSet) {
+        try {
+          cookiesToSet.forEach(({ name, value, options }) =>
+            cookieStore.set(name, value, options)
+          )
+        } catch {
+          // Server component cookie handling
+        }
+      },
+    },
+  }
+  // If a Bearer token is provided (from client authFetch), use it for auth.
+  // This makes auth work even when the session cookie is stale/expired,
+  // because the browser client always sends a freshly-refreshed access token.
+  if (authHeader && authHeader.startsWith('Bearer ') && authHeader.length > 20) {
+    options.global = { headers: { Authorization: authHeader } }
+  }
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll()
-        },
-        setAll(cookiesToSet) {
-          try {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            )
-          } catch {
-            // Server component cookie handling
-          }
-        },
-      },
-    }
+    options
   )
 }
 
@@ -58,7 +65,7 @@ export async function OPTIONS() {
 export async function GET(request, { params }) {
   const path = params?.path || []
   const pathStr = path.join('/')
-  const supabase = createSupabaseServer()
+  const supabase = createSupabaseServer(request.headers.get('Authorization'))
   const supabaseAdmin = createSupabaseAdmin()
   const { searchParams } = new URL(request.url)
 
@@ -497,7 +504,7 @@ export async function GET(request, { params }) {
 export async function POST(request, { params }) {
   const path = params?.path || []
   const pathStr = path.join('/')
-  const supabase = createSupabaseServer()
+  const supabase = createSupabaseServer(request.headers.get('Authorization'))
   const supabaseAdmin = createSupabaseAdmin()
 
   try {
@@ -1071,7 +1078,7 @@ export async function POST(request, { params }) {
 export async function PUT(request, { params }) {
   const path = params?.path || []
   const pathStr = path.join('/')
-  const supabase = createSupabaseServer()
+  const supabase = createSupabaseServer(request.headers.get('Authorization'))
   const supabaseAdmin = createSupabaseAdmin()
 
   try {
@@ -1206,7 +1213,7 @@ export async function PUT(request, { params }) {
 export async function DELETE(request, { params }) {
   const path = params?.path || []
   const pathStr = path.join('/')
-  const supabase = createSupabaseServer()
+  const supabase = createSupabaseServer(request.headers.get('Authorization'))
   const supabaseAdmin = createSupabaseAdmin()
 
   try {

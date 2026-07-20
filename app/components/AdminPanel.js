@@ -73,6 +73,15 @@ export default function AdminPanel({ user, profile, onLogout }) {
   const supabase = createClient()
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
 
+  // Authenticated fetch: sends fresh Bearer token so auth works even if cookies expire
+  const authFetch = async (url, options = {}) => {
+    const { data: { session } } = await supabase.auth.getSession()
+    return fetch(url, {
+      ...options,
+      headers: { ...(options.headers || {}), Authorization: `Bearer ${session?.access_token || ''}` }
+    })
+  }
+
   // Change password (developer account)
   const [pwData, setPwData] = useState({ new: '', confirm: '' })
   const [changingPw, setChangingPw] = useState(false)
@@ -126,12 +135,12 @@ export default function AdminPanel({ user, profile, onLogout }) {
     if (searchQuery) params.set('search', searchQuery)
     if (typeFilter && typeFilter !== 'all') params.set('type', typeFilter)
     
-    const res = await fetch(`/api/admin/users?${params}`)
+    const res = await authFetch(`/api/admin/users?${params}`)
     if (res.ok) setUsers(await res.json())
   }
 
   const loadPlans = async () => {
-    const res = await fetch('/api/plans')
+    const res = await authFetch('/api/plans')
     if (res.ok) setPlans(await res.json())
   }
 
@@ -145,7 +154,7 @@ export default function AdminPanel({ user, profile, onLogout }) {
   }
 
   const loadSentMessages = async () => {
-    const res = await fetch('/api/admin/messages-list')
+    const res = await authFetch('/api/admin/messages-list')
     if (res.ok) {
       setSentMessages(await res.json())
     }
@@ -180,7 +189,7 @@ export default function AdminPanel({ user, profile, onLogout }) {
     
     // Also try to save to API for persistence across sessions/users
     try {
-      await fetch('/api/admin/global-settings', {
+      await authFetch('/api/admin/global-settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(softwareSettings)
@@ -196,7 +205,7 @@ export default function AdminPanel({ user, profile, onLogout }) {
   const updateUser = async (userId, updates) => {
     setSaving(true)
     try {
-      const res = await fetch('/api/admin/users/update', {
+      const res = await authFetch('/api/admin/users/update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, ...updates })
@@ -220,7 +229,7 @@ export default function AdminPanel({ user, profile, onLogout }) {
     if (!confirm('¿Estás seguro de eliminar este usuario? Esta acción no se puede deshacer.')) return
     
     try {
-      const res = await fetch(`/api/admin/users/${userId}`, { method: 'DELETE' })
+      const res = await authFetch(`/api/admin/users/${userId}`, { method: 'DELETE' })
       if (res.ok) {
         toast.success('Usuario eliminado')
         loadUsers()
@@ -236,7 +245,7 @@ export default function AdminPanel({ user, profile, onLogout }) {
   const assignPlan = async (userId, planId, autoRenew) => {
     setSaving(true)
     try {
-      const res = await fetch('/api/admin/assign-plan', {
+      const res = await authFetch('/api/admin/assign-plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, planId, autoRenew })
@@ -260,7 +269,7 @@ export default function AdminPanel({ user, profile, onLogout }) {
     if (!editPlanDialog.plan) return
     setSaving(true)
     try {
-      const res = await fetch('/api/admin/plans/update', {
+      const res = await authFetch('/api/admin/plans/update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(editPlanDialog.plan)
@@ -285,7 +294,7 @@ export default function AdminPanel({ user, profile, onLogout }) {
     
     setSaving(true)
     try {
-      const res = await fetch('/api/admin/messages', {
+      const res = await authFetch('/api/admin/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -314,7 +323,7 @@ export default function AdminPanel({ user, profile, onLogout }) {
     if (!confirm('¿Eliminar este mensaje?')) return
     
     try {
-      const res = await fetch(`/api/admin/messages/${messageId}`, { method: 'DELETE' })
+      const res = await authFetch(`/api/admin/messages/${messageId}`, { method: 'DELETE' })
       if (res.ok) {
         toast.success('Mensaje eliminado')
         loadSentMessages()
@@ -331,7 +340,7 @@ export default function AdminPanel({ user, profile, onLogout }) {
     if (!confirm('¿Eliminar este contenido?')) return
     
     try {
-      const res = await fetch(`/api/admin/info-content/${contentId}`, { method: 'DELETE' })
+      const res = await authFetch(`/api/admin/info-content/${contentId}`, { method: 'DELETE' })
       if (res.ok) {
         toast.success('Contenido eliminado')
         loadInfoContent()
@@ -347,7 +356,7 @@ export default function AdminPanel({ user, profile, onLogout }) {
   const loadUserMessages = async (targetUser) => {
     try {
       // Get ALL messages sent to this user (not global ones)
-      const res = await fetch(`/api/admin/messages-list`)
+      const res = await authFetch(`/api/admin/messages-list`)
       if (res.ok) {
         const allMessages = await res.json()
         // Filter only messages specifically sent to this user
@@ -367,7 +376,7 @@ export default function AdminPanel({ user, profile, onLogout }) {
     if (!confirm('¿Eliminar este mensaje?')) return
     
     try {
-      const res = await fetch(`/api/admin/messages/${messageId}`, { method: 'DELETE' })
+      const res = await authFetch(`/api/admin/messages/${messageId}`, { method: 'DELETE' })
       if (res.ok) {
         toast.success('Mensaje eliminado')
         // Refresh messages
@@ -393,7 +402,7 @@ export default function AdminPanel({ user, profile, onLogout }) {
     
     setSaving(true)
     try {
-      const res = await fetch(`/api/admin/messages/${messageId}`, {
+      const res = await authFetch(`/api/admin/messages/${messageId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: newText })
@@ -421,7 +430,7 @@ export default function AdminPanel({ user, profile, onLogout }) {
   const saveInfoContent = async () => {
     setSaving(true)
     try {
-      const res = await fetch('/api/admin/info-content', {
+      const res = await authFetch('/api/admin/info-content', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(infoContent)

@@ -438,7 +438,7 @@ export default function StorePage() {
       </div>
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-6 pb-36 flex-1">
+      <main className="container mx-auto px-4 py-6 pb-24 flex-1">
         {filteredProducts.length === 0 ? (
           <div className="text-center py-16">
             <Store className="w-16 h-16 mx-auto mb-4 opacity-30" />
@@ -543,7 +543,7 @@ export default function StorePage() {
 
       {/* Floating Cart Button */}
       {cart.length > 0 && (
-        <div className="fixed bottom-[4.75rem] left-4 right-4 z-40">
+        <div className="fixed bottom-4 left-4 right-4 z-40">
           <Button
             className="w-full py-6 rounded-2xl shadow-2xl text-white font-semibold text-lg bg-indigo-600 hover:bg-indigo-700"
             onClick={() => setCartOpen(true)}
@@ -553,17 +553,6 @@ export default function StorePage() {
           </Button>
         </div>
       )}
-
-      {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-100 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
-        <div className="container mx-auto grid grid-cols-5 h-16">
-          <BottomNavItem icon={Home} label="Inicio" active={selectedCategory === 'all' && !searchQuery} onClick={() => { setSelectedCategory('all'); setSearchQuery(''); window.scrollTo({ top: 0, behavior: 'smooth' }) }} />
-          <BottomNavItem icon={LayoutGrid} label="Categorías" active={false} onClick={() => { setSelectedCategory('all'); document.querySelector('.scrollbar-hide')?.scrollIntoView({ behavior: 'smooth', block: 'center' }) }} />
-          <BottomNavItem icon={Tag} label="Ofertas" active={selectedCategory === 'promo'} onClick={() => { setSelectedCategory('promo'); window.scrollTo({ top: 0, behavior: 'smooth' }) }} />
-          <BottomNavItem icon={Heart} label="Favoritos" active={selectedCategory === 'featured'} onClick={() => { setSelectedCategory('featured'); window.scrollTo({ top: 0, behavior: 'smooth' }) }} />
-          <BottomNavItem icon={User} label="Mi cuenta" active={false} onClick={() => { if (settings?.whatsapp_number) { window.open(`https://wa.me/${settings.whatsapp_number.replace(/\D/g, '')}`, '_blank') } else { setCartOpen(true) } }} />
-        </div>
-      </nav>
 
       {/* Product Detail Dialog */}
       <Dialog open={!!productDetail} onOpenChange={(open) => { if (!open) { setProductDetail(null); setProductImageIndex(0) } }}>

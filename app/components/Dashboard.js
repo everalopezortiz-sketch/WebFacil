@@ -125,7 +125,7 @@ export default function Dashboard({ user, profile, onLogout }) {
   }
 
   const loadSettings = async () => {
-    const res = await fetch('/api/settings')
+    const res = await authFetch(supabase, '/api/settings')
     if (res.ok) {
       const data = await res.json()
       setSettings(data)
@@ -133,33 +133,33 @@ export default function Dashboard({ user, profile, onLogout }) {
   }
 
   const loadCategories = async () => {
-    const res = await fetch('/api/categories')
+    const res = await authFetch(supabase, '/api/categories')
     if (res.ok) setCategories(await res.json())
   }
 
   const loadProducts = async () => {
-    const res = await fetch('/api/products')
+    const res = await authFetch(supabase, '/api/products')
     if (res.ok) setProducts(await res.json())
   }
 
   const loadOrders = async (date) => {
     const url = date ? `/api/orders?date=${date}` : '/api/orders'
-    const res = await fetch(url)
+    const res = await authFetch(supabase, url)
     if (res.ok) setOrders(await res.json())
   }
 
   const loadCheckoutFields = async () => {
-    const res = await fetch('/api/checkout-fields')
+    const res = await authFetch(supabase, '/api/checkout-fields')
     if (res.ok) setCheckoutFields(await res.json())
   }
 
   const loadMessages = async () => {
-    const res = await fetch('/api/messages')
+    const res = await authFetch(supabase, '/api/messages')
     if (res.ok) setMessages(await res.json())
   }
 
   const loadUserPlan = async () => {
-    const res = await fetch('/api/user-plan')
+    const res = await authFetch(supabase, '/api/user-plan')
     if (res.ok) setUserPlan(await res.json())
   }
 
@@ -172,7 +172,7 @@ export default function Dashboard({ user, profile, onLogout }) {
     const params = new URLSearchParams()
     if (reportDateRange.start) params.set('startDate', reportDateRange.start)
     if (reportDateRange.end) params.set('endDate', reportDateRange.end)
-    const res = await fetch(`/api/reports?${params}`)
+    const res = await authFetch(supabase, `/api/reports?${params}`)
     if (res.ok) setReports(await res.json())
   }
 
