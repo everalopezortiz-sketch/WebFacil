@@ -76,6 +76,7 @@ export default function StorePage() {
   const [checkoutOpen, setCheckoutOpen] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
+  const [searchOpen, setSearchOpen] = useState(false)
   const [checkoutData, setCheckoutData] = useState({})
   const [productDetail, setProductDetail] = useState(null)
   const [productImageIndex, setProductImageIndex] = useState(0)
@@ -343,7 +344,7 @@ export default function StorePage() {
           {/* Floating actions */}
           <div className="absolute top-4 right-4 flex items-center gap-3">
             <button 
-              onClick={() => document.getElementById('store-search')?.focus()}
+              onClick={() => setSearchOpen((v) => !v)}
               className="w-12 h-12 rounded-full bg-white shadow-lg flex items-center justify-center text-indigo-700 active:scale-95 transition"
             >
               <Search className="w-5 h-5" />
@@ -380,64 +381,49 @@ export default function StorePage() {
                 </div>
               </div>
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <h1 className="text-xl font-extrabold text-gray-900 truncate">{profile.first_name} {profile.last_name}</h1>
-                  <BadgeCheck className="w-5 h-5 text-blue-500 flex-shrink-0" />
-                </div>
+                <h1 className="text-xl font-extrabold text-gray-900 truncate">{settings?.store_name || `${profile.first_name} ${profile.last_name}`}</h1>
                 {settings?.store_description && (
-                  <p className="text-sm font-semibold text-indigo-600 truncate">{settings.store_description}</p>
+                  <p className="text-sm font-semibold text-indigo-600 line-clamp-2">{settings.store_description}</p>
                 )}
-                <div className="flex items-center gap-3 mt-2 text-sm">
-                  <div className="flex items-center gap-1">
-                    <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
-                    <span className="font-bold text-gray-800">Verificada</span>
-                  </div>
-                  <span className="w-px h-4 bg-gray-200" />
-                  <div className="flex items-center gap-1 text-gray-500">
-                    <ShoppingCart className="w-4 h-4" />
-                    <span className="font-semibold">{products.length} productos</span>
-                  </div>
+              </div>
+            </div>
+
+            {/* Delivery info (only if enabled) */}
+            {settings?.delivery_enabled && (
+              <div className="mt-4 flex items-center gap-3 bg-indigo-50 rounded-2xl p-4">
+                <Truck className="w-7 h-7 text-indigo-600 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-gray-900 text-sm">Delivery disponible</p>
+                  <p className="text-xs text-gray-500 whitespace-pre-line">{settings?.shipping_info || 'Realizamos entregas a domicilio'}</p>
                 </div>
               </div>
-            </div>
-            {/* Trust pill */}
-            <div className="mt-4 flex items-center gap-3 bg-indigo-50 rounded-2xl p-4">
-              <ShieldCheck className="w-7 h-7 text-indigo-600 flex-shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="font-bold text-gray-900 text-sm">Tu tienda de confianza</p>
-                <p className="text-xs text-gray-500">Miles de clientes satisfechos</p>
-              </div>
-              <ChevronRight className="w-5 h-5 text-gray-400" />
-            </div>
+            )}
           </div>
         </div>
       </header>
 
-      {/* Search + Categories + Trust */}
+      {/* Search (toggled) + Categories */}
       <div className="container mx-auto px-4 mt-5">
-        {/* Search pill */}
-        <div className="relative">
-          <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
-          <Input
-            id="store-search"
-            placeholder="Buscar productos..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-14 pr-16 h-14 rounded-full border-0 bg-gray-100 text-base shadow-sm focus-visible:ring-2 focus-visible:ring-indigo-400"
-          />
-          {searchQuery ? (
-            <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center">
+        {/* Search pill - only when opened via icon */}
+        {searchOpen && (
+          <div className="relative mb-5">
+            <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+            <Input
+              id="store-search"
+              autoFocus
+              placeholder="Buscar productos..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-14 pr-16 h-14 rounded-full border-0 bg-gray-100 text-base shadow-sm focus-visible:ring-2 focus-visible:ring-indigo-400"
+            />
+            <button onClick={() => { setSearchQuery(''); setSearchOpen(false) }} className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center">
               <X className="w-5 h-5" />
             </button>
-          ) : (
-            <button className="absolute right-2 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow-md">
-              <Search className="w-5 h-5" />
-            </button>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Category icons */}
-        <div className="flex gap-3 mt-5 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
+        <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
           <CatPill active={selectedCategory === 'all'} onClick={() => setSelectedCategory('all')} icon={LayoutGrid} label="Todos" />
           {products.some(p => p.promo_active) && (
             <CatPill active={selectedCategory === 'promo'} onClick={() => setSelectedCategory('promo')} icon={Tag} label="Ofertas" color="#f97316" />
@@ -448,22 +434,6 @@ export default function StorePage() {
           {categories.map(cat => (
             <CatPill key={cat.id} active={selectedCategory === cat.id} onClick={() => setSelectedCategory(cat.id)} icon={Tag} label={cat.name} />
           ))}
-        </div>
-
-        {/* Trust banner dark */}
-        <div className="mt-5 rounded-2xl bg-slate-900 text-white py-5 grid grid-cols-3 divide-x divide-white/10">
-          <div className="flex items-center gap-2 px-3">
-            <ShieldCheck className="w-7 h-7 text-indigo-400 flex-shrink-0" />
-            <div className="min-w-0"><p className="font-bold text-xs sm:text-sm leading-tight">Compra segura</p><p className="text-[10px] sm:text-xs text-white/60 leading-tight">Protegemos tu compra</p></div>
-          </div>
-          <div className="flex items-center gap-2 px-3">
-            <Truck className="w-7 h-7 text-blue-400 flex-shrink-0" />
-            <div className="min-w-0"><p className="font-bold text-xs sm:text-sm leading-tight">Envíos rápidos</p><p className="text-[10px] sm:text-xs text-white/60 leading-tight">A todo el país</p></div>
-          </div>
-          <div className="flex items-center gap-2 px-3">
-            <Award className="w-7 h-7 text-green-400 flex-shrink-0" />
-            <div className="min-w-0"><p className="font-bold text-xs sm:text-sm leading-tight">Garantía</p><p className="text-[10px] sm:text-xs text-white/60 leading-tight">100% originales</p></div>
-          </div>
         </div>
       </div>
 
@@ -499,48 +469,13 @@ export default function StorePage() {
                   </section>
                 )}
 
-                {/* Featured */}
-                {filteredProducts.some(p => p.is_featured) && (
-                  <section>
-                    <div className="flex items-center justify-between mb-4">
-                      <h2 className="text-lg font-extrabold flex items-center gap-2 text-gray-900">
-                        <Star className="w-5 h-5 text-amber-500 fill-amber-400" /> Destacados
-                      </h2>
-                      <button onClick={() => setSelectedCategory('featured')} className="text-sm font-bold text-indigo-600 flex items-center gap-0.5">
-                        Ver todas <ChevronRight className="w-4 h-4" />
-                      </button>
-                    </div>
-                    <ProductGrid 
-                      products={filteredProducts.filter(p => p.is_featured)} 
-                      {...{ addToCart, setProductDetail, formatPrice, getProductPrice, buttonColor, cardSize, gridColumns }}
-                    />
-                  </section>
-                )}
-                
-                {/* By Category */}
-                {categories.map(cat => {
-                  const catProducts = filteredProducts.filter(p => p.category_id === cat.id && !p.is_featured)
-                  if (catProducts.length === 0) return null
-                  return (
-                    <section key={cat.id}>
-                      <h2 className="text-lg font-extrabold text-gray-900 mb-4">{cat.name}</h2>
-                      <ProductGrid 
-                        products={catProducts} 
-                        {...{ addToCart, setProductDetail, formatPrice, getProductPrice, buttonColor, cardSize, gridColumns }}
-                      />
-                    </section>
-                  )
-                })}
-                
-                {/* Uncategorized */}
-                {filteredProducts.filter(p => !p.category_id && !p.is_featured).length > 0 && (
-                  <section>
-                    <h2 className="text-lg font-extrabold text-gray-900 mb-4">Otros</h2>
-                    <ProductGrid 
-                      products={filteredProducts.filter(p => !p.category_id && !p.is_featured)} 
-                      {...{ addToCart, setProductDetail, formatPrice, getProductPrice, buttonColor, cardSize, gridColumns }}
-                    />
-                  </section>
+                {/* Default view shows only offers. Categories shown on demand. */}
+                {!filteredProducts.some(p => p.promo_active) && (
+                  <div className="text-center py-12">
+                    <Tag className="w-14 h-14 mx-auto mb-3 text-indigo-200" />
+                    <p className="text-lg font-semibold text-gray-700">Explora nuestros productos</p>
+                    <p className="text-sm text-gray-400">Selecciona una categoría arriba para ver los productos</p>
+                  </div>
                 )}
               </>
             ) : (
@@ -561,30 +496,17 @@ export default function StorePage() {
         )}
 
         {/* Additional Info */}
-        {(settings?.business_hours || settings?.shipping_info) && (
-          <div className="mt-10 grid md:grid-cols-2 gap-4">
-            {settings?.business_hours && (
-              <Card className="bg-white/80 border-0 shadow-sm">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Clock className="w-5 h-5" style={{ color: buttonColor }} />
-                    <h3 className="font-semibold">Horario de Atención</h3>
-                  </div>
-                  <p className="text-sm opacity-70 whitespace-pre-line">{settings.business_hours}</p>
-                </CardContent>
-              </Card>
-            )}
-            {settings?.shipping_info && (
-              <Card className="bg-white/80 border-0 shadow-sm">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Truck className="w-5 h-5" style={{ color: buttonColor }} />
-                    <h3 className="font-semibold">Envíos y Entregas</h3>
-                  </div>
-                  <p className="text-sm opacity-70 whitespace-pre-line">{settings.shipping_info}</p>
-                </CardContent>
-              </Card>
-            )}
+        {settings?.business_hours && (
+          <div className="mt-10">
+            <Card className="bg-white/80 border-0 shadow-sm">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Clock className="w-5 h-5" style={{ color: buttonColor }} />
+                  <h3 className="font-semibold">Horario de Atención</h3>
+                </div>
+                <p className="text-sm opacity-70 whitespace-pre-line">{settings.business_hours}</p>
+              </CardContent>
+            </Card>
           </div>
         )}
       </main>

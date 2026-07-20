@@ -335,6 +335,82 @@ export async function GET(request, { params }) {
       return handleCORS(NextResponse.json({ orders, topProducts, totalRevenue, totalOrders }))
     }
 
+    // Get dashboard stats (visits, sales day/week, low stock)
+    if (pathStr === 'dashboard-stats') {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+
+      const now = new Date()
+      const startOfToday = new Date(now); startOfToday.setHours(0, 0, 0, 0)
+      const startOfWeek = new Date(startOfToday); startOfWeek.setDate(startOfWeek.getDate() - 6)
+
+      // Visits
+      let visitsTotal = 0, visitsToday = 0, visitsWeek = 0
+      let visitsByDay = []
+      try {
+        const { data: visits } = await supabaseAdmin
+          .from('store_visits')
+          .select('created_at')
+          .eq('user_id', user.id)
+          .gte('created_at', startOfWeek.toISOString())
+        const { count: totalCount } = await supabaseAdmin
+          .from('store_visits')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+        visitsTotal = totalCount || 0
+        const dayMap = {}
+        for (let i = 6; i >= 0; i--) {
+          const d = new Date(startOfToday); d.setDate(d.getDate() - i)
+          dayMap[d.toISOString().split('T')[0]] = 0
+        }
+        ;(visits || []).forEach(v => {
+          const key = new Date(v.created_at).toISOString().split('T')[0]
+          if (dayMap[key] !== undefined) dayMap[key]++
+          if (new Date(v.created_at) >= startOfToday) visitsToday++
+        })
+        visitsWeek = (visits || []).length
+        visitsByDay = Object.entries(dayMap).map(([date, count]) => ({ date, count }))
+      } catch (e) { /* table may not exist */ }
+
+      // Sales (delivered orders)
+      const { data: weekOrders } = await supabaseAdmin
+        .from('orders')
+        .select('total, createdAt, status')
+        .eq('user_id', user.id)
+        .eq('status', 'delivered')
+        .gte('createdAt', startOfWeek.toISOString())
+
+      const salesDayMap = {}
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(startOfToday); d.setDate(d.getDate() - i)
+        salesDayMap[d.toISOString().split('T')[0]] = 0
+      }
+      let salesToday = 0, salesWeek = 0, ordersToday = 0
+      ;(weekOrders || []).forEach(o => {
+        const key = new Date(o.createdAt).toISOString().split('T')[0]
+        const amt = parseFloat(o.total) || 0
+        if (salesDayMap[key] !== undefined) salesDayMap[key] += amt
+        salesWeek += amt
+        if (new Date(o.createdAt) >= startOfToday) { salesToday += amt; ordersToday++ }
+      })
+      const salesByDay = Object.entries(salesDayMap).map(([date, total]) => ({ date, total }))
+
+      // Low stock products
+      const { data: lowStock } = await supabaseAdmin
+        .from('products')
+        .select('id, name, stock_quantity')
+        .eq('user_id', user.id)
+        .not('stock_quantity', 'is', null)
+        .lte('stock_quantity', 5)
+        .order('stock_quantity', { ascending: true })
+
+      return handleCORS(NextResponse.json({
+        visitsTotal, visitsToday, visitsWeek, visitsByDay,
+        salesToday, salesWeek, ordersToday, salesByDay,
+        lowStock: lowStock || []
+      }))
+    }
+
     // ============ ADMIN ROUTES ============
     
     // Get all users (admin)
@@ -386,32 +462,20 @@ export async function GET(request, { params }) {
         return handleCORS(NextResponse.json({ error: 'Store in maintenance', maintenance: true }, { status: 503 }))
       }
       
-      const { data: settings } = await supabaseAdmin
-        .from('user_settings')
-        .select('*')
-        .eq('user_id', profile.id)
-        .single()
-      
-      const { data: categories } = await supabaseAdmin
-        .from('categories')
-        .select('*')
-        .eq('user_id', profile.id)
-        .eq('is_active', true)
-        .order('display_order')
-      
-      const { data: products } = await supabaseAdmin
-        .from('products')
-        .select('*, categories(name)')
-        .eq('user_id', profile.id)
-        .eq('is_active', true)
-        .order('createdAt', { ascending: false })
-      
-      const { data: checkoutFields } = await supabaseAdmin
-        .from('checkout_fields')
-        .select('*')
-        .eq('user_id', profile.id)
-        .eq('is_active', true)
-        .order('display_order')
+      // Run all queries in parallel to reduce latency, plus non-blocking visit tracking
+      const [settingsRes, categoriesRes, productsRes, checkoutRes] = await Promise.all([
+        supabaseAdmin.from('user_settings').select('*').eq('user_id', profile.id).single(),
+        supabaseAdmin.from('categories').select('*').eq('user_id', profile.id).eq('is_active', true).order('display_order'),
+        supabaseAdmin.from('products').select('*, categories(name)').eq('user_id', profile.id).eq('is_active', true).order('createdAt', { ascending: false }),
+        supabaseAdmin.from('checkout_fields').select('*').eq('user_id', profile.id).eq('is_active', true).order('display_order'),
+        // fire-and-forget visit tracking (don't block response)
+        supabaseAdmin.from('store_visits').insert({ user_id: profile.id }).then(() => {}, () => {})
+      ])
+
+      const settings = settingsRes?.data
+      const categories = categoriesRes?.data
+      const products = productsRes?.data
+      const checkoutFields = checkoutRes?.data
       
       return handleCORS(NextResponse.json({
         profile,
@@ -594,7 +658,7 @@ export async function POST(request, { params }) {
       
       // Include all fields that exist in the database schema
       const allowedFields = [
-        'user_id', 'logo_url', 'cover_image_url', 'theme_bg_color', 'theme_font_color', 'theme_button_color',
+        'user_id', 'store_name', 'logo_url', 'cover_image_url', 'theme_bg_color', 'theme_font_color', 'theme_button_color',
         'bg_pattern', 'currency', 'business_mode', 'location_link', 'delivery_enabled',
         'payment_cash_enabled', 'payment_bank_account', 'payment_bank_enabled',
         'payment_link', 'payment_link_enabled', 'payment_qr_url', 'payment_qr_enabled',
@@ -609,11 +673,21 @@ export async function POST(request, { params }) {
         }
       })
       
-      const { data, error } = await supabaseAdmin
+      let { data, error } = await supabaseAdmin
         .from('user_settings')
         .upsert(cleanBody, { onConflict: 'user_id' })
         .select()
         .single()
+      
+      // Fallback: if store_name column doesn't exist yet, retry without it
+      if (error && /store_name/i.test(error.message || '')) {
+        const { store_name, ...rest } = cleanBody
+        ;({ data, error } = await supabaseAdmin
+          .from('user_settings')
+          .upsert(rest, { onConflict: 'user_id' })
+          .select()
+          .single())
+      }
       
       if (error) {
         console.error('Settings update error:', error)
@@ -736,9 +810,61 @@ export async function POST(request, { params }) {
       return handleCORS(NextResponse.json({ order, orderNumber }))
     }
 
-    // ============ ADMIN ROUTES ============
-    
-    // Admin: Update user
+    // Create manual sale (authenticated dashboard) - marked delivered so it counts in reports
+    if (pathStr === 'orders/manual') {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+
+      const { customerName, description, items, total, saleDate, deductStock } = body
+      const orderNumber = `VTA-${Date.now().toString(36).toUpperCase()}`
+
+      const insertData = {
+        user_id: user.id,
+        order_number: orderNumber,
+        customer_name: customerName || 'Venta directa',
+        status: 'delivered',
+        total: parseFloat(total) || 0,
+        notes: description || null
+      }
+      // Allow backdating the sale
+      if (saleDate) {
+        const d = new Date(saleDate)
+        if (!isNaN(d.getTime())) insertData.createdAt = d.toISOString()
+      }
+
+      const { data: order, error } = await supabaseAdmin
+        .from('orders')
+        .insert(insertData)
+        .select()
+        .single()
+
+      if (error) return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
+
+      if (Array.isArray(items) && items.length > 0) {
+        const orderItems = items.map(item => ({
+          order_id: order.id,
+          product_id: item.productId || null,
+          product_name: item.productName,
+          quantity: item.quantity || 1,
+          unit_price: item.unitPrice || 0,
+          subtotal: item.subtotal != null ? item.subtotal : (item.unitPrice || 0) * (item.quantity || 1)
+        }))
+        await supabaseAdmin.from('order_items').insert(orderItems)
+
+        // Optionally deduct stock
+        if (deductStock) {
+          for (const item of items) {
+            if (!item.productId) continue
+            const { data: prod } = await supabaseAdmin.from('products').select('stock_quantity').eq('id', item.productId).single()
+            if (prod && prod.stock_quantity !== null && prod.stock_quantity !== undefined) {
+              await supabaseAdmin.from('products').update({ stock_quantity: Math.max(0, prod.stock_quantity - (item.quantity || 0)) }).eq('id', item.productId)
+            }
+          }
+        }
+      }
+
+      return handleCORS(NextResponse.json({ order, orderNumber }))
+    }
     if (pathStr === 'admin/users/update') {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))

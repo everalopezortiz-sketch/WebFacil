@@ -1,163 +1,121 @@
 [
   {
-    "test": "Health Check",
-    "success": true,
-    "message": "API is healthy - ok",
-    "details": null,
-    "timestamp": "2026-01-29T20:29:17.179145"
-  },
-  {
-    "test": "Admin Signin",
-    "success": true,
-    "message": "Admin logged in successfully - Role: DESARROLLADOR",
-    "details": null,
-    "timestamp": "2026-01-29T20:29:17.740342"
-  },
-  {
     "test": "User Signin",
     "success": true,
-    "message": "User logged in successfully - Role: USER",
+    "message": "User logged in successfully - Email: ortiz@gmail.com",
     "details": null,
-    "timestamp": "2026-01-29T20:29:18.134981"
+    "timestamp": "2026-07-20T19:52:57.411698"
   },
   {
-    "test": "Signup Validation",
+    "test": "GET Settings",
     "success": true,
-    "message": "Signup properly validates missing fields",
+    "message": "Retrieved current settings",
     "details": null,
-    "timestamp": "2026-01-29T20:29:18.323077"
+    "timestamp": "2026-07-20T19:52:57.913148"
   },
   {
-    "test": "Get User Settings",
+    "test": "POST Settings",
     "success": true,
-    "message": "Retrieved settings successfully",
+    "message": "Settings saved successfully (returned 200)",
     "details": null,
-    "timestamp": "2026-01-29T20:29:18.585050"
+    "timestamp": "2026-07-20T19:52:58.331777"
   },
   {
-    "test": "Update User Settings",
-    "success": false,
-    "message": "Settings update failed with status 400",
-    "details": null,
-    "timestamp": "2026-01-29T20:29:18.848021"
-  },
-  {
-    "test": "Get Categories",
+    "test": "Verify Settings Persistence",
     "success": true,
-    "message": "Retrieved 0 categories",
+    "message": "Settings persisted correctly: theme_bg_color=\u2713, theme_font_color=\u2713, theme_button_color=\u2713, whatsapp_number=\u2713, store_name=N/A (column may not exist)",
     "details": null,
-    "timestamp": "2026-01-29T20:29:19.097440"
+    "timestamp": "2026-07-20T19:52:58.611186"
   },
   {
-    "test": "Create Category",
+    "test": "Settings Fallback Test",
     "success": true,
-    "message": "Category created with ID: 33d445be-4cac-4af5-b12a-bcf4ccf6d116",
+    "message": "Settings endpoint returned 200 (fallback working if store_name column missing)",
     "details": null,
-    "timestamp": "2026-01-29T20:29:19.414948"
+    "timestamp": "2026-07-20T19:52:58.611217"
   },
   {
-    "test": "Update Category",
+    "test": "POST Manual Sale",
     "success": true,
-    "message": "Category updated successfully",
+    "message": "Manual sale created successfully - Order: VTA-MRTN6BVB",
     "details": null,
-    "timestamp": "2026-01-29T20:29:19.661065"
+    "timestamp": "2026-07-20T19:52:59.029838"
   },
   {
-    "test": "Delete Category",
+    "test": "Verify Manual Sale in Orders",
     "success": true,
-    "message": "Category deleted successfully",
+    "message": "Manual sale found in orders with status 'delivered'",
     "details": null,
-    "timestamp": "2026-01-29T20:29:19.923784"
+    "timestamp": "2026-07-20T19:52:59.296764"
   },
   {
-    "test": "Get Products",
+    "test": "Dashboard Stats Structure",
     "success": true,
-    "message": "Retrieved 0 products",
+    "message": "All required keys present",
     "details": null,
-    "timestamp": "2026-01-29T20:29:20.184369"
+    "timestamp": "2026-07-20T19:52:59.918247"
   },
   {
-    "test": "Create Product",
-    "success": false,
-    "message": "Create failed with status 400",
-    "details": null,
-    "timestamp": "2026-01-29T20:29:20.419772"
-  },
-  {
-    "test": "Get Orders",
+    "test": "Dashboard Stats visitsByDay",
     "success": true,
-    "message": "Retrieved 0 orders",
+    "message": "visitsByDay has 7 days",
     "details": null,
-    "timestamp": "2026-01-29T20:29:20.685606"
+    "timestamp": "2026-07-20T19:52:59.918275"
   },
   {
-    "test": "Get Checkout Fields",
+    "test": "Dashboard Stats salesByDay",
     "success": true,
-    "message": "Retrieved 4 checkout fields",
+    "message": "salesByDay has 7 days",
     "details": null,
-    "timestamp": "2026-01-29T20:29:20.953761"
+    "timestamp": "2026-07-20T19:52:59.918280"
   },
   {
-    "test": "Get User Plan",
+    "test": "Dashboard Stats lowStock",
     "success": true,
-    "message": "Retrieved user plan: None",
+    "message": "lowStock is array with 1 items",
     "details": null,
-    "timestamp": "2026-01-29T20:29:21.197185"
+    "timestamp": "2026-07-20T19:52:59.918285"
   },
   {
-    "test": "Get Messages",
+    "test": "Dashboard Stats Graceful Degradation",
     "success": true,
-    "message": "Retrieved 0 messages",
+    "message": "Endpoint returned 200 (graceful degradation working)",
     "details": null,
-    "timestamp": "2026-01-29T20:29:21.484601"
+    "timestamp": "2026-07-20T19:52:59.918290"
   },
   {
-    "test": "Get Reports",
+    "test": "GET Reports (no filters)",
     "success": true,
-    "message": "Retrieved reports data",
+    "message": "Reports retrieved - 7 orders, revenue: 17150000",
     "details": null,
-    "timestamp": "2026-01-29T20:29:22.061025"
+    "timestamp": "2026-07-20T19:53:00.212775"
   },
   {
-    "test": "Admin Get Users",
+    "test": "GET Reports (with filters)",
     "success": true,
-    "message": "Retrieved 2 users",
+    "message": "Filtered reports retrieved - 2 orders",
     "details": null,
-    "timestamp": "2026-01-29T20:29:22.522741"
+    "timestamp": "2026-07-20T19:53:00.495920"
   },
   {
-    "test": "Admin Authorization",
+    "test": "GET Products (regression)",
     "success": true,
-    "message": "Regular user properly denied admin access",
+    "message": "Retrieved 4 products",
     "details": null,
-    "timestamp": "2026-01-29T20:29:22.765465"
+    "timestamp": "2026-07-20T19:53:01.271771"
   },
   {
-    "test": "Public Plans",
+    "test": "GET Categories (regression)",
     "success": true,
-    "message": "Retrieved 4 plans",
+    "message": "Retrieved 2 categories",
     "details": null,
-    "timestamp": "2026-01-29T20:29:22.948625"
+    "timestamp": "2026-07-20T19:53:01.538652"
   },
   {
-    "test": "Public Store",
+    "test": "GET Orders (regression)",
     "success": true,
-    "message": "Retrieved store data for slug",
+    "message": "Retrieved 9 orders",
     "details": null,
-    "timestamp": "2026-01-29T20:29:23.726097"
-  },
-  {
-    "test": "Info Content",
-    "success": true,
-    "message": "Retrieved 0 info content items",
-    "details": null,
-    "timestamp": "2026-01-29T20:29:23.890364"
-  },
-  {
-    "test": "User Signout",
-    "success": false,
-    "message": "User signout failed with status 520",
-    "details": null,
-    "timestamp": "2026-01-29T20:29:23.909256"
+    "timestamp": "2026-07-20T19:53:01.803450"
   }
 ]

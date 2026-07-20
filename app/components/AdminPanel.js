@@ -73,6 +73,34 @@ export default function AdminPanel({ user, profile, onLogout }) {
   const supabase = createClient()
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
 
+  // Change password (developer account)
+  const [pwData, setPwData] = useState({ new: '', confirm: '' })
+  const [changingPw, setChangingPw] = useState(false)
+  const changeDevPassword = async () => {
+    if (!pwData.new || pwData.new.length < 6) {
+      toast.error('La contraseña debe tener al menos 6 caracteres')
+      return
+    }
+    if (pwData.new !== pwData.confirm) {
+      toast.error('Las contraseñas no coinciden')
+      return
+    }
+    setChangingPw(true)
+    try {
+      const { error } = await supabase.auth.updateUser({ password: pwData.new })
+      if (error) {
+        toast.error(error.message || 'Error al cambiar la contraseña')
+      } else {
+        toast.success('Contraseña actualizada correctamente')
+        setPwData({ new: '', confirm: '' })
+      }
+    } catch (e) {
+      toast.error('Error al cambiar la contraseña')
+    } finally {
+      setChangingPw(false)
+    }
+  }
+
   useEffect(() => {
     loadData()
     loadSoftwareSettings()
@@ -832,6 +860,38 @@ export default function AdminPanel({ user, profile, onLogout }) {
                 </div>
                 <Button onClick={saveSoftwareSettings}>
                   Guardar Configuración
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Change Password (developer) */}
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Key className="w-5 h-5" /> Cambiar contraseña</CardTitle>
+                <CardDescription>Actualiza la contraseña de tu cuenta de desarrollador</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4 max-w-md">
+                <div>
+                  <Label>Nueva contraseña</Label>
+                  <Input
+                    type="password"
+                    placeholder="Mínimo 6 caracteres"
+                    value={pwData.new}
+                    onChange={(e) => setPwData({ ...pwData, new: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label>Confirmar contraseña</Label>
+                  <Input
+                    type="password"
+                    placeholder="Repite la contraseña"
+                    value={pwData.confirm}
+                    onChange={(e) => setPwData({ ...pwData, confirm: e.target.value })}
+                  />
+                </div>
+                <Button onClick={changeDevPassword} disabled={changingPw} variant="outline">
+                  {changingPw && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                  Cambiar contraseña
                 </Button>
               </CardContent>
             </Card>

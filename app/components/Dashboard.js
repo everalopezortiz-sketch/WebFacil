@@ -23,7 +23,7 @@ import {
   Plus, Pencil, Trash2, Loader2, Image, DollarSign, Tag,
   MessageSquare, Bell, QrCode, Link2, Copy, ExternalLink,
   Calendar, TrendingUp, Users, Store, AlertTriangle, X, Check,
-  Phone, Mail, MapPin, CreditCard, Truck, Eye, FileText, Boxes
+  Phone, Mail, MapPin, CreditCard, Truck, Eye, FileText, Boxes, Home, Lock
 } from 'lucide-react'
 
 const CURRENCIES = [
@@ -71,7 +71,7 @@ async function authFetch(supabase, url, options = {}) {
 }
 
 export default function Dashboard({ user, profile, onLogout }) {
-  const [activeTab, setActiveTab] = useState('settings')
+  const [activeTab, setActiveTab] = useState('inicio')
   const [settings, setSettings] = useState(null)
   const [categories, setCategories] = useState([])
   const [products, setProducts] = useState([])
@@ -114,7 +114,8 @@ export default function Dashboard({ user, profile, onLogout }) {
         loadCheckoutFields(),
         loadMessages(),
         loadUserPlan(),
-        loadInfoContent()
+        loadInfoContent(),
+        loadStats()
       ])
     } catch (error) {
       console.error('Error loading data:', error)
@@ -173,6 +174,58 @@ export default function Dashboard({ user, profile, onLogout }) {
     if (reportDateRange.end) params.set('endDate', reportDateRange.end)
     const res = await fetch(`/api/reports?${params}`)
     if (res.ok) setReports(await res.json())
+  }
+
+  // Dashboard stats (visits, sales, low stock)
+  const [stats, setStats] = useState(null)
+  const [statsLoading, setStatsLoading] = useState(false)
+  const loadStats = async () => {
+    setStatsLoading(true)
+    try {
+      const res = await authFetch(supabase, '/api/dashboard-stats')
+      if (res.ok) setStats(await res.json())
+    } catch (e) {
+      console.error('Stats error:', e)
+    } finally {
+      setStatsLoading(false)
+    }
+  }
+
+  // Manual sale
+  const [manualSale, setManualSale] = useState({ open: false, customerName: '', description: '', total: '', saleDate: today })
+  const [savingSale, setSavingSale] = useState(false)
+  const saveManualSale = async () => {
+    if (!manualSale.total || parseFloat(manualSale.total) <= 0) {
+      toast.error('Ingresa el monto de la venta')
+      return
+    }
+    setSavingSale(true)
+    try {
+      const res = await authFetch(supabase, '/api/orders/manual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customerName: manualSale.customerName || 'Venta directa',
+          description: manualSale.description,
+          total: manualSale.total,
+          saleDate: manualSale.saleDate,
+          items: manualSale.description ? [{ productName: manualSale.description, quantity: 1, unitPrice: parseFloat(manualSale.total), subtotal: parseFloat(manualSale.total) }] : []
+        })
+      })
+      if (res.ok) {
+        toast.success('Venta registrada')
+        setManualSale({ open: false, customerName: '', description: '', total: '', saleDate: today })
+        loadOrders(orderDateFilter)
+        loadStats()
+      } else {
+        const err = await res.json()
+        toast.error(err.error || 'Error al registrar venta')
+      }
+    } catch (e) {
+      toast.error('Error de conexión')
+    } finally {
+      setSavingSale(false)
+    }
   }
 
   // Update order status
@@ -245,7 +298,7 @@ export default function Dashboard({ user, profile, onLogout }) {
   const saveSettings = async () => {
     setSaving(true)
     try {
-      const res = await fetch('/api/settings', {
+      const res = await authFetch(supabase, '/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(settings)
@@ -263,6 +316,34 @@ export default function Dashboard({ user, profile, onLogout }) {
       toast.error('Error de conexión')
     } finally {
       setSaving(false)
+    }
+  }
+
+  // Change password (Supabase auth)
+  const [passwordData, setPasswordData] = useState({ new: '', confirm: '' })
+  const [changingPassword, setChangingPassword] = useState(false)
+  const changePassword = async () => {
+    if (!passwordData.new || passwordData.new.length < 6) {
+      toast.error('La contraseña debe tener al menos 6 caracteres')
+      return
+    }
+    if (passwordData.new !== passwordData.confirm) {
+      toast.error('Las contraseñas no coinciden')
+      return
+    }
+    setChangingPassword(true)
+    try {
+      const { error } = await supabase.auth.updateUser({ password: passwordData.new })
+      if (error) {
+        toast.error(error.message || 'Error al cambiar la contraseña')
+      } else {
+        toast.success('Contraseña actualizada correctamente')
+        setPasswordData({ new: '', confirm: '' })
+      }
+    } catch (e) {
+      toast.error('Error al cambiar la contraseña')
+    } finally {
+      setChangingPassword(false)
     }
   }
 
@@ -423,7 +504,7 @@ export default function Dashboard({ user, profile, onLogout }) {
               <businessConfig.icon className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="font-bold text-lg">{profile.first_name} {profile.last_name}</h1>
+              <h1 className="font-bold text-lg">{settings?.store_name || `${profile.first_name} ${profile.last_name}`}</h1>
               <p className="text-xs text-muted-foreground">{businessConfig.label}</p>
             </div>
           </div>
@@ -491,6 +572,9 @@ export default function Dashboard({ user, profile, onLogout }) {
       <main className="container mx-auto px-4 py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="mb-6 flex-wrap h-auto gap-1 bg-white/60 backdrop-blur p-1.5 shadow-sm">
+            <TabsTrigger value="inicio" className="gap-2 data-[state=active]:gradient-brand data-[state=active]:text-white data-[state=active]:shadow-md">
+              <Home className="w-4 h-4" /> Inicio
+            </TabsTrigger>
             <TabsTrigger value="settings" className="gap-2 data-[state=active]:gradient-brand data-[state=active]:text-white data-[state=active]:shadow-md">
               <Settings className="w-4 h-4" /> Configuración
             </TabsTrigger>
@@ -513,6 +597,86 @@ export default function Dashboard({ user, profile, onLogout }) {
               <Globe className="w-4 h-4" /> Mi Web
             </TabsTrigger>
           </TabsList>
+
+          {/* Inicio / Dashboard Tab */}
+          <TabsContent value="inicio">
+            <div className="space-y-6">
+              {/* Low stock alert */}
+              {stats?.lowStock?.length > 0 && (
+                <Card className="border-amber-200 bg-amber-50">
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="font-semibold text-amber-800">Alerta de stock bajo</p>
+                        <p className="text-sm text-amber-700 mb-2">{stats.lowStock.length} producto(s) con poco inventario</p>
+                        <div className="flex flex-wrap gap-2">
+                          {stats.lowStock.map(p => (
+                            <Badge key={p.id} className={`${p.stock_quantity <= 0 ? 'bg-red-500' : 'bg-amber-500'} text-white`}>
+                              {p.name}: {p.stock_quantity <= 0 ? 'Agotado' : p.stock_quantity}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                      <Button size="sm" variant="outline" onClick={() => setActiveTab('stock')}>Ver stock</Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Stat cards */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <Card className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white border-0">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 opacity-90 mb-1"><Eye className="w-4 h-4" /><span className="text-xs">Visitas hoy</span></div>
+                    <p className="text-3xl font-extrabold">{stats?.visitsToday ?? 0}</p>
+                    <p className="text-xs opacity-80 mt-1">{stats?.visitsWeek ?? 0} esta semana</p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-gradient-to-br from-emerald-500 to-teal-600 text-white border-0">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 opacity-90 mb-1"><DollarSign className="w-4 h-4" /><span className="text-xs">Ventas hoy</span></div>
+                    <p className="text-2xl font-extrabold">{formatPrice(stats?.salesToday ?? 0)}</p>
+                    <p className="text-xs opacity-80 mt-1">{stats?.ordersToday ?? 0} pedidos</p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-gradient-to-br from-orange-500 to-amber-600 text-white border-0">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 opacity-90 mb-1"><TrendingUp className="w-4 h-4" /><span className="text-xs">Ventas semana</span></div>
+                    <p className="text-2xl font-extrabold">{formatPrice(stats?.salesWeek ?? 0)}</p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-gradient-to-br from-pink-500 to-rose-600 text-white border-0">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 opacity-90 mb-1"><Eye className="w-4 h-4" /><span className="text-xs">Visitas totales</span></div>
+                    <p className="text-3xl font-extrabold">{stats?.visitsTotal ?? 0}</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Charts */}
+              <div className="grid lg:grid-cols-2 gap-6">
+                <Card>
+                  <CardHeader><CardTitle className="text-base flex items-center gap-2"><DollarSign className="w-4 h-4 text-emerald-600" /> Ventas últimos 7 días</CardTitle></CardHeader>
+                  <CardContent>
+                    <BarChart data={stats?.salesByDay || []} valueKey="total" color="#10b981" formatValue={formatPrice} />
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader><CardTitle className="text-base flex items-center gap-2"><Eye className="w-4 h-4 text-indigo-600" /> Visitas últimos 7 días</CardTitle></CardHeader>
+                  <CardContent>
+                    <BarChart data={stats?.visitsByDay || []} valueKey="count" color="#6366f1" formatValue={(v) => v} />
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="flex justify-end">
+                <Button variant="outline" size="sm" onClick={loadStats} disabled={statsLoading}>
+                  {statsLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />} Actualizar
+                </Button>
+              </div>
+            </div>
+          </TabsContent>
 
           {/* Settings Tab */}
           <TabsContent value="settings">
@@ -710,6 +874,15 @@ export default function Dashboard({ user, profile, onLogout }) {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div>
+                    <Label>Nombre de la tienda</Label>
+                    <Input
+                      placeholder="Ej: Tienda Ever López"
+                      value={settings?.store_name || ''}
+                      onChange={(e) => setSettings({ ...settings, store_name: e.target.value })}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Este nombre se mostrará en tu tienda pública</p>
+                  </div>
+                  <div>
                     <Label>Descripción de tu negocio</Label>
                     <Textarea
                       placeholder="Describe tu negocio o tienda..."
@@ -863,10 +1036,12 @@ export default function Dashboard({ user, profile, onLogout }) {
                         onCheckedChange={(v) => setSettings({ ...settings, payment_qr_enabled: v })}
                       />
                     </div>
-                    <Input
-                      placeholder="https://ejemplo.com/qr.png"
+                    <ImageUpload
+                      label="Imagen del QR"
                       value={settings?.payment_qr_url || ''}
-                      onChange={(e) => setSettings({ ...settings, payment_qr_url: e.target.value })}
+                      onChange={(v) => setSettings({ ...settings, payment_qr_url: v })}
+                      aspect="square"
+                      maxSizeMB={0.4}
                     />
                   </div>
                 </CardContent>
@@ -890,6 +1065,38 @@ export default function Dashboard({ user, profile, onLogout }) {
                       Incluye el código de país sin espacios (ej: +595991123456)
                     </p>
                   </div>
+                </CardContent>
+              </Card>
+
+              {/* Change Password */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Seguridad</CardTitle>
+                  <CardDescription>Cambia la contraseña de tu cuenta</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <Label>Nueva contraseña</Label>
+                    <Input
+                      type="password"
+                      placeholder="Mínimo 6 caracteres"
+                      value={passwordData.new}
+                      onChange={(e) => setPasswordData({ ...passwordData, new: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label>Confirmar contraseña</Label>
+                    <Input
+                      type="password"
+                      placeholder="Repite la contraseña"
+                      value={passwordData.confirm}
+                      onChange={(e) => setPasswordData({ ...passwordData, confirm: e.target.value })}
+                    />
+                  </div>
+                  <Button onClick={changePassword} disabled={changingPassword} variant="outline">
+                    {changingPassword && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                    Cambiar contraseña
+                  </Button>
                 </CardContent>
               </Card>
             </div>
@@ -1149,9 +1356,12 @@ export default function Dashboard({ user, profile, onLogout }) {
           <TabsContent value="orders">
             <Card>
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>Pedidos</CardTitle>
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <CardTitle>Pedidos y Ventas</CardTitle>
                   <div className="flex items-center gap-2">
+                    <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => setManualSale({ open: true, customerName: '', description: '', total: '', saleDate: today })}>
+                      <Plus className="w-4 h-4 mr-1" /> Cargar venta
+                    </Button>
                     <Input
                       type="date"
                       value={orderDateFilter}
@@ -1171,31 +1381,25 @@ export default function Dashboard({ user, profile, onLogout }) {
               </CardHeader>
               <CardContent>
                 {/* Order Status Tabs */}
-                <Tabs defaultValue="pending" className="w-full">
-                  <TabsList className="grid grid-cols-4 mb-4">
-                    <TabsTrigger value="pending" className="text-xs sm:text-sm">
+                <Tabs defaultValue="nuevos" className="w-full">
+                  <TabsList className="grid grid-cols-2 mb-4">
+                    <TabsTrigger value="nuevos" className="text-sm">
                       Nuevos
-                      {orders.filter(o => o.status === 'pending').length > 0 && (
-                        <Badge className="ml-1 bg-yellow-500">{orders.filter(o => o.status === 'pending').length}</Badge>
+                      {orders.filter(o => !['delivered', 'cancelled'].includes(o.status)).length > 0 && (
+                        <Badge className="ml-1 bg-yellow-500">{orders.filter(o => !['delivered', 'cancelled'].includes(o.status)).length}</Badge>
                       )}
                     </TabsTrigger>
-                    <TabsTrigger value="preparing" className="text-xs sm:text-sm">
-                      Preparando
-                      {orders.filter(o => o.status === 'preparing' || o.status === 'confirmed').length > 0 && (
-                        <Badge className="ml-1 bg-orange-500">{orders.filter(o => o.status === 'preparing' || o.status === 'confirmed').length}</Badge>
-                      )}
-                    </TabsTrigger>
-                    <TabsTrigger value="ready" className="text-xs sm:text-sm">
-                      Listo/Delivery
-                    </TabsTrigger>
-                    <TabsTrigger value="delivered" className="text-xs sm:text-sm">
+                    <TabsTrigger value="entregados" className="text-sm">
                       Entregados
+                      {orders.filter(o => o.status === 'delivered').length > 0 && (
+                        <Badge className="ml-1 bg-green-500">{orders.filter(o => o.status === 'delivered').length}</Badge>
+                      )}
                     </TabsTrigger>
                   </TabsList>
 
-                  {/* Pending Orders */}
-                  <TabsContent value="pending">
-                    {orders.filter(o => o.status === 'pending').length === 0 ? (
+                  {/* Nuevos */}
+                  <TabsContent value="nuevos">
+                    {orders.filter(o => !['delivered', 'cancelled'].includes(o.status)).length === 0 ? (
                       <div className="text-center py-8 text-muted-foreground">
                         <ShoppingCart className="w-12 h-12 mx-auto mb-2 opacity-50" />
                         <p>No hay pedidos nuevos</p>
@@ -1203,7 +1407,7 @@ export default function Dashboard({ user, profile, onLogout }) {
                     ) : (
                       <ScrollArea className="h-[400px]">
                         <div className="space-y-4">
-                          {orders.filter(o => o.status === 'pending').map(order => (
+                          {orders.filter(o => !['delivered', 'cancelled'].includes(o.status)).map(order => (
                             <OrderCard 
                               key={order.id} 
                               order={order} 
@@ -1213,8 +1417,8 @@ export default function Dashboard({ user, profile, onLogout }) {
                               onDelete={() => deleteOrder(order.id)}
                               actions={
                                 <>
-                                  <Button size="sm" className="bg-blue-500 hover:bg-blue-600 text-white" onClick={() => updateOrderStatus(order.id, 'confirmed')}>
-                                    <Check className="w-4 h-4 mr-1" /> Confirmar
+                                  <Button size="sm" className="bg-green-500 hover:bg-green-600 text-white" onClick={() => updateOrderStatus(order.id, 'delivered')}>
+                                    <Truck className="w-4 h-4 mr-1" /> Marcar Entregado
                                   </Button>
                                   <Button size="sm" variant="outline" className="text-red-600" onClick={() => updateOrderStatus(order.id, 'cancelled')}>
                                     <X className="w-4 h-4 mr-1" /> Cancelar
@@ -1228,72 +1432,12 @@ export default function Dashboard({ user, profile, onLogout }) {
                     )}
                   </TabsContent>
 
-                  {/* Preparing Orders */}
-                  <TabsContent value="preparing">
-                    {orders.filter(o => o.status === 'preparing' || o.status === 'confirmed').length === 0 ? (
-                      <div className="text-center py-8 text-muted-foreground">
-                        <ShoppingCart className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                        <p>No hay pedidos en preparación</p>
-                      </div>
-                    ) : (
-                      <ScrollArea className="h-[400px]">
-                        <div className="space-y-4">
-                          {orders.filter(o => o.status === 'preparing' || o.status === 'confirmed').map(order => (
-                            <OrderCard 
-                              key={order.id} 
-                              order={order} 
-                              formatPrice={formatPrice}
-                              onView={() => setOrderDialog({ open: true, data: order })}
-                              onReceipt={() => setReceiptOrder(order)}
-                              onDelete={() => deleteOrder(order.id)}
-                              actions={
-                                <Button size="sm" className="bg-cyan-500 hover:bg-cyan-600 text-white" onClick={() => updateOrderStatus(order.id, 'ready')}>
-                                  <Check className="w-4 h-4 mr-1" /> Listo para Entrega
-                                </Button>
-                              }
-                            />
-                          ))}
-                        </div>
-                      </ScrollArea>
-                    )}
-                  </TabsContent>
-
-                  {/* Ready Orders */}
-                  <TabsContent value="ready">
-                    {orders.filter(o => o.status === 'ready').length === 0 ? (
-                      <div className="text-center py-8 text-muted-foreground">
-                        <ShoppingCart className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                        <p>No hay pedidos listos</p>
-                      </div>
-                    ) : (
-                      <ScrollArea className="h-[400px]">
-                        <div className="space-y-4">
-                          {orders.filter(o => o.status === 'ready').map(order => (
-                            <OrderCard 
-                              key={order.id} 
-                              order={order} 
-                              formatPrice={formatPrice}
-                              onView={() => setOrderDialog({ open: true, data: order })}
-                              onReceipt={() => setReceiptOrder(order)}
-                              onDelete={() => deleteOrder(order.id)}
-                              actions={
-                                <Button size="sm" className="bg-green-500 hover:bg-green-600 text-white" onClick={() => updateOrderStatus(order.id, 'delivered')}>
-                                  <Truck className="w-4 h-4 mr-1" /> Marcar Entregado
-                                </Button>
-                              }
-                            />
-                          ))}
-                        </div>
-                      </ScrollArea>
-                    )}
-                  </TabsContent>
-
-                  {/* Delivered Orders */}
-                  <TabsContent value="delivered">
+                  {/* Entregados */}
+                  <TabsContent value="entregados">
                     {orders.filter(o => o.status === 'delivered').length === 0 ? (
                       <div className="text-center py-8 text-muted-foreground">
                         <ShoppingCart className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                        <p>No hay pedidos entregados</p>
+                        <p>No hay ventas entregadas</p>
                       </div>
                     ) : (
                       <ScrollArea className="h-[400px]">
@@ -1307,7 +1451,12 @@ export default function Dashboard({ user, profile, onLogout }) {
                               onReceipt={() => setReceiptOrder(order)}
                               onDelete={() => deleteOrder(order.id)}
                               actions={
-                                <Badge className="bg-green-100 text-green-700">✓ Entregado</Badge>
+                                <>
+                                  <Badge className="bg-green-100 text-green-700">✓ Entregado</Badge>
+                                  <Button size="sm" variant="outline" onClick={() => updateOrderStatus(order.id, 'pending')}>
+                                    Reabrir
+                                  </Button>
+                                </>
                               }
                             />
                           ))}
@@ -1504,9 +1653,60 @@ export default function Dashboard({ user, profile, onLogout }) {
         </DialogContent>
       </Dialog>
 
+      {/* Manual Sale Dialog */}
+      <Dialog open={manualSale.open} onOpenChange={(open) => setManualSale({ ...manualSale, open })}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cargar venta del día</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 p-1">
+            <div>
+              <Label>Monto de la venta *</Label>
+              <Input
+                type="number"
+                step="0.01"
+                placeholder="0"
+                value={manualSale.total}
+                onChange={(e) => setManualSale({ ...manualSale, total: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>Descripción / producto</Label>
+              <Input
+                placeholder="Ej: Venta mostrador, 2 camisas..."
+                value={manualSale.description}
+                onChange={(e) => setManualSale({ ...manualSale, description: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>Cliente (opcional)</Label>
+              <Input
+                placeholder="Venta directa"
+                value={manualSale.customerName}
+                onChange={(e) => setManualSale({ ...manualSale, customerName: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>Fecha de la venta</Label>
+              <Input
+                type="date"
+                value={manualSale.saleDate}
+                onChange={(e) => setManualSale({ ...manualSale, saleDate: e.target.value })}
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setManualSale({ ...manualSale, open: false })}>Cancelar</Button>
+              <Button onClick={saveManualSale} disabled={savingSale} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+                {savingSale && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                Registrar venta
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Product Dialog */}
-      <Dialog open={productDialog.open} onOpenChange={(open) => setProductDialog({ ...productDialog, open })}>
-        <DialogContent className="max-w-2xl">
+      <Dialog open={productDialog.open} onOpenChange={(open) => setProductDialog({ ...productDialog, open })}>        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>{productDialog.data?.id ? 'Editar' : 'Nuevo'} {businessConfig.productLabel.slice(0, -1)}</DialogTitle>
           </DialogHeader>
@@ -2001,3 +2201,33 @@ function OrderCard({ order, formatPrice, onView, onDelete, onReceipt, actions })
     </Card>
   )
 }
+
+// Simple bar chart (no external dependency)
+function BarChart({ data, valueKey, color, formatValue }) {
+  const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+  if (!data || data.length === 0) {
+    return <p className="text-sm text-muted-foreground text-center py-8">Sin datos aún</p>
+  }
+  const max = Math.max(...data.map(d => Number(d[valueKey]) || 0), 1)
+  return (
+    <div className="flex items-end justify-between gap-2 h-40 pt-4">
+      {data.map((d, i) => {
+        const val = Number(d[valueKey]) || 0
+        const heightPct = Math.round((val / max) * 100)
+        const dayLabel = dayNames[new Date(d.date + 'T00:00:00').getDay()]
+        return (
+          <div key={i} className="flex-1 flex flex-col items-center gap-1 h-full justify-end">
+            <span className="text-[10px] font-semibold text-gray-600">{val > 0 ? (formatValue ? formatValue(val) : val) : ''}</span>
+            <div
+              className="w-full rounded-t-md transition-all min-h-[2px]"
+              style={{ height: `${Math.max(heightPct, val > 0 ? 6 : 2)}%`, backgroundColor: val > 0 ? color : '#e5e7eb' }}
+              title={`${dayLabel}: ${formatValue ? formatValue(val) : val}`}
+            />
+            <span className="text-[10px] text-gray-500">{dayLabel}</span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
