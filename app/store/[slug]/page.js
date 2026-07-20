@@ -16,7 +16,8 @@ import {
   Phone, Store, User, Utensils, Loader2,
   MessageCircle, QrCode, Building,
   Star, Tag, Truck, Banknote, Link2, Search, Clock,
-  ChevronLeft, ChevronRight, ZoomIn
+  ChevronLeft, ChevronRight, ZoomIn,
+  Heart, ShieldCheck, BadgeCheck, Home, LayoutGrid, Award, Zap, Flame
 } from 'lucide-react'
 import { normalizeImageSrc, parseImages } from '@/lib/imageUtils'
 
@@ -327,148 +328,147 @@ export default function StorePage() {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: bgColor, color: textColor }}>
-      {/* Header with Cover */}
+      {/* Hero Banner */}
       <header className="relative">
-        <div className="h-44 md:h-56 relative overflow-hidden">
-          {settings?.cover_image_url ? (
+        <div className="relative h-52 md:h-64 overflow-hidden rounded-b-[2rem] bg-gradient-to-br from-indigo-700 via-purple-700 to-fuchsia-700">
+          {settings?.cover_image_url && (
             <img 
               src={normalizeImageSrc(settings.cover_image_url)}
               alt="Portada"
               className="w-full h-full object-cover"
-              style={{ objectPosition: 'center' }}
-              onError={(e) => { 
-                e.target.onerror = null
-                e.target.src = ''
-                e.target.parentElement.style.backgroundColor = buttonColor
-              }}
+              onError={(e) => { e.target.onerror = null; e.target.style.display = 'none' }}
             />
-          ) : (
-            <div className="w-full h-full" style={{ backgroundColor: buttonColor }}>
-              <div className="absolute inset-0 flex items-center justify-center opacity-20">
-                <BusinessIcon className="w-32 h-32 text-white" />
-              </div>
-            </div>
           )}
-          <div className="absolute inset-0 bg-gradient-to-b from-black/10 to-black/40" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent" />
+          {/* Floating actions */}
+          <div className="absolute top-4 right-4 flex items-center gap-3">
+            <button 
+              onClick={() => document.getElementById('store-search')?.focus()}
+              className="w-12 h-12 rounded-full bg-white shadow-lg flex items-center justify-center text-indigo-700 active:scale-95 transition"
+            >
+              <Search className="w-5 h-5" />
+            </button>
+            <button 
+              onClick={() => setCartOpen(true)}
+              className="relative w-12 h-12 rounded-full bg-white shadow-lg flex items-center justify-center text-indigo-700 active:scale-95 transition"
+            >
+              <ShoppingCart className="w-5 h-5" />
+              {cartCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-6 h-6 px-1 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center border-2 border-white">{cartCount}</span>
+              )}
+            </button>
+          </div>
         </div>
-        
-        {/* Profile Info */}
+
+        {/* Profile Card */}
         <div className="container mx-auto px-4">
-          <div className="flex items-end gap-4 -mt-14 relative z-10">
-            <div className="w-24 h-24 md:w-28 md:h-28 rounded-2xl bg-white shadow-xl overflow-hidden border-4 border-white flex-shrink-0">
-              {settings?.logo_url ? (
-                <img 
-                  src={normalizeImageSrc(settings.logo_url)}
-                  alt="Logo"
-                  className="w-full h-full object-cover"
-                  onError={(e) => { 
-                    e.target.onerror = null
-                    e.target.style.display = 'none'
-                    e.target.nextSibling.style.display = 'flex'
-                  }}
-                />
-              ) : null}
-              <div 
-                className={`w-full h-full items-center justify-center ${settings?.logo_url ? 'hidden' : 'flex'}`}
-                style={{ backgroundColor: buttonColor }}
-              >
-                <BusinessIcon className="w-12 h-12 text-white" />
+          <div className="bg-white rounded-3xl shadow-xl -mt-6 relative z-10 p-5">
+            <div className="flex items-center gap-4">
+              <div className="p-[3px] rounded-full bg-gradient-to-tr from-fuchsia-500 via-purple-500 to-indigo-500 flex-shrink-0">
+                <div className="w-20 h-20 rounded-full bg-white overflow-hidden flex items-center justify-center">
+                  {settings?.logo_url ? (
+                    <img 
+                      src={normalizeImageSrc(settings.logo_url)}
+                      alt="Logo"
+                      className="w-full h-full object-cover"
+                      onError={(e) => { e.target.onerror = null; e.target.style.display = 'none'; e.target.nextSibling && (e.target.nextSibling.style.display = 'flex') }}
+                    />
+                  ) : null}
+                  <div className={`w-full h-full items-center justify-center ${settings?.logo_url ? 'hidden' : 'flex'}`}>
+                    <BusinessIcon className="w-9 h-9 text-indigo-600" />
+                  </div>
+                </div>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <h1 className="text-xl font-extrabold text-gray-900 truncate">{profile.first_name} {profile.last_name}</h1>
+                  <BadgeCheck className="w-5 h-5 text-blue-500 flex-shrink-0" />
+                </div>
+                {settings?.store_description && (
+                  <p className="text-sm font-semibold text-indigo-600 truncate">{settings.store_description}</p>
+                )}
+                <div className="flex items-center gap-3 mt-2 text-sm">
+                  <div className="flex items-center gap-1">
+                    <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
+                    <span className="font-bold text-gray-800">Verificada</span>
+                  </div>
+                  <span className="w-px h-4 bg-gray-200" />
+                  <div className="flex items-center gap-1 text-gray-500">
+                    <ShoppingCart className="w-4 h-4" />
+                    <span className="font-semibold">{products.length} productos</span>
+                  </div>
+                </div>
               </div>
             </div>
-            <div className="pb-3 flex-1 min-w-0">
-              <h1 className="text-xl md:text-2xl font-bold truncate">
-                {profile.first_name} {profile.last_name}
-              </h1>
-              {settings?.store_description && (
-                <p className="text-sm opacity-70 line-clamp-2 mt-1">{settings.store_description}</p>
-              )}
+            {/* Trust pill */}
+            <div className="mt-4 flex items-center gap-3 bg-indigo-50 rounded-2xl p-4">
+              <ShieldCheck className="w-7 h-7 text-indigo-600 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-gray-900 text-sm">Tu tienda de confianza</p>
+                <p className="text-xs text-gray-500">Miles de clientes satisfechos</p>
+              </div>
+              <ChevronRight className="w-5 h-5 text-gray-400" />
             </div>
           </div>
         </div>
       </header>
 
-      {/* Search Bar */}
-      <div className="sticky top-0 z-30 bg-white/95 backdrop-blur shadow-sm border-b">
-        <div className="container mx-auto px-4 py-3">
-          <div className="flex items-center gap-3">
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <Input
-                placeholder={`Buscar ${businessConfig.productLabel.toLowerCase()}...`}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 rounded-full border-gray-200 bg-gray-50 h-10"
-              />
-              {searchQuery && (
-                <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                  <X className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-            {settings?.whatsapp_number && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="rounded-full border-green-500 text-green-600 hover:bg-green-50 gap-1.5 h-10"
-                onClick={() => window.open(`https://wa.me/${settings.whatsapp_number.replace(/\D/g, '')}`, '_blank')}
-              >
-                <Phone className="w-4 h-4" />
-                <span className="hidden sm:inline">Contactar</span>
-              </Button>
-            )}
+      {/* Search + Categories + Trust */}
+      <div className="container mx-auto px-4 mt-5">
+        {/* Search pill */}
+        <div className="relative">
+          <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+          <Input
+            id="store-search"
+            placeholder="Buscar productos..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-14 pr-16 h-14 rounded-full border-0 bg-gray-100 text-base shadow-sm focus-visible:ring-2 focus-visible:ring-indigo-400"
+          />
+          {searchQuery ? (
+            <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center">
+              <X className="w-5 h-5" />
+            </button>
+          ) : (
+            <button className="absolute right-2 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow-md">
+              <Search className="w-5 h-5" />
+            </button>
+          )}
+        </div>
+
+        {/* Category icons */}
+        <div className="flex gap-3 mt-5 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
+          <CatPill active={selectedCategory === 'all'} onClick={() => setSelectedCategory('all')} icon={LayoutGrid} label="Todos" />
+          {products.some(p => p.promo_active) && (
+            <CatPill active={selectedCategory === 'promo'} onClick={() => setSelectedCategory('promo')} icon={Tag} label="Ofertas" color="#f97316" />
+          )}
+          {products.some(p => p.is_featured) && (
+            <CatPill active={selectedCategory === 'featured'} onClick={() => setSelectedCategory('featured')} icon={Star} label="Destacados" color="#f59e0b" />
+          )}
+          {categories.map(cat => (
+            <CatPill key={cat.id} active={selectedCategory === cat.id} onClick={() => setSelectedCategory(cat.id)} icon={Tag} label={cat.name} />
+          ))}
+        </div>
+
+        {/* Trust banner dark */}
+        <div className="mt-5 rounded-2xl bg-slate-900 text-white py-5 grid grid-cols-3 divide-x divide-white/10">
+          <div className="flex items-center gap-2 px-3">
+            <ShieldCheck className="w-7 h-7 text-indigo-400 flex-shrink-0" />
+            <div className="min-w-0"><p className="font-bold text-xs sm:text-sm leading-tight">Compra segura</p><p className="text-[10px] sm:text-xs text-white/60 leading-tight">Protegemos tu compra</p></div>
           </div>
-          
-          {/* Category Pills */}
-          <div className="flex gap-2 mt-3 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
-            <Button
-              size="sm"
-              variant={selectedCategory === 'all' ? 'default' : 'outline'}
-              className="rounded-full whitespace-nowrap flex-shrink-0 h-8"
-              style={selectedCategory === 'all' ? { backgroundColor: buttonColor, color: 'white' } : {}}
-              onClick={() => setSelectedCategory('all')}
-            >
-              Todos
-            </Button>
-            {products.some(p => p.is_featured) && (
-              <Button
-                size="sm"
-                variant={selectedCategory === 'featured' ? 'default' : 'outline'}
-                className="rounded-full whitespace-nowrap flex-shrink-0 h-8"
-                style={selectedCategory === 'featured' ? { backgroundColor: '#f59e0b', color: 'white' } : {}}
-                onClick={() => setSelectedCategory('featured')}
-              >
-                <Star className="w-3 h-3 mr-1" /> Destacados
-              </Button>
-            )}
-            {products.some(p => p.promo_active) && (
-              <Button
-                size="sm"
-                variant={selectedCategory === 'promo' ? 'default' : 'outline'}
-                className="rounded-full whitespace-nowrap flex-shrink-0 h-8"
-                style={selectedCategory === 'promo' ? { backgroundColor: '#ef4444', color: 'white' } : {}}
-                onClick={() => setSelectedCategory('promo')}
-              >
-                <Tag className="w-3 h-3 mr-1" /> Ofertas
-              </Button>
-            )}
-            {categories.map(cat => (
-              <Button
-                key={cat.id}
-                size="sm"
-                variant={selectedCategory === cat.id ? 'default' : 'outline'}
-                className="rounded-full whitespace-nowrap flex-shrink-0 h-8"
-                style={selectedCategory === cat.id ? { backgroundColor: buttonColor, color: 'white' } : {}}
-                onClick={() => setSelectedCategory(cat.id)}
-              >
-                {cat.name}
-              </Button>
-            ))}
+          <div className="flex items-center gap-2 px-3">
+            <Truck className="w-7 h-7 text-blue-400 flex-shrink-0" />
+            <div className="min-w-0"><p className="font-bold text-xs sm:text-sm leading-tight">Envíos rápidos</p><p className="text-[10px] sm:text-xs text-white/60 leading-tight">A todo el país</p></div>
+          </div>
+          <div className="flex items-center gap-2 px-3">
+            <Award className="w-7 h-7 text-green-400 flex-shrink-0" />
+            <div className="min-w-0"><p className="font-bold text-xs sm:text-sm leading-tight">Garantía</p><p className="text-[10px] sm:text-xs text-white/60 leading-tight">100% originales</p></div>
           </div>
         </div>
       </div>
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-6 pb-28 flex-1">
+      <main className="container mx-auto px-4 py-6 pb-36 flex-1">
         {filteredProducts.length === 0 ? (
           <div className="text-center py-16">
             <Store className="w-16 h-16 mx-auto mb-4 opacity-30" />
@@ -480,12 +480,36 @@ export default function StorePage() {
             {/* Show by category when "all" is selected and no search */}
             {selectedCategory === 'all' && !searchQuery.trim() ? (
               <>
+                {/* Ofertas imperdibles */}
+                {filteredProducts.some(p => p.promo_active) && (
+                  <section>
+                    <div className="flex items-center justify-between mb-4">
+                      <h2 className="text-lg font-extrabold flex items-center gap-2 text-gray-900">
+                        <Flame className="w-5 h-5 text-orange-500" /> Ofertas imperdibles
+                      </h2>
+                      <button onClick={() => setSelectedCategory('promo')} className="text-sm font-bold text-indigo-600 flex items-center gap-0.5">
+                        Ver todas <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <div className="flex gap-4 overflow-x-auto pb-3 -mx-4 px-4 scrollbar-hide">
+                      {filteredProducts.filter(p => p.promo_active).slice(0, 10).map((product, i) => (
+                        <OfferCard key={product.id} product={product} index={i} {...{ addToCart, setProductDetail, formatPrice }} />
+                      ))}
+                    </div>
+                  </section>
+                )}
+
                 {/* Featured */}
                 {filteredProducts.some(p => p.is_featured) && (
                   <section>
-                    <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
-                      <Star className="w-5 h-5 text-amber-500" /> Destacados
-                    </h2>
+                    <div className="flex items-center justify-between mb-4">
+                      <h2 className="text-lg font-extrabold flex items-center gap-2 text-gray-900">
+                        <Star className="w-5 h-5 text-amber-500 fill-amber-400" /> Destacados
+                      </h2>
+                      <button onClick={() => setSelectedCategory('featured')} className="text-sm font-bold text-indigo-600 flex items-center gap-0.5">
+                        Ver todas <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
                     <ProductGrid 
                       products={filteredProducts.filter(p => p.is_featured)} 
                       {...{ addToCart, setProductDetail, formatPrice, getProductPrice, buttonColor, cardSize, gridColumns }}
@@ -499,7 +523,7 @@ export default function StorePage() {
                   if (catProducts.length === 0) return null
                   return (
                     <section key={cat.id}>
-                      <h2 className="text-lg font-bold mb-4">{cat.name}</h2>
+                      <h2 className="text-lg font-extrabold text-gray-900 mb-4">{cat.name}</h2>
                       <ProductGrid 
                         products={catProducts} 
                         {...{ addToCart, setProductDetail, formatPrice, getProductPrice, buttonColor, cardSize, gridColumns }}
@@ -511,7 +535,7 @@ export default function StorePage() {
                 {/* Uncategorized */}
                 {filteredProducts.filter(p => !p.category_id && !p.is_featured).length > 0 && (
                   <section>
-                    <h2 className="text-lg font-bold mb-4">Otros</h2>
+                    <h2 className="text-lg font-extrabold text-gray-900 mb-4">Otros</h2>
                     <ProductGrid 
                       products={filteredProducts.filter(p => !p.category_id && !p.is_featured)} 
                       {...{ addToCart, setProductDetail, formatPrice, getProductPrice, buttonColor, cardSize, gridColumns }}
@@ -521,7 +545,7 @@ export default function StorePage() {
               </>
             ) : (
               <section>
-                <h2 className="text-lg font-bold mb-4">
+                <h2 className="text-lg font-extrabold text-gray-900 mb-4">
                   {searchQuery.trim() ? `Resultados para "${searchQuery}"` :
                    selectedCategory === 'promo' ? 'Ofertas' : 
                    selectedCategory === 'featured' ? 'Destacados' :
@@ -597,10 +621,9 @@ export default function StorePage() {
 
       {/* Floating Cart Button */}
       {cart.length > 0 && (
-        <div className="fixed bottom-20 left-4 right-4 z-40">
+        <div className="fixed bottom-[4.75rem] left-4 right-4 z-40">
           <Button
-            className="w-full py-6 rounded-2xl shadow-2xl text-white font-semibold text-lg"
-            style={{ backgroundColor: buttonColor }}
+            className="w-full py-6 rounded-2xl shadow-2xl text-white font-semibold text-lg bg-indigo-600 hover:bg-indigo-700"
             onClick={() => setCartOpen(true)}
           >
             <ShoppingCart className="w-5 h-5 mr-2" />
@@ -608,6 +631,17 @@ export default function StorePage() {
           </Button>
         </div>
       )}
+
+      {/* Bottom Navigation */}
+      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-100 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
+        <div className="container mx-auto grid grid-cols-5 h-16">
+          <BottomNavItem icon={Home} label="Inicio" active={selectedCategory === 'all' && !searchQuery} onClick={() => { setSelectedCategory('all'); setSearchQuery(''); window.scrollTo({ top: 0, behavior: 'smooth' }) }} />
+          <BottomNavItem icon={LayoutGrid} label="Categorías" active={false} onClick={() => { setSelectedCategory('all'); document.querySelector('.scrollbar-hide')?.scrollIntoView({ behavior: 'smooth', block: 'center' }) }} />
+          <BottomNavItem icon={Tag} label="Ofertas" active={selectedCategory === 'promo'} onClick={() => { setSelectedCategory('promo'); window.scrollTo({ top: 0, behavior: 'smooth' }) }} />
+          <BottomNavItem icon={Heart} label="Favoritos" active={selectedCategory === 'featured'} onClick={() => { setSelectedCategory('featured'); window.scrollTo({ top: 0, behavior: 'smooth' }) }} />
+          <BottomNavItem icon={User} label="Mi cuenta" active={false} onClick={() => { if (settings?.whatsapp_number) { window.open(`https://wa.me/${settings.whatsapp_number.replace(/\D/g, '')}`, '_blank') } else { setCartOpen(true) } }} />
+        </div>
+      </nav>
 
       {/* Product Detail Dialog */}
       <Dialog open={!!productDetail} onOpenChange={(open) => { if (!open) { setProductDetail(null); setProductImageIndex(0) } }}>
@@ -979,6 +1013,82 @@ function ProductGrid({ products, addToCart, setProductDetail, formatPrice, getPr
         </div>
         )
       })}
+    </div>
+  )
+}
+
+
+// Category pill with icon
+function CatPill({ active, onClick, icon: Icon, label, color }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex-shrink-0 w-24 rounded-2xl border p-3 flex flex-col items-center gap-2 transition ${active ? 'bg-indigo-50 border-indigo-300 shadow-sm' : 'bg-white border-gray-100 hover:border-gray-200'}`}
+    >
+      <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${active ? 'bg-indigo-100' : 'bg-gray-50'}`}>
+        <Icon className="w-5 h-5" style={{ color: active ? '#4f46e5' : (color || '#6b7280') }} />
+      </div>
+      <span className={`text-xs font-semibold truncate max-w-full ${active ? 'text-indigo-700' : 'text-gray-600'}`}>{label}</span>
+    </button>
+  )
+}
+
+// Bottom navigation item
+function BottomNavItem({ icon: Icon, label, active, onClick }) {
+  return (
+    <button onClick={onClick} className="flex flex-col items-center justify-center gap-1 transition active:scale-95">
+      <Icon className={`w-5 h-5 ${active ? 'text-indigo-600' : 'text-gray-400'}`} fill={active && (label === 'Favoritos') ? '#4f46e5' : 'none'} />
+      <span className={`text-[11px] font-semibold ${active ? 'text-indigo-600' : 'text-gray-400'}`}>{label}</span>
+    </button>
+  )
+}
+
+// Horizontal gradient offer card
+const OFFER_GRADIENTS = [
+  'from-purple-600 to-indigo-600',
+  'from-orange-500 to-amber-500',
+  'from-fuchsia-600 to-pink-600',
+  'from-cyan-500 to-blue-600',
+  'from-rose-500 to-red-600',
+  'from-emerald-500 to-teal-600',
+]
+function OfferCard({ product, index, addToCart, setProductDetail, formatPrice }) {
+  const imgs = parseImages(product.image_url)
+  const mainImg = imgs[0]
+  const gradient = OFFER_GRADIENTS[index % OFFER_GRADIENTS.length]
+  const discount = (product.promo_price && product.price)
+    ? Math.round((1 - parseFloat(product.promo_price) / parseFloat(product.price)) * 100)
+    : 0
+  const isOut = product.stock_quantity !== null && product.stock_quantity !== undefined && product.stock_quantity <= 0
+  return (
+    <div
+      onClick={() => setProductDetail(product)}
+      className={`flex-shrink-0 w-56 rounded-3xl overflow-hidden cursor-pointer shadow-lg bg-gradient-to-br ${gradient} text-white active:scale-[0.98] transition`}
+    >
+      <div className="relative p-3 h-40 flex items-center justify-center">
+        {discount > 0 && (
+          <span className="absolute top-3 left-3 bg-amber-300 text-amber-900 text-xs font-extrabold px-2.5 py-1 rounded-lg">-{discount}%</span>
+        )}
+        <button
+          onClick={(e) => { e.stopPropagation(); if (!isOut) addToCart(product) }}
+          className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/25 backdrop-blur flex items-center justify-center hover:bg-white/40"
+        >
+          <Heart className="w-4 h-4 text-white" />
+        </button>
+        {mainImg ? (
+          <img src={mainImg} alt={product.name} className={`max-h-32 object-contain drop-shadow-xl ${isOut ? 'opacity-50 grayscale' : ''}`} loading="lazy" onError={(e) => { e.target.style.display = 'none' }} />
+        ) : (
+          <Store className="w-16 h-16 text-white/50" />
+        )}
+        {isOut && <span className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/60 text-white text-xs px-3 py-1 rounded-full">Agotado</span>}
+      </div>
+      <div className="px-4 pb-4">
+        <h3 className="font-bold text-base truncate">{product.name}</h3>
+        <p className="text-xl font-extrabold text-amber-300 mt-1">{formatPrice(product.promo_price || product.price)}</p>
+        {product.promo_price && (
+          <p className="text-sm text-white/70 line-through">{formatPrice(product.price)}</p>
+        )}
+      </div>
     </div>
   )
 }
