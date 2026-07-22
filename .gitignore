@@ -108,3 +108,6 @@ node_modules/@next/swc-linux-arm64-gnu/next-swc.linux-arm64-gnu.node
 credentials.json
 *.key
 .credentials
+
+# Local-only test credentials (never commit to git)
+memory/test_credentials.md

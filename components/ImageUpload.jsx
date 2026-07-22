@@ -6,16 +6,25 @@ import { Button } from '@/components/ui/button'
 import { Upload, X, Loader2, ImageIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { normalizeImageSrc } from '@/lib/imageUtils'
+import { createClient } from '@/lib/supabase'
+
+const BUCKET = 'webfacil-images'
+const ACCEPTED = 'image/avif,image/gif,image/jpeg,image/png,image/webp'
+const ACCEPTED_SET = new Set(['image/avif', 'image/gif', 'image/jpeg', 'image/png', 'image/webp'])
 
 /**
- * Reusable image uploader (gallery upload only).
- *  - Accepts a file from the gallery (drag&drop, file picker)
- *  - Auto-compresses with browser-image-compression
- *  - Returns base64 (data:image/...) through onChange
+ * Reusable image uploader.
+ *  - Compresses in the browser
+ *  - Uploads to Supabase Storage bucket (public) under {user_id}/{folder}/...
+ *  - Returns the PUBLIC URL through onChange (never base64 in DB)
+ *
+ * Props:
+ *  - folder: storage sub-path, e.g. "products", "settings/logo", "settings/cover", "settings/payment-qr"
  */
 export default function ImageUpload({
   value,
   onChange,
+  folder = 'products',
   aspect = 'square',
   label = 'Imagen',
   maxSizeMB = 0.6,
@@ -24,6 +33,7 @@ export default function ImageUpload({
   const inputRef = useRef(null)
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState(0)
+  const supabase = createClient()
 
   const aspectClass = {
     square: 'aspect-square',
@@ -33,8 +43,8 @@ export default function ImageUpload({
 
   const handleFile = async (file) => {
     if (!file) return
-    if (!file.type.startsWith('image/')) {
-      toast.error('Selecciona un archivo de imagen válido')
+    if (!ACCEPTED_SET.has(file.type)) {
+      toast.error('Formato no permitido. Usa AVIF, GIF, JPEG, PNG o WebP')
       return
     }
 
@@ -44,23 +54,57 @@ export default function ImageUpload({
     try {
       const originalSizeKB = (file.size / 1024).toFixed(0)
 
+      // Compress + convert to WebP for maximum savings
       const options = {
         maxSizeMB,
         maxWidthOrHeight: maxWidth,
         useWebWorker: true,
-        initialQuality: 0.85,
+        initialQuality: 0.82,
+        fileType: 'image/webp',
         onProgress: (p) => setProgress(p),
       }
-
       const compressed = await imageCompression(file, options)
       const compressedSizeKB = (compressed.size / 1024).toFixed(0)
 
-      const base64 = await imageCompression.getDataUrlFromFile(compressed)
-      onChange(base64)
+      // Resolve current user for the storage path (RLS restricts writes to owner)
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        toast.error('Sesión expirada, vuelve a iniciar sesión')
+        return
+      }
 
-      toast.success(`Imagen lista (${originalSizeKB}KB → ${compressedSizeKB}KB)`)
+      const now = new Date()
+      const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
+      const uuid = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+      const cleanFolder = folder.replace(/^\/+|\/+$/g, '')
+      const objectPath = `${user.id}/${cleanFolder}/${dateStr}-${uuid}.webp`
+
+      const { error: uploadError } = await supabase
+        .storage
+        .from(BUCKET)
+        .upload(objectPath, compressed, {
+          cacheControl: '31536000',
+          contentType: 'image/webp',
+          upsert: false,
+        })
+
+      if (uploadError) {
+        console.error('Upload error:', uploadError)
+        toast.error('Error al subir la imagen')
+        return
+      }
+
+      const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(objectPath)
+      const publicUrl = pub?.publicUrl
+      if (!publicUrl) {
+        toast.error('No se pudo obtener la URL pública')
+        return
+      }
+
+      onChange(publicUrl)
+      toast.success(`Imagen subida (${originalSizeKB}KB → ${compressedSizeKB}KB)`)
     } catch (err) {
-      console.error('Error compressing image:', err)
+      console.error('Error processing image:', err)
       toast.error('Error al procesar la imagen')
     } finally {
       setUploading(false)
@@ -131,7 +175,7 @@ export default function ImageUpload({
         ) : uploading ? (
           <div className="flex flex-col items-center gap-2 text-muted-foreground">
             <Loader2 className="w-8 h-8 animate-spin text-primary" />
-            <p className="text-sm">Comprimiendo... {progress}%</p>
+            <p className="text-sm">Subiendo... {progress}%</p>
           </div>
         ) : (
           <div className="flex flex-col items-center gap-2 text-muted-foreground p-4 text-center">
@@ -140,7 +184,7 @@ export default function ImageUpload({
             </div>
             <p className="text-sm font-medium">Haz clic para subir</p>
             <p className="text-xs">o arrastra una imagen desde tu galería</p>
-            <p className="text-[10px] opacity-70">Se comprimirá automáticamente</p>
+            <p className="text-[10px] opacity-70">Se comprime y sube automáticamente</p>
           </div>
         )}
       </div>
@@ -148,7 +192,7 @@ export default function ImageUpload({
       <input
         ref={inputRef}
         type="file"
-        accept="image/*"
+        accept={ACCEPTED}
         className="hidden"
         onChange={handleInputChange}
       />

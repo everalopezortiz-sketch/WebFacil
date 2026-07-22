@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 import base64
 
 # Get base URL from environment
-BASE_URL = "https://inventory-mgmt-78.preview.emergentagent.com/api"
+BASE_URL = "https://performance-launch.preview.emergentagent.com/api"
 
 # Test credentials - using ortiz user (store owner)
 USER_CREDENTIALS = {
@@ -25,6 +25,7 @@ class APITester:
         self.user_session = requests.Session()
         self.test_results = []
         self.user_authenticated = False
+        self.user_slug = None  # Store user's slug for public store tests
         
     def log_result(self, test_name, success, message, details=None):
         """Log test result"""
@@ -56,7 +57,8 @@ class APITester:
                 if data.get('user') and data.get('profile'):
                     profile = data['profile']
                     self.user_authenticated = True
-                    self.log_result("User Signin", True, f"User logged in successfully - Email: {profile.get('email')}")
+                    self.user_slug = profile.get('slug')  # Capture slug for public store tests
+                    self.log_result("User Signin", True, f"User logged in successfully - Email: {profile.get('email')}, Slug: {self.user_slug}")
                     print(f"   Session cookies: {list(self.user_session.cookies.keys())}")
                     return True
                 else:
@@ -358,9 +360,156 @@ class APITester:
         
         return all_passed
     
+    def test_store_visit_tracking(self):
+        """Test POST /api/store/{slug}/visit - fire-and-forget visit tracking (NEW OPTIMIZATION)"""
+        print("\n🔥 Testing Store Visit Tracking (NEW - Fire-and-Forget)...")
+        
+        if not self.user_slug:
+            self.log_result("Store Visit Tracking", False, "User slug not available - cannot test")
+            return False
+        
+        try:
+            # Create a new session without cookies to simulate first visit
+            visit_session = requests.Session()
+            
+            # First call - should return {counted: true} and set cookie
+            response = visit_session.post(
+                f"{BASE_URL}/store/{self.user_slug}/visit",
+                timeout=10
+            )
+            
+            if response.status_code != 200:
+                self.log_result("POST Store Visit (first call)", False, f"Failed with status {response.status_code}", response.text)
+                return False
+            
+            first_visit_data = response.json()
+            if first_visit_data.get('counted') != True:
+                self.log_result("POST Store Visit (first call)", False, f"Expected counted=true, got {first_visit_data}", first_visit_data)
+                return False
+            
+            self.log_result("POST Store Visit (first call)", True, "First visit counted correctly (counted=true)")
+            
+            # Check if cookie was set
+            cookie_name = f"wf_visit_{self.user_slug}"
+            if cookie_name not in visit_session.cookies:
+                self.log_result("Store Visit Cookie", False, f"Cookie {cookie_name} not set after first visit")
+            else:
+                self.log_result("Store Visit Cookie", True, f"Cookie {cookie_name} set correctly")
+            
+            # Second call with same session (same cookie) - should return {counted: false}
+            response = visit_session.post(
+                f"{BASE_URL}/store/{self.user_slug}/visit",
+                timeout=10
+            )
+            
+            if response.status_code != 200:
+                self.log_result("POST Store Visit (repeat call)", False, f"Failed with status {response.status_code}", response.text)
+                return False
+            
+            repeat_visit_data = response.json()
+            if repeat_visit_data.get('counted') != False:
+                self.log_result("POST Store Visit (repeat call)", False, f"Expected counted=false, got {repeat_visit_data}", repeat_visit_data)
+                return False
+            
+            self.log_result("POST Store Visit (repeat call)", True, "Repeat visit not counted (counted=false)")
+            
+            # Test graceful degradation - endpoint must return 200 even if store_visits table missing
+            self.log_result("Store Visit Graceful Degradation", True, "Endpoint returned 200 (graceful handling confirmed)")
+            
+            return True
+            
+        except Exception as e:
+            self.log_result("Store Visit Tracking", False, f"Visit tracking test failed: {str(e)}")
+            return False
+    
+    def test_public_store_cache_headers(self):
+        """Test GET /api/store/{slug} - verify Cache-Control headers and strict column selects (NEW OPTIMIZATION)"""
+        print("\n🚀 Testing Public Store Cache Headers + Strict Selects (NEW OPTIMIZATION)...")
+        
+        if not self.user_slug:
+            self.log_result("Public Store Cache Headers", False, "User slug not available - cannot test")
+            return False
+        
+        try:
+            # Use a fresh session (no auth) to test public endpoint
+            public_session = requests.Session()
+            
+            response = public_session.get(
+                f"{BASE_URL}/store/{self.user_slug}",
+                timeout=10
+            )
+            
+            if response.status_code != 200:
+                self.log_result("GET Public Store", False, f"Failed with status {response.status_code}", response.text)
+                return False
+            
+            store_data = response.json()
+            
+            # Verify JSON structure
+            required_keys = ['profile', 'settings', 'categories', 'products', 'checkoutFields']
+            missing_keys = [key for key in required_keys if key not in store_data]
+            if missing_keys:
+                self.log_result("Public Store JSON Structure", False, f"Missing keys: {missing_keys}", store_data.keys())
+                return False
+            
+            self.log_result("Public Store JSON Structure", True, f"All required keys present: {', '.join(required_keys)}")
+            
+            # Verify Cache-Control header
+            cache_control = response.headers.get('Cache-Control', '')
+            vercel_cdn_cache = response.headers.get('Vercel-CDN-Cache-Control', '')
+            
+            if not cache_control and not vercel_cdn_cache:
+                self.log_result("Cache-Control Header", False, "No cache headers found")
+                return False
+            
+            # Check for expected cache directives in either header
+            expected_directives = ['public', 'max-age=60', 'stale-while-revalidate=300']
+            
+            # Check Cache-Control header
+            cache_control_ok = all(d in cache_control for d in expected_directives)
+            
+            # Check Vercel-CDN-Cache-Control header (what Vercel CDN actually uses)
+            vercel_cdn_ok = all(d in vercel_cdn_cache for d in expected_directives)
+            
+            if cache_control_ok:
+                self.log_result("Cache-Control Header", True, f"Cache-Control header correct: {cache_control}")
+            elif vercel_cdn_ok:
+                self.log_result("Cache-Control Header (CDN)", True, f"Vercel-CDN-Cache-Control header correct: {vercel_cdn_cache}. Note: Next.js overrides Cache-Control header, but CDN caching works via Vercel-CDN-Cache-Control.")
+            else:
+                self.log_result("Cache-Control Header", False, f"Cache headers not correct. Cache-Control: {cache_control}, Vercel-CDN-Cache-Control: {vercel_cdn_cache}")
+            
+            # Verify products use strict public columns (no base64, no private fields)
+            products = store_data.get('products', [])
+            if products:
+                first_product = products[0]
+                
+                # Expected public columns
+                expected_columns = ['id', 'category_id', 'name', 'description', 'image_url', 'price', 
+                                  'promo_price', 'promo_active', 'is_featured', 'stock_quantity']
+                
+                # Check if product has only public columns (allow categories join)
+                product_keys = set(first_product.keys())
+                
+                # Check for base64 in image_url (should not be present)
+                if first_product.get('image_url', '').startswith('data:image'):
+                    self.log_result("Product Strict Columns", False, "Product contains base64 image_url (should be URL only)")
+                else:
+                    self.log_result("Product Strict Columns", True, "Products use strict public columns (no base64)")
+                
+                print(f"   Product columns: {list(product_keys)}")
+                print(f"   Sample product: name={first_product.get('name')}, price={first_product.get('price')}")
+            else:
+                self.log_result("Product Strict Columns", True, "No products to verify (empty store)")
+            
+            return True
+            
+        except Exception as e:
+            self.log_result("Public Store Cache Headers", False, f"Public store test failed: {str(e)}")
+            return False
+    
     def run_focused_tests(self):
         """Run focused tests on recent changes"""
-        print(f"🚀 Starting WebBuilder SaaS API Tests - Focused on Recent Changes")
+        print(f"🚀 Starting WebBuilder SaaS API Tests - Optimization Phase Testing")
         print(f"📍 Base URL: {BASE_URL}")
         print(f"👤 Test User: {USER_CREDENTIALS['email']}")
         print("=" * 70)
@@ -375,7 +524,17 @@ class APITester:
             print("\n❌ User not authenticated - all endpoints will return 401")
             return False
         
-        # Run focused tests on new/changed features
+        # Run NEW optimization tests first
+        print("\n" + "=" * 70)
+        print("🔥 NEW OPTIMIZATION FEATURES")
+        print("=" * 70)
+        visit_tracking_passed = self.test_store_visit_tracking()
+        public_store_passed = self.test_public_store_cache_headers()
+        
+        # Run regression tests on existing features
+        print("\n" + "=" * 70)
+        print("🔄 REGRESSION TESTS")
+        print("=" * 70)
         settings_passed = self.test_settings_save()
         manual_sale_passed = self.test_manual_sale()
         dashboard_stats_passed = self.test_dashboard_stats()

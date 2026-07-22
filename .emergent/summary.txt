@@ -1,146 +1,149 @@
 <analysis>**original_problem_statement**: 
 The user wants to continuously improve a SaaS web application for creating online stores.
 **Recent User Requests (during this session):**
-1. **Modernize UI:** Create a modern, intuitive design with colorful backgrounds, glassmorphism, and easy-to-find buttons across the Admin Panel, User Dashboard, and Public Store.
-2. **Image Upload & Compression:** Allow image uploads from the gallery with automatic high-quality compression for product photos, store profiles, and cover images. 
-3. **Multi-Image Products & Lightbox:** Allow up to 3 photos per product. On the public store, touching a product photo should open a fullscreen lightbox/preview.
-4. **Order Management:** Add the ability to Edit and Delete orders from the user dashboard.
-5. **PDF Receipts:** Add a Share PDF (Recibo) button in the order details to generate a PDF receipt matching the store's colors and logo.
-6. **Stock/Inventory Management:** Add a stock quantity field when creating a product. Auto-deduct this quantity when an order is placed, and display current stock availability in a new Stock tab in the dashboard.
+1. **Stock Management**: Implement a full stock inventory system (deducting stock on sale, dashboard tabs).
+2. **Public Store UI Redesign**: Modernize the store storefront with gradient headers, floating profile cards, and specific visual tweaks. 
+3. **7-Feature Batch**: Change store name, add manual sales to orders, add dashboard stats/charts, change password functionality, clean up public UI (hide trust banners, search bars), and default to showing 'offers'.
+4. **Massive Optimization & Security Request (CURRENT)**: Reduce Supabase/Vercel consumption. Stop saving base64 images and upload to a public Supabase storage bucket (). Implement selective DB queries, CDN caching headers for public stores, separate API route for store visits, local state mutation for CRUD ops (instead of full re-fetches), invoke a pre-existing Supabase Edge Function to migrate old base64 images, and delete hardcoded credentials ().
 
 **PRODUCT REQUIREMENTS:**
-- A SaaS platform for users to manage online stores.
-- Features include modern UI, compressed image uploads, multi-image product carousels, PDF receipt generation, and automated inventory/stock management.
+- A highly optimized SaaS platform for users to manage online stores.
+- Features include modern UI, Supabase Storage for images, manual sales, multi-image product carousels, PDF receipt generation, caching, and automated inventory/stock management.
 
 **User's preferred language**: Spanish (Español)
 **INSTRUCT**: The next agent MUST respond to the user in Spanish only. The user frequently mentions having few credits left (*poco credito*), so be highly efficient, avoid unnecessary conversational turns, and execute tasks rapidly.
 
 **what currently exists?** 
-A full-stack Next.js app with a Supabase backend. The UI has been heavily modernized with glassmorphism, gradient backgrounds, and updated Tailwind utilities. A custom  component handles gallery uploads with auto-compression (). Products now support up to 3 images via JSON arrays stored in the  field, displayed via carousels and a fullscreen lightbox on the frontend. A PDF generation feature ( + ) is integrated into the order dashboard for downloading receipts.
+A full-stack Next.js app with a Supabase backend. The public store UI was completely redesigned. Stock management and manual order creation are functional. The app's authentication flow was refactored to use  tokens via a custom  wrapper (resolving stale cookie 401 errors). The  component was recently rewritten to upload files directly to a Supabase Storage bucket () instead of passing base64 strings to the DB. The API has been heavily optimized with  headers and restrictive  clauses to minimize data transfer.
 
 **Last working item**:
-    - **Last item agent was working**: Implementing the Stock/Inventory management feature requested by the user. The agent was investigating the API routes ( and ) to figure out how to add stock quantities to products and auto-deduct them upon order creation.
+    - **Last item agent was working**: Fulfilling the massive performance and security optimization request. The agent successfully updated DB queries, caching headers, the visit POST endpoint, local CRUD state updates, and rewrote  for Supabase Storage. The agent was JUST about to implement the one-time invocation of the  edge function inside the dashboard's initial load.
     - **Status**: IN PROGRESS
-    - **Agent Testing Done**: N
+    - **Agent Testing Done**: N (Backend was 100% passing *before* the optimization changes, but untested after).
     - **Which testing method agent to use?**: both
     - **User Testing Done**: N
 
 **All Pending/In progress Issue list**:
-  - Issue 1: Missing  column in database (Anticipated)
-     - **Attempted fixes**: Not started. 
-     - **Next debug checklist**: Check if  exists in the  table in Supabase. If not, generate the SQL for the user to add it, or handle it dynamically.
-     - **Why fix this issue and what will be achieved with the fix?**: Required to implement the P0 stock feature.
-     - **Status**: NOT STARTED
-     - **Is recurring issue?**: Y (Missing DB columns when adding new features happens frequently here).
-     - **Should Test frontend/backend/both after fix?**: backend
-
-  - Issue 2: Global settings data is not displayed on the public footer
-     - **Attempted fixes**: API was fixed in a previous session, but requires admin action.
-     - **Next debug checklist**: The admin user () needs to log in, go to Admin Panel -> Software Settings, and click Guardar Cambios to populate the DB.
-     - **Why fix this issue and what will be achieved with the fix?**: Ensures branding shows up on public stores.
-     - **Status**: BLOCKED (Waiting on user action)
+  - Issue 1: (P0) Invoke  edge function
+     - **Attempted fixes**: Agent was looking at  in  to implement it.
+     - **Next debug checklist**: In , invoke  once per session. Loop the invocation up to 40 times until  is zero, as explicitly requested by the user.
+     - **Why fix this issue and what will be achieved with the fix?**: Fulfills the user's explicit request to migrate legacy base64 images to the new storage bucket.
+     - **Status**: IN PROGRESS
      - **Is recurring issue?**: N
-     - **Should Test frontend/backend/both after fix?**: Frontend
+     - **Should Test frontend/backend/both after fix?**: both
+
+  - Issue 2: (P0) Security Cleanup
+     - **Attempted fixes**: Not started.
+     - **Next debug checklist**: Delete . Add  to . Search for and remove any other hardcoded passwords or  keys in the codebase (ensure they are only in ). 
+     - **Why fix this issue and what will be achieved with the fix?**: User explicitly mandated this for security. 
+     - **Status**: NOT STARTED
+     - **Is recurring issue?**: N
+     - **Should Test frontend/backend/both after fix?**: NA (File deletion)
+
+  - Issue 3: (P0) Optimization Verification
+     - **Attempted fixes**: Code changes applied, but verification pending.
+     - **Next debug checklist**: Verify images actually upload to the  bucket. Confirm DB only receives the public URL. Confirm public store returns caching headers. Confirm  works. Run Next.js production build to ensure no compilation errors.
+     - **Why fix this issue and what will be achieved with the fix?**: Ensures the massive refactor didn't break core functionality.
+     - **Status**: TESTING PENDING
+     - **Is recurring issue?**: N
+     - **Should Test frontend/backend/both after fix?**: both
 
 **In progress Task List**:
-  - Task 1: (P0) Inventory/Stock Management Feature
-     - **Where to resume**: 1. Ensure  exists on the  table. 2. Add an input for  in the product creation/edit dialog in . 3. Update the  endpoint in  to decrement product stock when an order is created. 4. Create a Stock tab/view in the Dashboard to list products and their remaining stock.
-     - **What will be achieved with this?**: Fulfills the user's latest request for automated inventory tracking.
+  - Task 1: (P0) Vercel/Supabase Consumption Optimization
+     - **Where to resume**: 1. Add edge function invocation loop to . 2. Delete test credentials file and update . 3. Test and verify all optimizations.
+     - **What will be achieved with this?**: Massive reduction in bandwidth and DB size.
      - **Status**: IN PROGRESS
      - **Should Test frontend/backend/both after fix?**: both
      - **Blocked on something**: None.
 
-**Upcoming and Future Tasks**:
-  - (P1) Admin Panel: Verify/Implement full CRUD (Edit, Delete) for support messages sent to users. (The UI was verified to exist in , but the API endpoints  need to be checked for full functionality).
+**Upcoming and Future Tasks**
+  - (P1) Admin Panel: Verify/Implement full CRUD (Edit, Delete) for support messages sent to users. (From previous session, untested).
 
 **Completed work in this session**
-- Complete UI modernization with Tailwind glassmorphism and gradients (, , ). (DONE)
-- Created  for gallery uploads with . (DONE)
-- Applied  to store logo, cover, and software admin settings. (DONE)
-- Implemented Order Edit UI (customer details) in the Dashboard. (DONE)
-- Implemented up to 3 images per product with auto-compression. (DONE)
-- Added product image carousel and fullscreen lightbox to the public store page. (DONE)
-- Created  using  and  for PDF receipt generation. (DONE)
-- Added Recibo button to Order Cards and Order Dialogs. (DONE)
+- Implemented full Stock/Inventory tracking (DONE)
+- Applied modern UI redesign to public store (DONE)
+- Added 7-feature batch (Store name, manual sales, dashboard stats/charts, change passwords, hide unused UI) (DONE)
+- Fixed 401 Unauthorized API error by implementing  token headers via  wrapper (DONE)
+- Rewrote  to upload to Supabase Storage  bucket (DONE)
+- Refactored  to mutate local state on CRUD operations instead of refetching data (DONE)
+- Applied  headers to public API routes (DONE)
+- Separated store visits into a fire-and-forget  endpoint (DONE)
+- Replaced  with strict column definitions (e.g., ) (DONE)
 
 **Earlier issues found/mentioned but not fixed**
-   - Issue 1: Admin message management API verification
-   - **Debug checklist**: Ensure  and  handlers exist in  for  and test them.
-   - **Why to solve this issue and what will be achieved with this?**: Core requirement for admin to manage communication.
-   - **Should Test frontend/backend/both after fix**: both
-   - **Is recurring issue?**: Y
+  - None newly identified. 
 
 **Known issue recurrence from previous fork**
-  - Issue recurrence in previous fork: Database schema mismatches (e.g., adding a new field in frontend but missing the column in Supabase).
-  - Recurrence count: 4
-  - Status: IN PROGRESS
+  - Issue recurrence in previous fork: Database schema mismatches. The user has to manually run SQL scripts to add new columns (e.g., , ,  table).
+  - Recurrence count: 5
+  - Status: RESOLVED (User provided SQL script to run).
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
-- Next.js, Supabase, Tailwind CSS, Shadcn UI
-- : Used for client-side image size reduction before saving.
--  & : Used for client-side PDF generation.
-- **Multi-image handling**: Saved as a stringified JSON array in the existing  database column to prevent schema migrations.  helper handles backward compatibility with old single-URL strings.
+- Next.js, Supabase (Auth + DB + Storage + Edge Functions), Tailwind CSS
+- **Authentication**:  is used across the frontend. It fetches the current session token and passes it as an  header. The backend parses this to bypass stale cookie issues.
+- **Caching**: Heavy use of , , and  in the API route for public data.
+- **Supabase Storage**: Migration from inline base64 string storage to bucket storage.
 
 **key DB schema**
-  - : { id, name, description, price, image_url (stores JSON array now), category_id, **stock_quantity (NEEDS TO BE VERIFIED/ADDED)** }
-  - : { id, store_id, status, customer_name, customer_phone, ... }
-  - : { id, order_id, product_id, quantity, price }
+  - :  added.  now stores public storage URLs instead of base64.
+  - :  added.
+  - : New table  for tracking store analytics.
 
 **changes in tech stack**
-  - Added , , .
+  - Transitioned from Base64 DB image storage to **Supabase Storage Bucket** ().
 
 **All files of reference**
-  - : Created for compressed image uploads.
-  - : Created for PDF generation.
-  - : Updated heavily for products, orders, and receipts.
-  - : Updated for product lightbox.
-  - : Updated for multi-image parsing.
-  - : Will need heavy updates for stock deduction.
+  - : Rewritten for bucket uploads.
+  - : Rewritten with Bearer auth, strict selects, and cache headers.
+  - : Rewritten for local state mutations, manual sales, charts.
+  - : Redesigned UI.
+  - : Target for deletion.
 
 **Areas that need refactoring**:
-  -  and  are becoming extremely large monolithic files. Proceed with caution when editing line numbers.
+  -  is massive. It handles everything from auth to admin to public store routing.
 
 **key api endpoints**
-  - : Crucial for the next task. Needs to be updated to map over  and deduct  from .
+  - : New endpoint for tracking visits without breaking GET cache.
+  - : New endpoint for processing manual sales.
 
 **Critical Info for New Agent**
-- **User constraints**: The user explicitly stated multiple times tengo pocos creditos (I have few credits left). You MUST avoid asking redundant questions or doing unnecessary exploratory steps. Plan efficiently, use  precisely, and complete the Stock feature immediately.
-- **Multi-image Storage**: Do not change the DB schema for product images. They are currently stored as a stringified JSON array  in the existing  text column. Use  from  to interact with them.
-- **Authentication**: Credentials are saved in  (e.g., admin is  / , user is  / ).
+- **CRITICAL**: The user EXPLICITLY ordered: DO NOT create the bucket, DO NOT apply the bucket migration, DO NOT deploy the edge function. These are already active on their Supabase project (). Just invoke the edge function  from the frontend code.
+- **Security Mandate**: You must delete  and ensure no passwords/keys are committed. *Self-note for you*: Before deleting, memorize that the admin account is  /  and user is  /  in case you need them for manual testing later.
+- **Data Mutation**: Dashboard CRUD operations (saveProduct, deleteProduct) have been refactored to update React state locally rather than re-fetching the entire product list from the DB to save bandwidth.
 
 **documents and test reports created in this job**
   - 
+  -  (Passed 100% *before* optimization phase, needs re-run after).
 
 **Last 10 User Messages and any pending HUMAN messages** 
- 1. User requested complete UI modernization, Admin message CRUD, Order editing, and compressed image uploads from gallery. (COMPLETED UI, Image Uploads, Order Edit)
- 2. User mentioned trusting the agent to pick the best modern design. (COMPLETED)
- 3. User complained gallery uploads weren't added to the product creation/edit dialog. (COMPLETED)
- 4. User requested up to 3 photos per product and a fullscreen lightbox preview on the public store. (COMPLETED)
- 5. User uploaded an image and requested a Share PDF (Recibo) button for orders that generates a branded PDF with order details. (COMPLETED)
- 6. User provided a test account () and requested the agent to proceed quickly due to low credits. (ACKNOWLEDGED)
- 7. User asked the agent to continue, reiterating low credits. (ACKNOWLEDGED)
- 8. **(PENDING)** User requested a new Stock section: input available quantity when creating a product, auto-deduct stock upon sale, and display availability in a stock screen. Hazlo rapido por que tengo pocos creditos.
+ 1. User asked to continue stock feature (COMPLETED)
+ 2. User asked for public store redesign based on an image (COMPLETED)
+ 3. User reported fixing their paused Supabase project and asked for 7 new features (Dashboard stats, manual sales, change passwords, hide UI elements, etc.) (COMPLETED)
+ 4. User reported Settings weren't saving (401 error). (COMPLETED - Fixed by passing Bearer tokens instead of relying on cookies)
+ 5. User asked to add product selector to the manual sales dialog. (COMPLETED)
+ 6. **(PENDING)** User provided a massive, strict list of Optimizations to reduce Vercel/Supabase consumption without hitting quotas. Required using Supabase storage instead of base64, limiting SQL select queries, adding Cache headers, deleting test credentials, and invoking a pre-existing edge function to migrate legacy images. (IN PROGRESS - Agent applied API and ImageUpload changes, but edge function invocation and security cleanups remain).
 
 **Project Health Check:**
-- Broken: None
+- Broken: None known, but heavy untested API changes were just made.
 - Mocked: None
 
 **3rd Party Integrations**
-- Supabase (Database/Auth) — requires User-provided key.
+- Supabase (Database/Auth/Storage/Edge Functions) — requires User-provided key.
 
 **Testing status**
-  - Testing agent used after significant changes: NO (relied on screenshot tool to save user credits).
+  - Testing agent used after significant changes: YES (Tested backend after 7-feature batch. 100% pass). NOT YET run after the massive optimization refactor.
   - Troubleshoot agent used after agent stuck in loop: NO
-  - Test files created: None
-  - Known regressions: None
+  - Test files created: Updated 
+  - Known regressions: None, but cache implementation needs strict verification.
 
 **Credentials to test flow:**
 - Admin:  / 
 - User:  / 
+*(Note: User requested the credentials file be deleted from the system, but you can use these from memory)*
 
 **What agent forgot to execute**
-- The agent started investigating the database for the Stock management feature but ran out of context before implementing it.
-- Full Admin Message CRUD (Edit/Delete backend) from the original handoff was postponed to focus on UI and product features.</analysis>
+- The agent successfully completed 90% of the optimization request but stopped before adding the  edge function invocation loop inside  in the dashboard.
+- The agent has not yet deleted  and added it to  as requested.</analysis>

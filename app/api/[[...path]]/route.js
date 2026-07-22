@@ -4,6 +4,9 @@ import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { v4 as uuidv4 } from 'uuid'
 
+// Route segment config - allow custom Cache-Control headers
+export const dynamic = 'force-dynamic'
+
 // Create Supabase client for server-side operations (with user context)
 function createSupabaseServer(authHeader) {
   const cookieStore = cookies()
@@ -56,6 +59,34 @@ function handleCORS(response) {
   response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
   response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization')
   return response
+}
+
+// Public column selects (minimize data transfer)
+const PRODUCT_PUBLIC_SELECT = 'id,category_id,name,description,image_url,price,promo_price,promo_active,is_featured,stock_quantity,categories(name)'
+const PROFILE_PUBLIC_SELECT = 'id,first_name,last_name,business_type,slug,maintenance_mode'
+const CATEGORY_PUBLIC_SELECT = 'id,name'
+const CHECKOUT_PUBLIC_SELECT = 'id,field_name,field_label,field_type,is_required,options,display_order'
+
+// Allowed product fields accepted from client body (never trust user_id/timestamps/joins)
+const PRODUCT_ALLOWED_FIELDS = [
+  'name', 'description', 'price', 'image_url', 'category_id',
+  'promo_price', 'promo_active', 'is_featured', 'is_active',
+  'stock_quantity', 'display_order'
+]
+function pickProductFields(body) {
+  const out = {}
+  PRODUCT_ALLOWED_FIELDS.forEach(f => { if (body[f] !== undefined) out[f] = body[f] })
+  if (out.category_id === 'none' || out.category_id === '') out.category_id = null
+  if (out.stock_quantity === '' || out.stock_quantity === undefined) out.stock_quantity = null
+  return out
+}
+
+// Add CDN cache headers to PUBLIC (non-private) responses only
+function handlePublicCache(response, maxAge = 60) {
+  response.headers.set('Cache-Control', `public, max-age=${maxAge}, stale-while-revalidate=300`)
+  response.headers.set('CDN-Cache-Control', `public, max-age=${maxAge}, stale-while-revalidate=300`)
+  response.headers.set('Vercel-CDN-Cache-Control', `public, max-age=${maxAge}, stale-while-revalidate=300`)
+  return handleCORS(response)
 }
 
 export async function OPTIONS() {
@@ -127,7 +158,7 @@ export async function GET(request, { params }) {
       
       const { data, error } = await supabase
         .from('products')
-        .select('*, categories(name)')
+        .select('id,category_id,name,description,image_url,price,promo_price,promo_active,is_featured,is_active,stock_quantity,display_order,createdAt,categories(name)')
         .eq('user_id', user.id)
         .order('createdAt', { ascending: false })
       
@@ -217,22 +248,22 @@ export async function GET(request, { params }) {
         // Try to get from info_content by title
         const { data, error } = await supabaseAdmin
           .from('info_content')
-          .select('*')
+          .select('description')
           .eq('title', 'GLOBAL_SOFTWARE_SETTINGS')
           .single()
         
         if (data && data.description) {
           try {
             const settings = JSON.parse(data.description)
-            return handleCORS(NextResponse.json(settings))
+            return handlePublicCache(NextResponse.json(settings), 300)
           } catch (e) {
-            return handleCORS(NextResponse.json({ name: 'webFácil' }))
+            return handlePublicCache(NextResponse.json({ name: 'webFácil' }), 300)
           }
         }
       } catch (e) {
         console.log('Global settings not found')
       }
-      return handleCORS(NextResponse.json({ name: 'webFácil' }))
+      return handlePublicCache(NextResponse.json({ name: 'webFácil' }), 300)
     }
 
     // Admin: Get all sent messages
@@ -456,7 +487,7 @@ export async function GET(request, { params }) {
       
       const { data: profile } = await supabaseAdmin
         .from('profiles')
-        .select('*')
+        .select(PROFILE_PUBLIC_SELECT)
         .eq('slug', slug)
         .eq('is_active', true)
         .single()
@@ -469,14 +500,12 @@ export async function GET(request, { params }) {
         return handleCORS(NextResponse.json({ error: 'Store in maintenance', maintenance: true }, { status: 503 }))
       }
       
-      // Run all queries in parallel to reduce latency, plus non-blocking visit tracking
+      // Run all queries in parallel to reduce latency (visit tracking is a separate POST)
       const [settingsRes, categoriesRes, productsRes, checkoutRes] = await Promise.all([
         supabaseAdmin.from('user_settings').select('*').eq('user_id', profile.id).single(),
-        supabaseAdmin.from('categories').select('*').eq('user_id', profile.id).eq('is_active', true).order('display_order'),
-        supabaseAdmin.from('products').select('*, categories(name)').eq('user_id', profile.id).eq('is_active', true).order('createdAt', { ascending: false }),
-        supabaseAdmin.from('checkout_fields').select('*').eq('user_id', profile.id).eq('is_active', true).order('display_order'),
-        // fire-and-forget visit tracking (don't block response)
-        supabaseAdmin.from('store_visits').insert({ user_id: profile.id }).then(() => {}, () => {})
+        supabaseAdmin.from('categories').select(CATEGORY_PUBLIC_SELECT).eq('user_id', profile.id).eq('is_active', true).order('display_order'),
+        supabaseAdmin.from('products').select(PRODUCT_PUBLIC_SELECT).eq('user_id', profile.id).eq('is_active', true).order('createdAt', { ascending: false }),
+        supabaseAdmin.from('checkout_fields').select(CHECKOUT_PUBLIC_SELECT).eq('user_id', profile.id).eq('is_active', true).order('display_order')
       ])
 
       const settings = settingsRes?.data
@@ -484,13 +513,14 @@ export async function GET(request, { params }) {
       const products = productsRes?.data
       const checkoutFields = checkoutRes?.data
       
-      return handleCORS(NextResponse.json({
+      // Public store data has no private info -> cache 60s at the CDN
+      return handlePublicCache(NextResponse.json({
         profile,
         settings,
         categories,
         products,
         checkoutFields
-      }))
+      }), 60)
     }
 
     return handleCORS(NextResponse.json({ error: 'Not found' }, { status: 404 }))
@@ -513,6 +543,35 @@ export async function POST(request, { params }) {
       body = await request.json()
     } catch (e) {
       // Body might be empty for some requests like signout
+    }
+
+    // Public: register a store visit (max 1 per browser per day via cookie)
+    if (path[0] === 'store' && path[2] === 'visit') {
+      const slug = path[1]
+      const cookieName = `wf_visit_${slug}`
+      const alreadyVisited = cookies().get(cookieName)
+      if (alreadyVisited) {
+        return handleCORS(NextResponse.json({ counted: false }))
+      }
+      try {
+        const { data: prof } = await supabaseAdmin
+          .from('profiles')
+          .select('id')
+          .eq('slug', slug)
+          .eq('is_active', true)
+          .single()
+        if (prof) {
+          await supabaseAdmin.from('store_visits').insert({ user_id: prof.id }).then(() => {}, () => {})
+        }
+      } catch (e) { /* ignore */ }
+      const res = NextResponse.json({ counted: true })
+      res.cookies.set(cookieName, '1', {
+        maxAge: 60 * 60 * 24,
+        path: '/',
+        httpOnly: true,
+        sameSite: 'lax'
+      })
+      return handleCORS(res)
     }
 
     // Sign up
@@ -723,20 +782,13 @@ export async function POST(request, { params }) {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
       
-      // Clean category_id if it's 'none'
-      const productData = { ...body, user_id: user.id }
-      if (productData.category_id === 'none' || productData.category_id === '') {
-        productData.category_id = null
-      }
-      // Normalize stock_quantity: empty -> null (unlimited)
-      if (productData.stock_quantity === '' || productData.stock_quantity === undefined) {
-        productData.stock_quantity = null
-      }
+      // Whitelist fields; never trust user_id/timestamps/joins from client
+      const productData = { ...pickProductFields(body), user_id: user.id }
       
       const { data, error } = await supabaseAdmin
         .from('products')
         .insert(productData)
-        .select()
+        .select('id,category_id,name,description,image_url,price,promo_price,promo_active,is_featured,is_active,stock_quantity,display_order,createdAt,categories(name)')
         .single()
       
       if (error) return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
@@ -1134,26 +1186,15 @@ export async function PUT(request, { params }) {
     // Update product
     if (pathStr.startsWith('products/')) {
       const id = path[1]
-      // Clean category_id if it's 'none' and remove JOIN properties
-      const productData = { ...body }
-      if (productData.category_id === 'none' || productData.category_id === '') {
-        productData.category_id = null
-      }
-      // Remove properties that come from JOINs
-      delete productData.categories
-      delete productData.created_at
-      delete productData.updated_at
-      // Normalize stock_quantity: empty -> null (unlimited)
-      if (productData.stock_quantity === '') {
-        productData.stock_quantity = null
-      }
+      // Whitelist fields only (supports partial updates like { stock_quantity })
+      const productData = pickProductFields(body)
       
       const { data, error } = await supabaseAdmin
         .from('products')
         .update(productData)
         .eq('id', id)
         .eq('user_id', user.id)
-        .select()
+        .select('id,category_id,name,description,image_url,price,promo_price,promo_active,is_featured,is_active,stock_quantity,display_order,createdAt,categories(name)')
         .single()
       
       if (error) {

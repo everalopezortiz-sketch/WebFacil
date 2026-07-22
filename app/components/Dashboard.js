@@ -101,7 +101,35 @@ export default function Dashboard({ user, profile, onLogout }) {
 
   useEffect(() => {
     loadAllData()
+    migrateLegacyImages()
   }, [])
+
+  // One-time (per browser session) migration of legacy base64 images
+  // to the Supabase Storage bucket via the pre-deployed edge function.
+  const migrateLegacyImages = async () => {
+    try {
+      if (typeof window === 'undefined') return
+      if (sessionStorage.getItem('img_migration_done') === '1') return
+
+      let productsChanged = false
+      for (let i = 0; i < 40; i++) {
+        const { data, error } = await supabase.functions.invoke('migrate-my-inline-images', { body: {} })
+        if (error) {
+          console.warn('Image migration error:', error?.message || error)
+          break
+        }
+        if (data?.migrated > 0) productsChanged = true
+        const remaining = data?.remainingProducts ?? data?.remaining ?? 0
+        if (!remaining || remaining <= 0) break
+      }
+
+      sessionStorage.setItem('img_migration_done', '1')
+      // Refresh products so the freshly migrated storage URLs are shown
+      if (productsChanged) loadProducts()
+    } catch (e) {
+      console.warn('Image migration skipped:', e?.message || e)
+    }
+  }
 
   const loadAllData = async () => {
     setLoading(true)
@@ -382,7 +410,7 @@ export default function Dashboard({ user, profile, onLogout }) {
     setSaving(true)
     try {
       const isEdit = !!data.id
-      const res = await fetch(isEdit ? `/api/categories/${data.id}` : '/api/categories', {
+      const res = await authFetch(supabase, isEdit ? `/api/categories/${data.id}` : '/api/categories', {
         method: isEdit ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
@@ -421,7 +449,10 @@ export default function Dashboard({ user, profile, onLogout }) {
       const result = await res.json()
       if (res.ok) {
         toast.success(isEdit ? 'Actualizado' : 'Creado')
-        loadProducts()
+        // Update local state from server response (avoid refetching full list)
+        setProducts(prev => isEdit
+          ? prev.map(p => p.id === result.id ? result : p)
+          : [result, ...prev])
         setProductDialog({ open: false, data: null })
       } else {
         console.error('Product save error:', result)
@@ -440,21 +471,23 @@ export default function Dashboard({ user, profile, onLogout }) {
     const res = await authFetch(supabase, `/api/products/${product.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...product, stock_quantity: stockVal })
+      body: JSON.stringify({ stock_quantity: stockVal }) // send only the changed field
     })
     if (res.ok) {
+      const result = await res.json()
       toast.success('Stock actualizado')
-      loadProducts()
+      setProducts(prev => prev.map(p => p.id === result.id ? result : p))
     } else {
       toast.error('Error al actualizar stock')
     }
   }
 
-  const deleteProduct = async (id) => {    if (!confirm('¿Eliminar este elemento?')) return
+  const deleteProduct = async (id) => {
+    if (!confirm('¿Eliminar este elemento?')) return
     const res = await authFetch(supabase, `/api/products/${id}`, { method: 'DELETE' })
     if (res.ok) {
       toast.success('Eliminado')
-      loadProducts()
+      setProducts(prev => prev.filter(p => p.id !== id)) // remove from local state
     }
   }
 
@@ -723,6 +756,7 @@ export default function Dashboard({ user, profile, onLogout }) {
                     value={settings?.logo_url || ''}
                     onChange={(v) => setSettings({ ...settings, logo_url: v })}
                     aspect="square"
+                    folder="settings/logo"
                   />
                   <ImageUpload
                     label="Imagen de Portada"
@@ -730,6 +764,7 @@ export default function Dashboard({ user, profile, onLogout }) {
                     onChange={(v) => setSettings({ ...settings, cover_image_url: v })}
                     aspect="cover"
                     maxSizeMB={0.8}
+                    folder="settings/cover"
                   />
                   <div>
                     <Label>Patrón de Fondo</Label>
@@ -1072,6 +1107,7 @@ export default function Dashboard({ user, profile, onLogout }) {
                       onChange={(v) => setSettings({ ...settings, payment_qr_url: v })}
                       aspect="square"
                       maxSizeMB={0.4}
+                      folder="settings/payment-qr"
                     />
                   </div>
                 </CardContent>
@@ -1828,6 +1864,7 @@ export default function Dashboard({ user, profile, onLogout }) {
                         key={idx}
                         label={idx === 0 ? 'Principal' : `Foto ${idx + 1}`}
                         value={value}
+                        folder="products"
                         onChange={(v) => {
                           const imgs = parseImages(productDialog.data?.image_url || '')
                           while (imgs.length < 3) imgs.push('')

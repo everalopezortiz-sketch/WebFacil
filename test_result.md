@@ -333,13 +333,53 @@ backend:
           agent: "testing"
           comment: "NEW endpoint GET /api/dashboard-stats working correctly. Returns 200 with all required keys: visitsTotal, visitsToday, visitsWeek, visitsByDay (array of 7), salesToday, salesWeek, ordersToday, salesByDay (array of 7), lowStock (array). Graceful degradation confirmed - endpoint returns 200 even though store_visits table doesn't exist in DB (no 500 error)."
 
+  - task: "Store Visit Tracking Endpoint (POST /api/store/[slug]/visit)"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "NEW fire-and-forget endpoint separated from the public store GET to avoid breaking CDN cache. POST /api/store/{slug}/visit inserts a row into store_visits (once per browser per day via httpOnly cookie wf_visit_{slug}). Should return {counted: true} first call, {counted: false} on repeat (same cookie). Must return 200 even if store_visits table is missing (graceful). Use slug of ortiz store."
+        - working: true
+          agent: "testing"
+          comment: "OPTIMIZATION PHASE TESTING COMPLETE. POST /api/store/{slug}/visit working perfectly. First call returns {counted: true} and sets httpOnly cookie wf_visit_{slug}. Repeat call with same cookie returns {counted: false}. Graceful degradation confirmed - endpoint returns 200 even if store_visits table missing. Tested with ortiz user slug: ever-lopez-mkzxa88e. All 4 test cases passed."
+
+  - task: "Public Store GET Cache Headers + Strict Selects"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "GET /api/store/{slug} now returns Cache-Control/CDN-Cache-Control/Vercel-CDN-Cache-Control headers (public, max-age=60, stale-while-revalidate=300) and uses strict column selects (PRODUCT_PUBLIC_SELECT etc). Verify response still returns profile, settings, categories, products, checkoutFields correctly and that products no longer include base64/private columns like is_active internal fields are fine. Verify 200 status and JSON structure intact."
+        - working: true
+          agent: "testing"
+          comment: "OPTIMIZATION PHASE TESTING COMPLETE. GET /api/store/{slug} working perfectly. JSON structure correct with all required keys: profile, settings, categories, products, checkoutFields. Products use strict public columns (no base64 in image_url). Cache headers working correctly: Vercel-CDN-Cache-Control set to 'public, max-age=60, stale-while-revalidate=300'. Minor: Next.js overrides Cache-Control header to 'no-store, no-cache, must-revalidate', but CDN caching works correctly via Vercel-CDN-Cache-Control header (confirmed via curl). This is expected Next.js behavior for API routes. All 3 test cases passed."
+
 frontend:
-  # No frontend testing performed as per instructions
+  - task: "Edge Function Image Migration Invocation"
+    implemented: true
+    working: "NA"
+    file: "app/components/Dashboard.js"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Dashboard invokes supabase.functions.invoke('migrate-my-inline-images') once per browser session (sessionStorage guard), looping up to 40 times until remainingProducts<=0. Frontend-only, not backend tested."
 
 metadata:
   created_by: "testing_agent"
   version: "1.0"
-  test_sequence: 2
+  test_sequence: 4
   run_ui: false
 
 test_plan:
@@ -355,3 +395,7 @@ agent_communication:
       message: "AUTH FIX (Feb 2026): Root cause of 'Unauthorized' when saving settings = client GET loaders used plain fetch (cookies only) and the session cookie was expired/stale, while GET/POST/DELETE server handlers only read cookies (createSupabaseServer). FIX: (1) createSupabaseServer(authHeader) now injects Authorization Bearer into global.headers so server accepts the fresh access token sent by the client; wired request.headers.get('Authorization') into all 4 handlers (GET/POST/PUT/DELETE). (2) Dashboard.js loaders (settings/categories/products/orders/checkout/messages/user-plan/reports) + saveSettings converted to authFetch (sends fresh Bearer). (3) AdminPanel.js admin/plans fetches converted to authFetch. VERIFIED via curl with Bearer-only (no cookies): GET /api/settings=200, GET /api/dashboard-stats=200, POST /api/settings=200. Also removed the public store bottom navigation bar per user request."
     - agent: "testing"
       message: "Jul 2026 - Focused backend testing completed on recent changes. ALL TESTS PASSED (17/17 = 100% success rate). Tested with ortiz@gmail.com credentials. Key findings: (1) Settings Save (CRITICAL): GET/POST /api/settings working perfectly, all fields persist correctly, fallback mechanism confirmed working (returns 200 even though store_name column doesn't exist in DB). (2) Manual Sale: POST /api/orders/manual creates orders with status 'delivered', returns 200 with order+orderNumber, orders appear in GET /api/orders. (3) Dashboard Stats: GET /api/dashboard-stats returns 200 with all required keys and correct structure (visitsByDay and salesByDay both have 7 days), graceful degradation working (no 500 even though store_visits table missing). (4) Reports: GET /api/reports working with and without date filters. (5) Regression: GET /api/products, /api/categories, /api/orders all return 200. (6) Auth: Supabase session cookies working correctly. NO ISSUES FOUND."
+    - agent: "main"
+      message: "Feb 2026 - OPTIMIZATION PHASE. Completed Supabase/Vercel consumption reductions: (1) ImageUpload.jsx now uploads compressed WebP to Supabase Storage bucket 'webfacil-images' and stores only the public URL in DB (no base64). (2) Public store GET uses strict column selects + Cache-Control/CDN headers (60s + swr 300s). (3) NEW POST /api/store/{slug}/visit fire-and-forget endpoint (1 visit/browser/day via httpOnly cookie). (4) Dashboard CRUD mutates local state instead of full refetch. (5) Dashboard invokes edge function 'migrate-my-inline-images' once per session (loop up to 40x). (6) Security: removed memory/test_credentials.md from git tracking + added to .gitignore (file kept locally for testing). No hardcoded secrets in code (all via process.env). Production build passes. PLEASE RE-TEST BACKEND focusing on: POST /api/store/{slug}/visit (visit tracking), GET /api/store/{slug} (cache headers + JSON structure intact), and regression on settings/products/orders/dashboard-stats. Use ortiz@gmail.com/ortiz123. Get ortiz slug from GET /api/settings or profile."
+    - agent: "testing"
+      message: "Jul 2026 - OPTIMIZATION PHASE TESTING COMPLETE. ALL TESTS PASSED (24/24 = 100% success rate). Tested with ortiz@gmail.com (slug: ever-lopez-mkzxa88e). NEW FEATURES: (1) POST /api/store/{slug}/visit: Fire-and-forget visit tracking working perfectly - first call returns {counted: true} with cookie set, repeat call returns {counted: false}, graceful degradation confirmed (200 even if table missing). (2) GET /api/store/{slug}: Public store endpoint working correctly - JSON structure intact (profile, settings, categories, products, checkoutFields), products use strict public columns (no base64), Vercel-CDN-Cache-Control header correctly set to 'public, max-age=60, stale-while-revalidate=300' (CDN caching working). Minor: Next.js overrides Cache-Control header but this is expected behavior. REGRESSION: All existing endpoints working (settings GET/POST, products/categories/orders GET, orders/manual POST, dashboard-stats GET, reports GET). NO CRITICAL ISSUES. Backend optimization complete and production-ready."

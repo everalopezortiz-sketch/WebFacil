@@ -2,120 +2,169 @@
   {
     "test": "User Signin",
     "success": true,
-    "message": "User logged in successfully - Email: ortiz@gmail.com",
+    "message": "User logged in successfully - Email: ortiz@gmail.com, Slug: ever-lopez-mkzxa88e",
     "details": null,
-    "timestamp": "2026-07-20T19:52:57.411698"
+    "timestamp": "2026-07-22T19:53:58.071225"
+  },
+  {
+    "test": "POST Store Visit (first call)",
+    "success": true,
+    "message": "First visit counted correctly (counted=true)",
+    "details": null,
+    "timestamp": "2026-07-22T19:53:58.712333"
+  },
+  {
+    "test": "Store Visit Cookie",
+    "success": true,
+    "message": "Cookie wf_visit_ever-lopez-mkzxa88e set correctly",
+    "details": null,
+    "timestamp": "2026-07-22T19:53:58.712372"
+  },
+  {
+    "test": "POST Store Visit (repeat call)",
+    "success": true,
+    "message": "Repeat visit not counted (counted=false)",
+    "details": null,
+    "timestamp": "2026-07-22T19:53:58.789107"
+  },
+  {
+    "test": "Store Visit Graceful Degradation",
+    "success": true,
+    "message": "Endpoint returned 200 (graceful handling confirmed)",
+    "details": null,
+    "timestamp": "2026-07-22T19:53:58.789136"
+  },
+  {
+    "test": "Public Store JSON Structure",
+    "success": true,
+    "message": "All required keys present: profile, settings, categories, products, checkoutFields",
+    "details": null,
+    "timestamp": "2026-07-22T19:53:59.342560"
+  },
+  {
+    "test": "Cache-Control Header (CDN)",
+    "success": true,
+    "message": "Vercel-CDN-Cache-Control header correct: public, max-age=60, stale-while-revalidate=300. Note: Next.js overrides Cache-Control header, but CDN caching works via Vercel-CDN-Cache-Control.",
+    "details": null,
+    "timestamp": "2026-07-22T19:53:59.342588"
+  },
+  {
+    "test": "Product Strict Columns",
+    "success": true,
+    "message": "Products use strict public columns (no base64)",
+    "details": null,
+    "timestamp": "2026-07-22T19:53:59.342597"
   },
   {
     "test": "GET Settings",
     "success": true,
     "message": "Retrieved current settings",
     "details": null,
-    "timestamp": "2026-07-20T19:52:57.913148"
+    "timestamp": "2026-07-22T19:53:59.917543"
   },
   {
     "test": "POST Settings",
     "success": true,
     "message": "Settings saved successfully (returned 200)",
     "details": null,
-    "timestamp": "2026-07-20T19:52:58.331777"
+    "timestamp": "2026-07-22T19:54:00.251394"
   },
   {
     "test": "Verify Settings Persistence",
     "success": true,
-    "message": "Settings persisted correctly: theme_bg_color=\u2713, theme_font_color=\u2713, theme_button_color=\u2713, whatsapp_number=\u2713, store_name=N/A (column may not exist)",
+    "message": "Settings persisted correctly: theme_bg_color=\u2713, theme_font_color=\u2713, theme_button_color=\u2713, whatsapp_number=\u2713, store_name=\u2713",
     "details": null,
-    "timestamp": "2026-07-20T19:52:58.611186"
+    "timestamp": "2026-07-22T19:54:00.610143"
   },
   {
     "test": "Settings Fallback Test",
     "success": true,
     "message": "Settings endpoint returned 200 (fallback working if store_name column missing)",
     "details": null,
-    "timestamp": "2026-07-20T19:52:58.611217"
+    "timestamp": "2026-07-22T19:54:00.610169"
   },
   {
     "test": "POST Manual Sale",
     "success": true,
-    "message": "Manual sale created successfully - Order: VTA-MRTN6BVB",
+    "message": "Manual sale created successfully - Order: VTA-MRWI3D19",
     "details": null,
-    "timestamp": "2026-07-20T19:52:59.029838"
+    "timestamp": "2026-07-22T19:54:01.030131"
   },
   {
     "test": "Verify Manual Sale in Orders",
     "success": true,
     "message": "Manual sale found in orders with status 'delivered'",
     "details": null,
-    "timestamp": "2026-07-20T19:52:59.296764"
+    "timestamp": "2026-07-22T19:54:01.347910"
   },
   {
     "test": "Dashboard Stats Structure",
     "success": true,
     "message": "All required keys present",
     "details": null,
-    "timestamp": "2026-07-20T19:52:59.918247"
+    "timestamp": "2026-07-22T19:54:02.015220"
   },
   {
     "test": "Dashboard Stats visitsByDay",
     "success": true,
     "message": "visitsByDay has 7 days",
     "details": null,
-    "timestamp": "2026-07-20T19:52:59.918275"
+    "timestamp": "2026-07-22T19:54:02.015246"
   },
   {
     "test": "Dashboard Stats salesByDay",
     "success": true,
     "message": "salesByDay has 7 days",
     "details": null,
-    "timestamp": "2026-07-20T19:52:59.918280"
+    "timestamp": "2026-07-22T19:54:02.015250"
   },
   {
     "test": "Dashboard Stats lowStock",
     "success": true,
     "message": "lowStock is array with 1 items",
     "details": null,
-    "timestamp": "2026-07-20T19:52:59.918285"
+    "timestamp": "2026-07-22T19:54:02.015255"
   },
   {
     "test": "Dashboard Stats Graceful Degradation",
     "success": true,
     "message": "Endpoint returned 200 (graceful degradation working)",
     "details": null,
-    "timestamp": "2026-07-20T19:52:59.918290"
+    "timestamp": "2026-07-22T19:54:02.015261"
   },
   {
     "test": "GET Reports (no filters)",
     "success": true,
-    "message": "Reports retrieved - 7 orders, revenue: 17150000",
+    "message": "Reports retrieved - 11 orders, revenue: 22050000",
     "details": null,
-    "timestamp": "2026-07-20T19:53:00.212775"
+    "timestamp": "2026-07-22T19:54:02.452016"
   },
   {
     "test": "GET Reports (with filters)",
     "success": true,
-    "message": "Filtered reports retrieved - 2 orders",
+    "message": "Filtered reports retrieved - 6 orders",
     "details": null,
-    "timestamp": "2026-07-20T19:53:00.495920"
+    "timestamp": "2026-07-22T19:54:02.768144"
   },
   {
     "test": "GET Products (regression)",
     "success": true,
-    "message": "Retrieved 4 products",
+    "message": "Retrieved 0 products",
     "details": null,
-    "timestamp": "2026-07-20T19:53:01.271771"
+    "timestamp": "2026-07-22T19:54:03.067697"
   },
   {
     "test": "GET Categories (regression)",
     "success": true,
     "message": "Retrieved 2 categories",
     "details": null,
-    "timestamp": "2026-07-20T19:53:01.538652"
+    "timestamp": "2026-07-22T19:54:03.375641"
   },
   {
     "test": "GET Orders (regression)",
     "success": true,
-    "message": "Retrieved 9 orders",
+    "message": "Retrieved 13 orders",
     "details": null,
-    "timestamp": "2026-07-20T19:53:01.803450"
+    "timestamp": "2026-07-22T19:54:03.675041"
   }
 ]

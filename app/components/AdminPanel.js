@@ -819,6 +819,7 @@ export default function AdminPanel({ user, profile, onLogout }) {
                         onChange={(v) => setSoftwareSettings({ ...softwareSettings, logo_url: v })}
                         aspect="square"
                         maxSizeMB={0.4}
+                        folder="settings/software"
                       />
                     </div>
                     <div>
