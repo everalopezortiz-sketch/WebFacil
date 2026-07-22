@@ -512,15 +512,28 @@ export async function GET(request, { params }) {
       const categories = categoriesRes?.data
       const products = productsRes?.data
       const checkoutFields = checkoutRes?.data
-      
-      // Public store data has no private info -> cache 60s at the CDN
-      return handlePublicCache(NextResponse.json({
+
+      const payload = {
         profile,
         settings,
         categories,
         products,
         checkoutFields
-      }), 60)
+      }
+
+      // If a critical query failed (e.g. DB paused / transient error), DO NOT
+      // let the CDN cache a broken/empty response — it would keep serving the
+      // empty store for minutes. Return with no-store so the next request retries.
+      const criticalError = productsRes?.error || settingsRes?.error
+      if (criticalError) {
+        console.error('Store fetch partial error:', criticalError?.message)
+        const res = NextResponse.json(payload)
+        res.headers.set('Cache-Control', 'no-store')
+        return handleCORS(res)
+      }
+
+      // Public store data has no private info -> cache 60s at the CDN
+      return handlePublicCache(NextResponse.json(payload), 60)
     }
 
     return handleCORS(NextResponse.json({ error: 'Not found' }, { status: 404 }))
