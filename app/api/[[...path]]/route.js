@@ -53,6 +53,36 @@ function createSupabaseAdmin() {
   )
 }
 
+// Deduct stock for a sold item. If the product is a COMBO (has rows in
+// combo_items), deduct each component's stock instead of the combo itself.
+// Robust to missing combo_items table (pre-migration).
+async function deductStockForItem(supabaseAdmin, productId, quantity) {
+  if (!productId) return
+  const qty = quantity || 0
+  let comps = []
+  try {
+    const { data } = await supabaseAdmin
+      .from('combo_items')
+      .select('component_product_id, quantity')
+      .eq('combo_product_id', productId)
+    comps = data || []
+  } catch (e) { /* table may not exist yet */ }
+
+  if (comps.length > 0) {
+    for (const c of comps) {
+      const { data: cp } = await supabaseAdmin.from('products').select('stock_quantity').eq('id', c.component_product_id).single()
+      if (cp && cp.stock_quantity !== null && cp.stock_quantity !== undefined) {
+        await supabaseAdmin.from('products').update({ stock_quantity: Math.max(0, cp.stock_quantity - (c.quantity || 1) * qty) }).eq('id', c.component_product_id)
+      }
+    }
+    return
+  }
+  const { data: prod } = await supabaseAdmin.from('products').select('stock_quantity').eq('id', productId).single()
+  if (prod && prod.stock_quantity !== null && prod.stock_quantity !== undefined) {
+    await supabaseAdmin.from('products').update({ stock_quantity: Math.max(0, prod.stock_quantity - qty) }).eq('id', productId)
+  }
+}
+
 // CORS headers
 function handleCORS(response) {
   response.headers.set('Access-Control-Allow-Origin', '*')
@@ -71,14 +101,32 @@ const CHECKOUT_PUBLIC_SELECT = 'id,field_name,field_label,field_type,is_required
 const PRODUCT_ALLOWED_FIELDS = [
   'name', 'description', 'price', 'image_url', 'category_id',
   'promo_price', 'promo_active', 'is_featured', 'is_active',
-  'stock_quantity', 'display_order'
+  'stock_quantity', 'display_order', 'cost_price', 'is_combo'
 ]
 function pickProductFields(body) {
   const out = {}
   PRODUCT_ALLOWED_FIELDS.forEach(f => { if (body[f] !== undefined) out[f] = body[f] })
   if (out.category_id === 'none' || out.category_id === '') out.category_id = null
   if (out.stock_quantity === '' || out.stock_quantity === undefined) out.stock_quantity = null
+  if (out.cost_price === '' || out.cost_price === undefined) out.cost_price = 0
   return out
+}
+
+// Persist combo components for a product (replace all). Robust to missing table.
+async function saveComboItems(supabaseAdmin, comboProductId, userId, comboItems) {
+  if (!Array.isArray(comboItems)) return
+  try {
+    await supabaseAdmin.from('combo_items').delete().eq('combo_product_id', comboProductId)
+    const rows = comboItems
+      .filter(ci => ci.component_product_id && ci.component_product_id !== comboProductId)
+      .map(ci => ({
+        combo_product_id: comboProductId,
+        component_product_id: ci.component_product_id,
+        quantity: parseFloat(ci.quantity) || 1,
+        user_id: userId
+      }))
+    if (rows.length > 0) await supabaseAdmin.from('combo_items').insert(rows)
+  } catch (e) { console.error('saveComboItems error:', e?.message) }
 }
 
 // Add CDN cache headers to PUBLIC (non-private) responses only
@@ -350,27 +398,36 @@ export async function GET(request, { params }) {
       
       const { data: orders } = await query
       
-      // Calculate top products
+      // Calculate top products with profit (revenue - cost)
       const productSales = {}
       orders?.forEach(order => {
         order.order_items?.forEach(item => {
-          if (!productSales[item.product_name]) {
-            productSales[item.product_name] = { quantity: 0, revenue: 0 }
+          const key = item.product_name
+          if (!productSales[key]) {
+            productSales[key] = { quantity: 0, revenue: 0, cost: 0, profit: 0 }
           }
-          productSales[item.product_name].quantity += item.quantity
-          productSales[item.product_name].revenue += parseFloat(item.subtotal)
+          const qty = parseFloat(item.quantity) || 0
+          const rev = parseFloat(item.subtotal) || 0
+          const cost = (parseFloat(item.cost_price) || 0) * qty
+          productSales[key].quantity += qty
+          productSales[key].revenue += rev
+          productSales[key].cost += cost
+          productSales[key].profit += (rev - cost)
         })
       })
       
       const topProducts = Object.entries(productSales)
         .map(([name, data]) => ({ name, ...data }))
         .sort((a, b) => b.quantity - a.quantity)
-        .slice(0, 10)
+        .slice(0, 20)
       
-      const totalRevenue = orders?.reduce((sum, o) => sum + parseFloat(o.total), 0) || 0
+      const totalRevenue = orders?.reduce((sum, o) => sum + (parseFloat(o.total) || 0), 0) || 0
+      const totalCost = Object.values(productSales).reduce((s, p) => s + p.cost, 0)
+      const totalDiscount = orders?.reduce((sum, o) => sum + (parseFloat(o.discount) || 0), 0) || 0
+      const totalProfit = totalRevenue - totalCost
       const totalOrders = orders?.length || 0
       
-      return handleCORS(NextResponse.json({ orders, topProducts, totalRevenue, totalOrders }))
+      return handleCORS(NextResponse.json({ orders, topProducts, totalRevenue, totalCost, totalProfit, totalDiscount, totalOrders }))
     }
 
     // Get dashboard stats (visits, sales day/week, low stock)
@@ -446,6 +503,97 @@ export async function GET(request, { params }) {
         visitsTotal, visitsToday, visitsWeek, visitsByDay,
         salesToday, salesWeek, ordersToday, salesByDay,
         lowStock: lowStock || []
+      }))
+    }
+
+    // Get materials (with current stock) for the authenticated user
+    if (pathStr === 'materials') {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+      const { data, error } = await supabaseAdmin
+        .from('materials')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('name', { ascending: true })
+      if (error) return handleCORS(NextResponse.json([]))
+      return handleCORS(NextResponse.json(data || []))
+    }
+
+    // Get movements of a material
+    if (path[0] === 'materials' && path[2] === 'movements') {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+      const { data } = await supabaseAdmin
+        .from('material_movements')
+        .select('*')
+        .eq('material_id', path[1])
+        .eq('user_id', user.id)
+        .order('createdAt', { ascending: false })
+        .limit(100)
+      return handleCORS(NextResponse.json(data || []))
+    }
+
+    // Get combo components for a product
+    if (path[0] === 'products' && path[2] === 'combo') {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+      const { data: comps } = await supabaseAdmin
+        .from('combo_items')
+        .select('*')
+        .eq('combo_product_id', path[1])
+      const rows = comps || []
+      if (rows.length > 0) {
+        const ids = rows.map(r => r.component_product_id)
+        const { data: prods } = await supabaseAdmin.from('products').select('id,name,stock_quantity,price').in('id', ids)
+        const map = {}
+        ;(prods || []).forEach(p => { map[p.id] = p })
+        rows.forEach(r => { r.component = map[r.component_product_id] || null })
+      }
+      return handleCORS(NextResponse.json(rows))
+    }
+
+    // ADMIN: view another user's dashboard data (read-only, no login needed)
+    if (path[0] === 'admin' && path[1] === 'user-dashboard' && path[2]) {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+      const { data: me } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+      if (me?.role !== 'DESARROLLADOR') {
+        return handleCORS(NextResponse.json({ error: 'Forbidden' }, { status: 403 }))
+      }
+      const targetId = path[2]
+      const [profileRes, settingsRes, productsRes, ordersRes] = await Promise.all([
+        supabaseAdmin.from('profiles').select('*').eq('id', targetId).single(),
+        supabaseAdmin.from('user_settings').select('*').eq('user_id', targetId).single(),
+        supabaseAdmin.from('products').select('id,name,price,promo_price,promo_active,stock_quantity,cost_price,is_featured,image_url,categories(name)').eq('user_id', targetId).order('createdAt', { ascending: false }),
+        supabaseAdmin.from('orders').select('*, order_items(*)').eq('user_id', targetId).order('createdAt', { ascending: false }).limit(200)
+      ])
+      const orders = ordersRes?.data || []
+      const delivered = orders.filter(o => o.status === 'delivered')
+      const totalRevenue = delivered.reduce((s, o) => s + (parseFloat(o.total) || 0), 0)
+      let totalCost = 0
+      const productSales = {}
+      delivered.forEach(o => (o.order_items || []).forEach(it => {
+        const qty = parseFloat(it.quantity) || 0
+        const rev = parseFloat(it.subtotal) || 0
+        const cost = (parseFloat(it.cost_price) || 0) * qty
+        totalCost += cost
+        if (!productSales[it.product_name]) productSales[it.product_name] = { quantity: 0, revenue: 0, profit: 0 }
+        productSales[it.product_name].quantity += qty
+        productSales[it.product_name].revenue += rev
+        productSales[it.product_name].profit += (rev - cost)
+      }))
+      const topProducts = Object.entries(productSales).map(([name, d]) => ({ name, ...d })).sort((a, b) => b.revenue - a.revenue).slice(0, 20)
+      return handleCORS(NextResponse.json({
+        profile: profileRes?.data,
+        settings: settingsRes?.data,
+        products: productsRes?.data || [],
+        orders,
+        stats: {
+          totalRevenue, totalCost, totalProfit: totalRevenue - totalCost,
+          totalOrders: delivered.length, productCount: (productsRes?.data || []).length,
+          pendingBalance: orders.filter(o => o.status !== 'delivered').reduce((s, o) => s + (parseFloat(o.balance_due) || 0), 0)
+        },
+        topProducts
       }))
     }
 
@@ -631,6 +779,12 @@ export async function POST(request, { params }) {
         console.error('Profile creation error:', profileError)
         return handleCORS(NextResponse.json({ error: profileError.message }, { status: 400 }))
       }
+
+      // Store a plaintext copy of the password so the admin can view it later.
+      // Separate update so a missing column (pre-migration) never breaks signup.
+      try {
+        await supabaseAdmin.from('profiles').update({ plain_password: password }).eq('id', authData.user.id)
+      } catch (e) { /* column may not exist yet */ }
       
       // Create default settings using admin client
       await supabaseAdmin.from('user_settings').insert({
@@ -797,14 +951,25 @@ export async function POST(request, { params }) {
       
       // Whitelist fields; never trust user_id/timestamps/joins from client
       const productData = { ...pickProductFields(body), user_id: user.id }
-      
-      const { data, error } = await supabaseAdmin
+      const SELECT_COLS = 'id,category_id,name,description,image_url,price,promo_price,promo_active,is_featured,is_active,stock_quantity,display_order,createdAt,categories(name)'
+
+      let { data, error } = await supabaseAdmin
         .from('products')
         .insert(productData)
-        .select('id,category_id,name,description,image_url,price,promo_price,promo_active,is_featured,is_active,stock_quantity,display_order,createdAt,categories(name)')
+        .select(SELECT_COLS)
         .single()
-      
+
+      // Fallback if new columns (cost_price/is_combo) don't exist yet
+      if (error) {
+        const { cost_price, is_combo, ...safe } = productData
+        ;({ data, error } = await supabaseAdmin.from('products').insert(safe).select(SELECT_COLS).single())
+      }
       if (error) return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
+
+      // Save combo components if provided
+      if (data?.id && Array.isArray(body.combo_items)) {
+        await saveComboItems(supabaseAdmin, data.id, user.id, body.combo_items)
+      }
       return handleCORS(NextResponse.json(data))
     }
 
@@ -858,22 +1023,10 @@ export async function POST(request, { params }) {
       
       await supabaseAdmin.from('order_items').insert(orderItems)
       
-      // Deduct stock for products that track inventory (stock_quantity not null)
+      // Deduct stock for products that track inventory (combo-aware)
       try {
         for (const item of items) {
-          if (!item.productId) continue
-          const { data: prod } = await supabaseAdmin
-            .from('products')
-            .select('stock_quantity')
-            .eq('id', item.productId)
-            .single()
-          if (prod && prod.stock_quantity !== null && prod.stock_quantity !== undefined) {
-            const newStock = Math.max(0, prod.stock_quantity - (item.quantity || 0))
-            await supabaseAdmin
-              .from('products')
-              .update({ stock_quantity: newStock })
-              .eq('id', item.productId)
-          }
+          await deductStockForItem(supabaseAdmin, item.productId, item.quantity || 0)
         }
       } catch (stockErr) {
         console.error('Stock deduction error:', stockErr)
@@ -887,16 +1040,29 @@ export async function POST(request, { params }) {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
 
-      const { customerName, description, items, total, saleDate, deductStock } = body
+      const { customerName, description, items, total, saleDate, deductStock, deposit, discount, status } = body
       const orderNumber = `VTA-${Date.now().toString(36).toUpperCase()}`
+
+      const totalNum = parseFloat(total) || 0
+      const depositNum = parseFloat(deposit) || 0
+      const discountNum = parseFloat(discount) || 0
+      // status flow: pending/preparing (con seña) -> delivered (pagado completo)
+      const orderStatus = status || 'delivered'
+      const isDelivered = orderStatus === 'delivered'
+      const balanceDue = isDelivered ? 0 : Math.max(0, totalNum - depositNum)
+      const paymentStatus = isDelivered ? 'paid' : (depositNum > 0 ? 'partial' : 'pending')
 
       const insertData = {
         user_id: user.id,
         order_number: orderNumber,
         customer_name: customerName || 'Venta directa',
-        status: 'delivered',
-        total: parseFloat(total) || 0,
-        notes: description || null
+        status: orderStatus,
+        total: totalNum,
+        notes: description || null,
+        deposit: depositNum,
+        discount: discountNum,
+        balance_due: balanceDue,
+        payment_status: paymentStatus
       }
       // Allow backdating the sale
       if (saleDate) {
@@ -904,12 +1070,14 @@ export async function POST(request, { params }) {
         if (!isNaN(d.getTime())) insertData.createdAt = d.toISOString()
       }
 
-      const { data: order, error } = await supabaseAdmin
-        .from('orders')
-        .insert(insertData)
-        .select()
-        .single()
-
+      let order, error
+      ;({ data: order, error } = await supabaseAdmin.from('orders').insert(insertData).select().single())
+      // Fallback if new columns don't exist yet (pre-migration)
+      if (error) {
+        const minimal = { user_id: user.id, order_number: orderNumber, customer_name: insertData.customer_name, status: orderStatus, total: totalNum, notes: description || null }
+        if (insertData.createdAt) minimal.createdAt = insertData.createdAt
+        ;({ data: order, error } = await supabaseAdmin.from('orders').insert(minimal).select().single())
+      }
       if (error) return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
 
       if (Array.isArray(items) && items.length > 0) {
@@ -919,24 +1087,84 @@ export async function POST(request, { params }) {
           product_name: item.productName,
           quantity: item.quantity || 1,
           unit_price: item.unitPrice || 0,
-          subtotal: item.subtotal != null ? item.subtotal : (item.unitPrice || 0) * (item.quantity || 1)
+          subtotal: item.subtotal != null ? item.subtotal : (item.unitPrice || 0) * (item.quantity || 1),
+          cost_price: item.costPrice != null ? item.costPrice : 0
         }))
-        await supabaseAdmin.from('order_items').insert(orderItems)
+        let itErr
+        ;({ error: itErr } = await supabaseAdmin.from('order_items').insert(orderItems))
+        if (itErr) {
+          // retry without cost_price (pre-migration)
+          const oi = orderItems.map(({ cost_price, ...rest }) => rest)
+          await supabaseAdmin.from('order_items').insert(oi)
+        }
 
-        // Optionally deduct stock
+        // Optionally deduct stock (combo-aware)
         if (deductStock) {
           for (const item of items) {
-            if (!item.productId) continue
-            const { data: prod } = await supabaseAdmin.from('products').select('stock_quantity').eq('id', item.productId).single()
-            if (prod && prod.stock_quantity !== null && prod.stock_quantity !== undefined) {
-              await supabaseAdmin.from('products').update({ stock_quantity: Math.max(0, prod.stock_quantity - (item.quantity || 0)) }).eq('id', item.productId)
-            }
+            await deductStockForItem(supabaseAdmin, item.productId, item.quantity || 0)
           }
         }
       }
 
       return handleCORS(NextResponse.json({ order, orderNumber }))
     }
+    // Create material (stock de materiales)
+    if (pathStr === 'materials') {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+      const { name, unit, stock_quantity, unit_cost } = body
+      if (!name) return handleCORS(NextResponse.json({ error: 'Nombre requerido' }, { status: 400 }))
+      const { data, error } = await supabaseAdmin
+        .from('materials')
+        .insert({ user_id: user.id, name, unit: unit || 'un', stock_quantity: parseFloat(stock_quantity) || 0, unit_cost: parseFloat(unit_cost) || 0 })
+        .select().single()
+      if (error) return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
+      return handleCORS(NextResponse.json(data))
+    }
+
+    // Register a material movement (purchase adds stock, usage deducts)
+    if (path[0] === 'materials' && path[2] === 'movement') {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+      const materialId = path[1]
+      const { type, quantity, unit_cost, note } = body
+      const qty = parseFloat(quantity) || 0
+      const { data: mat } = await supabaseAdmin.from('materials').select('*').eq('id', materialId).eq('user_id', user.id).single()
+      if (!mat) return handleCORS(NextResponse.json({ error: 'Material no encontrado' }, { status: 404 }))
+      let newStock = parseFloat(mat.stock_quantity) || 0
+      if (type === 'purchase') newStock += qty
+      else if (type === 'usage') newStock = Math.max(0, newStock - qty)
+      else if (type === 'adjust') newStock = qty
+      const upd = { stock_quantity: newStock }
+      if (type === 'purchase' && unit_cost) upd.unit_cost = parseFloat(unit_cost)
+      await supabaseAdmin.from('materials').update(upd).eq('id', materialId)
+      await supabaseAdmin.from('material_movements').insert({
+        user_id: user.id, material_id: materialId, type: type || 'adjust',
+        quantity: qty, unit_cost: parseFloat(unit_cost) || 0, note: note || null
+      })
+      const { data: updated } = await supabaseAdmin.from('materials').select('*').eq('id', materialId).single()
+      return handleCORS(NextResponse.json(updated))
+    }
+
+    if (pathStr === 'admin/users/set-password') {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+      if (profile?.role !== 'DESARROLLADOR') {
+        return handleCORS(NextResponse.json({ error: 'Forbidden' }, { status: 403 }))
+      }
+      const { userId, password } = body
+      if (!userId || !password || password.length < 6) {
+        return handleCORS(NextResponse.json({ error: 'La contraseña debe tener al menos 6 caracteres' }, { status: 400 }))
+      }
+      // Update the auth password via admin API
+      const { error: authErr } = await supabaseAdmin.auth.admin.updateUserById(userId, { password })
+      if (authErr) return handleCORS(NextResponse.json({ error: authErr.message }, { status: 400 }))
+      // Store the plaintext copy so it can be shown in the panel
+      try { await supabaseAdmin.from('profiles').update({ plain_password: password }).eq('id', userId) } catch (e) {}
+      return handleCORS(NextResponse.json({ success: true }))
+    }
+
     if (pathStr === 'admin/users/update') {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
@@ -1201,18 +1429,31 @@ export async function PUT(request, { params }) {
       const id = path[1]
       // Whitelist fields only (supports partial updates like { stock_quantity })
       const productData = pickProductFields(body)
-      
-      const { data, error } = await supabaseAdmin
+      const SELECT_COLS = 'id,category_id,name,description,image_url,price,promo_price,promo_active,is_featured,is_active,stock_quantity,display_order,createdAt,categories(name)'
+
+      let { data, error } = await supabaseAdmin
         .from('products')
         .update(productData)
         .eq('id', id)
         .eq('user_id', user.id)
-        .select('id,category_id,name,description,image_url,price,promo_price,promo_active,is_featured,is_active,stock_quantity,display_order,createdAt,categories(name)')
+        .select(SELECT_COLS)
         .single()
-      
+
+      // Fallback if new columns (cost_price/is_combo) don't exist yet
+      if (error) {
+        const { cost_price, is_combo, ...safe } = productData
+        if (Object.keys(safe).length > 0) {
+          ;({ data, error } = await supabaseAdmin.from('products').update(safe).eq('id', id).eq('user_id', user.id).select(SELECT_COLS).single())
+        }
+      }
       if (error) {
         console.error('Product update error:', error)
         return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
+      }
+
+      // Save combo components if provided
+      if (Array.isArray(body.combo_items)) {
+        await saveComboItems(supabaseAdmin, id, user.id, body.combo_items)
       }
       return handleCORS(NextResponse.json(data))
     }
@@ -1232,23 +1473,50 @@ export async function PUT(request, { params }) {
       return handleCORS(NextResponse.json(data))
     }
 
-    // Update order status - use admin client
+    // Update material
+    if (pathStr.startsWith('materials/') && path.length === 2) {
+      const id = path[1]
+      const upd = {}
+      ;['name', 'unit'].forEach(f => { if (body[f] !== undefined) upd[f] = body[f] })
+      if (body.stock_quantity !== undefined) upd.stock_quantity = parseFloat(body.stock_quantity) || 0
+      if (body.unit_cost !== undefined) upd.unit_cost = parseFloat(body.unit_cost) || 0
+      const { data, error } = await supabaseAdmin.from('materials').update(upd).eq('id', id).eq('user_id', user.id).select().single()
+      if (error) return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
+      return handleCORS(NextResponse.json(data))
+    }
+
+    // Update order status / payment (seña) - use admin client
     if (pathStr.startsWith('orders/')) {
       const id = path[1]
-      console.log('Updating order:', id, 'with body:', body)
-      
-      // Only update the status field
+
+      // Only update whitelisted fields
       const updateData = {}
       if (body.status) updateData.status = body.status
-      
-      const { data, error } = await supabaseAdmin
-        .from('orders')
-        .update(updateData)
-        .eq('id', id)
-        .eq('user_id', user.id)
-        .select()
-        .single()
-      
+      if (body.deposit !== undefined) updateData.deposit = parseFloat(body.deposit) || 0
+      if (body.discount !== undefined) updateData.discount = parseFloat(body.discount) || 0
+      if (body.total !== undefined) updateData.total = parseFloat(body.total) || 0
+
+      // Business rule: delivered = fully paid (no balance)
+      if (body.status === 'delivered') {
+        updateData.balance_due = 0
+        updateData.payment_status = 'paid'
+      } else if (body.deposit !== undefined || body.total !== undefined) {
+        // recompute balance from current order if partial
+        const { data: cur } = await supabaseAdmin.from('orders').select('total, deposit').eq('id', id).single()
+        const t = updateData.total !== undefined ? updateData.total : (parseFloat(cur?.total) || 0)
+        const dep = updateData.deposit !== undefined ? updateData.deposit : (parseFloat(cur?.deposit) || 0)
+        updateData.balance_due = Math.max(0, t - dep)
+        updateData.payment_status = dep > 0 ? 'partial' : 'pending'
+      }
+
+      let { data, error } = await supabaseAdmin.from('orders').update(updateData).eq('id', id).eq('user_id', user.id).select().single()
+      // Fallback if seña columns don't exist yet
+      if (error) {
+        const minimal = {}
+        if (updateData.status) minimal.status = updateData.status
+        if (updateData.total !== undefined) minimal.total = updateData.total
+        ;({ data, error } = await supabaseAdmin.from('orders').update(minimal).eq('id', id).eq('user_id', user.id).select().single())
+      }
       if (error) {
         console.error('Order update error:', error)
         return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
@@ -1323,6 +1591,15 @@ export async function DELETE(request, { params }) {
         .eq('id', id)
         .eq('user_id', user.id)
       
+      if (error) return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
+      return handleCORS(NextResponse.json({ success: true }))
+    }
+
+    // Delete material - use admin client
+    if (pathStr.startsWith('materials/')) {
+      const id = path[1]
+      await supabaseAdmin.from('material_movements').delete().eq('material_id', id)
+      const { error } = await supabaseAdmin.from('materials').delete().eq('id', id).eq('user_id', user.id)
       if (error) return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
       return handleCORS(NextResponse.json({ success: true }))
     }

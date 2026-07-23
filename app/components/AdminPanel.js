@@ -63,6 +63,26 @@ export default function AdminPanel({ user, profile, onLogout }) {
   // Dialogs
   const [userDialog, setUserDialog] = useState({ open: false, user: null })
   const [planDialog, setPlanDialog] = useState({ open: false, user: null })
+  const [passwordDialog, setPasswordDialog] = useState({ open: false, user: null, password: '', newPassword: '' })
+  const [savingPassword, setSavingPassword] = useState(false)
+
+  const setUserPassword = async () => {
+    const np = passwordDialog.newPassword
+    if (!np || np.length < 6) { toast.error('La contraseña debe tener al menos 6 caracteres'); return }
+    setSavingPassword(true)
+    try {
+      const res = await authFetch('/api/admin/users/set-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: passwordDialog.user.id, password: np })
+      })
+      if (res.ok) {
+        toast.success('Contraseña asignada')
+        setPasswordDialog({ ...passwordDialog, password: np, newPassword: '' })
+        loadUsers()
+      } else { const e = await res.json(); toast.error(e.error || 'Error') }
+    } catch (e) { toast.error('Error de conexión') } finally { setSavingPassword(false) }
+  }
   const [messageDialog, setMessageDialog] = useState({ open: false, user: null, isGlobal: false })
   const [editPlanDialog, setEditPlanDialog] = useState({ open: false, plan: null })
   const [userMessagesDialog, setUserMessagesDialog] = useState({ open: false, user: null, messages: [] })
@@ -642,6 +662,9 @@ export default function AdminPanel({ user, profile, onLogout }) {
                                 <Button size="sm" variant="ghost" title="Ver/Enviar Mensajes" onClick={() => loadUserMessages(u)}>
                                   <MessageSquare className="w-4 h-4" />
                                 </Button>
+                                <Button size="sm" variant="ghost" title="Ver/asignar contraseña" onClick={() => setPasswordDialog({ open: true, user: u, password: u.plain_password || '', newPassword: '' })}>
+                                  <Key className="w-4 h-4" />
+                                </Button>
                                 <Button size="sm" variant="ghost" className="text-destructive" title="Eliminar" onClick={() => deleteUser(u.id)}>
                                   <Trash2 className="w-4 h-4" />
                                 </Button>
@@ -908,6 +931,40 @@ export default function AdminPanel({ user, profile, onLogout }) {
           </TabsContent>
         </Tabs>
       </main>
+
+      {/* Password Dialog */}
+      <Dialog open={passwordDialog.open} onOpenChange={(open) => setPasswordDialog({ ...passwordDialog, open })}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Contraseña de {passwordDialog.user?.first_name} {passwordDialog.user?.last_name}</DialogTitle>
+            <DialogDescription>{passwordDialog.user?.email}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 p-1">
+            <div>
+              <Label>Contraseña actual guardada</Label>
+              <div className="flex items-center gap-2 mt-1">
+                <Input readOnly value={passwordDialog.password || ''} placeholder="No disponible" className="font-mono" />
+                {passwordDialog.password && (
+                  <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(passwordDialog.password); toast.success('Copiada') }}>Copiar</Button>
+                )}
+              </div>
+              {!passwordDialog.password && (
+                <p className="text-xs text-muted-foreground mt-1">Las contraseñas anteriores están encriptadas y no se pueden mostrar. Asigna una nueva abajo para poder verla.</p>
+              )}
+            </div>
+            <div className="border-t pt-3">
+              <Label>Asignar nueva contraseña</Label>
+              <Input type="text" className="font-mono mt-1" placeholder="Mínimo 6 caracteres" value={passwordDialog.newPassword} onChange={(e) => setPasswordDialog({ ...passwordDialog, newPassword: e.target.value })} />
+              <p className="text-xs text-muted-foreground mt-1">Cambia la contraseña de acceso del usuario y queda visible aquí.</p>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setPasswordDialog({ ...passwordDialog, open: false })}>Cerrar</Button>
+              <Button onClick={setUserPassword} disabled={savingPassword}>{savingPassword && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}Guardar contraseña</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
 
       {/* User Edit Dialog */}
       <Dialog open={userDialog.open} onOpenChange={(open) => setUserDialog({ ...userDialog, open })}>

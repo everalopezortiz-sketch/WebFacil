@@ -378,7 +378,31 @@ backend:
           agent: "testing"
           comment: "BUG FIX VERIFIED (Jul 2026). ALL TESTS PASSED (6/6 = 100%). Defensive fix working correctly: (1) GET /api/store/monserrat-pereira-mphih60x returns 200 with all required keys (profile, settings, categories, products, checkoutFields), products array has 134 products (non-empty), Vercel-CDN-Cache-Control header present with 'public, max-age=60, stale-while-revalidate=300' on SUCCESS case. (2) GET /api/store/nonexistent-slug-xyz returns 404 without public cache headers (correct). (3) GET /api/admin/users returns 200 with 10 user profiles with joins (user_settings, user_plans). (4) REGRESSION TESTS: GET /api/products (200), GET /api/settings (200), GET /api/dashboard-stats (200). Fix prevents CDN from caching broken/empty responses while still caching successful responses. NO ISSUES FOUND."
 
+  - task: "NEW FEATURES: seña/discount, materials, profit, combos, admin password"
+    implemented: true
+    working: "NA"
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Added 5 feature sets (require SQL migration /app/memory/features_migration.sql; test BOTH before and after user runs it). (1) Manual sale POST /api/orders/manual now accepts deposit(seña), discount, status(delivered/preparing/pending); computes balance_due & payment_status; has graceful FALLBACK if columns missing. (2) Materials: GET/POST /api/materials, PUT/DELETE /api/materials/:id, POST /api/materials/:id/movement (purchase adds, usage deducts, adjust sets), GET /api/materials/:id/movements. Returns [] if table missing (no 500). (3) Reports GET /api/reports now returns totalCost, totalProfit, totalDiscount and per-product profit. (4) Combos: products accept is_combo + body.combo_items (saved to combo_items table via saveComboItems); GET /api/products/:id/combo; stock deduction is combo-aware (deductStockForItem deducts each component). Product create/update have fallback if cost_price/is_combo columns missing. (5) Admin password: signup stores plain_password (best-effort); POST /api/admin/users/set-password (DESARROLLADOR only) sets auth password via admin API + stores plain_password; admin/users GET returns plain_password. IMPORTANT: Before SQL migration, verify NO regressions on existing endpoints (store, products, orders, settings, dashboard-stats, admin/users) and that new endpoints degrade gracefully (no 500). Credentials: everlopez@gmail.com/ever123 (admin), ortiz@gmail.com/ortiz123 (user)."
+
 frontend:
+  - task: "Base64 image migration to Supabase Storage (one-time server script)"
+    implemented: true
+    working: true
+    file: "scripts/migrate_b64.mjs"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "CRITICAL FIX: store responses were 64MB/11s because products stored base64 images in DB, causing browser hangs (ERR_ABORTED) and huge Vercel/Supabase consumption. Migrated 133 products (214 images) + 2 settings images to webfacil-images bucket. Store response now 86KB/1.1s (~740x smaller). Verified store renders fast with images."
+
   - task: "Edge Function Image Migration Invocation"
     implemented: true
     working: "NA"

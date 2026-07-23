@@ -143,7 +143,8 @@ export default function Dashboard({ user, profile, onLogout }) {
         loadMessages(),
         loadUserPlan(),
         loadInfoContent(),
-        loadStats()
+        loadStats(),
+        loadMaterials()
       ])
     } catch (error) {
       console.error('Error loading data:', error)
@@ -220,8 +221,8 @@ export default function Dashboard({ user, profile, onLogout }) {
   }
 
   // Manual sale
-  const [manualSale, setManualSale] = useState({ open: false, customerName: '', saleDate: today, items: [] })
-  const [saleLine, setSaleLine] = useState({ productId: '', quantity: 1 })
+  const [manualSale, setManualSale] = useState({ open: false, customerName: '', saleDate: today, items: [], deposit: '', discount: '', status: 'delivered' })
+  const [saleLine, setSaleLine] = useState({ productId: '', quantity: 1, wholesale: false, price: '' })
   const [savingSale, setSavingSale] = useState(false)
 
   const getUnitPrice = (p) => (p?.promo_active && p?.promo_price ? parseFloat(p.promo_price) : parseFloat(p?.price || 0))
@@ -231,23 +232,102 @@ export default function Dashboard({ user, profile, onLogout }) {
     const product = products.find(p => p.id === saleLine.productId)
     if (!product) return
     const qty = Math.max(1, parseInt(saleLine.quantity) || 1)
-    const unit = getUnitPrice(product)
-    const existing = manualSale.items.find(i => i.productId === product.id)
+    // Wholesale: use the custom "precio nuevo" typed by the user
+    const unit = (saleLine.wholesale && saleLine.price !== '' && !isNaN(parseFloat(saleLine.price)))
+      ? parseFloat(saleLine.price)
+      : getUnitPrice(product)
+    const cost = parseFloat(product.cost_price) || 0
+    const existing = manualSale.items.find(i => i.productId === product.id && i.unitPrice === unit)
     let newItems
     if (existing) {
-      newItems = manualSale.items.map(i => i.productId === product.id ? { ...i, quantity: i.quantity + qty, subtotal: (i.quantity + qty) * unit } : i)
+      newItems = manualSale.items.map(i => (i.productId === product.id && i.unitPrice === unit) ? { ...i, quantity: i.quantity + qty, subtotal: (i.quantity + qty) * unit } : i)
     } else {
-      newItems = [...manualSale.items, { productId: product.id, productName: product.name, quantity: qty, unitPrice: unit, subtotal: unit * qty }]
+      newItems = [...manualSale.items, { productId: product.id, productName: product.name, quantity: qty, unitPrice: unit, costPrice: cost, subtotal: unit * qty, wholesale: saleLine.wholesale }]
     }
     setManualSale({ ...manualSale, items: newItems })
-    setSaleLine({ productId: '', quantity: 1 })
+    setSaleLine({ productId: '', quantity: 1, wholesale: false, price: '' })
+  }
+
+  // ===== Materiales (stock de insumos) =====
+  const [materials, setMaterials] = useState([])
+  const [materialDialog, setMaterialDialog] = useState({ open: false, data: null })
+  const [movementDialog, setMovementDialog] = useState({ open: false, material: null, type: 'purchase', quantity: '', unit_cost: '', note: '' })
+  const [savingMaterial, setSavingMaterial] = useState(false)
+
+  const loadMaterials = async () => {
+    try {
+      const res = await authFetch(supabase, '/api/materials')
+      if (res.ok) setMaterials(await res.json())
+    } catch (e) { /* ignore */ }
+  }
+
+  const saveMaterial = async () => {
+    const d = materialDialog.data
+    if (!d?.name) { toast.error('Nombre requerido'); return }
+    setSavingMaterial(true)
+    try {
+      const isEdit = !!d.id
+      const res = await authFetch(supabase, isEdit ? `/api/materials/${d.id}` : '/api/materials', {
+        method: isEdit ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(d)
+      })
+      if (res.ok) { toast.success('Material guardado'); setMaterialDialog({ open: false, data: null }); loadMaterials() }
+      else { const e = await res.json(); toast.error(e.error || 'Error') }
+    } catch (e) { toast.error('Error de conexión') } finally { setSavingMaterial(false) }
+  }
+
+  const deleteMaterial = async (id) => {
+    if (!confirm('¿Eliminar este material?')) return
+    const res = await authFetch(supabase, `/api/materials/${id}`, { method: 'DELETE' })
+    if (res.ok) { toast.success('Eliminado'); setMaterials(prev => prev.filter(m => m.id !== id)) }
+  }
+
+  const saveMovement = async () => {
+    const m = movementDialog
+    const qty = parseFloat(m.quantity)
+    if (!qty || qty <= 0) { toast.error('Cantidad inválida'); return }
+    setSavingMaterial(true)
+    try {
+      const res = await authFetch(supabase, `/api/materials/${m.material.id}/movement`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: m.type, quantity: qty, unit_cost: m.unit_cost, note: m.note })
+      })
+      if (res.ok) {
+        const updated = await res.json()
+        toast.success(m.type === 'purchase' ? 'Compra registrada' : m.type === 'usage' ? 'Uso descontado' : 'Ajuste guardado')
+        setMaterials(prev => prev.map(x => x.id === updated.id ? updated : x))
+        setMovementDialog({ open: false, material: null, type: 'purchase', quantity: '', unit_cost: '', note: '' })
+      } else { const e = await res.json(); toast.error(e.error || 'Error') }
+    } catch (e) { toast.error('Error de conexión') } finally { setSavingMaterial(false) }
   }
 
   const removeSaleLine = (productId) => {
     setManualSale({ ...manualSale, items: manualSale.items.filter(i => i.productId !== productId) })
   }
 
-  const manualSaleTotal = manualSale.items.reduce((s, i) => s + (i.subtotal || 0), 0)
+  // Load combo components when opening a combo product for editing
+  useEffect(() => {
+    const loadCombo = async () => {
+      if (productDialog.open && productDialog.data?.id && productDialog.data?.is_combo && productDialog.data?.combo_items === undefined) {
+        try {
+          const res = await authFetch(supabase, `/api/products/${productDialog.data.id}/combo`)
+          if (res.ok) {
+            const rows = await res.json()
+            setProductDialog(prev => ({ ...prev, data: { ...prev.data, combo_items: (rows || []).map(r => ({ component_product_id: r.component_product_id, quantity: r.quantity })) } }))
+          }
+        } catch (e) { /* ignore */ }
+      }
+    }
+    loadCombo()
+  }, [productDialog.open, productDialog.data?.id])
+
+  const manualSaleSubtotal = manualSale.items.reduce((s, i) => s + (i.subtotal || 0), 0)
+  const manualSaleDiscount = parseFloat(manualSale.discount) || 0
+  const manualSaleTotal = Math.max(0, manualSaleSubtotal - manualSaleDiscount)
+  const manualSaleDeposit = parseFloat(manualSale.deposit) || 0
+  const manualSaleBalance = Math.max(0, manualSaleTotal - manualSaleDeposit)
 
   const saveManualSale = async () => {
     if (manualSale.items.length === 0) {
@@ -263,6 +343,9 @@ export default function Dashboard({ user, profile, onLogout }) {
           customerName: manualSale.customerName || 'Venta directa',
           description: manualSale.items.map(i => `${i.quantity}x ${i.productName}`).join(', '),
           total: manualSaleTotal,
+          discount: manualSaleDiscount,
+          deposit: manualSaleDeposit,
+          status: manualSale.status || 'delivered',
           saleDate: manualSale.saleDate,
           deductStock: true,
           items: manualSale.items
@@ -270,8 +353,8 @@ export default function Dashboard({ user, profile, onLogout }) {
       })
       if (res.ok) {
         toast.success('Venta registrada')
-        setManualSale({ open: false, customerName: '', saleDate: today, items: [] })
-        setSaleLine({ productId: '', quantity: 1 })
+        setManualSale({ open: false, customerName: '', saleDate: today, items: [], deposit: '', discount: '', status: 'delivered' })
+        setSaleLine({ productId: '', quantity: 1, wholesale: false, price: '' })
         loadOrders(orderDateFilter)
         loadProducts()
         loadStats()
@@ -646,6 +729,9 @@ export default function Dashboard({ user, profile, onLogout }) {
             </TabsTrigger>
             <TabsTrigger value="stock" className="gap-2 data-[state=active]:gradient-brand data-[state=active]:text-white data-[state=active]:shadow-md">
               <Boxes className="w-4 h-4" /> Stock
+            </TabsTrigger>
+            <TabsTrigger value="materials" className="gap-2 data-[state=active]:gradient-brand data-[state=active]:text-white data-[state=active]:shadow-md">
+              <Package className="w-4 h-4" /> Materiales
             </TabsTrigger>
             <TabsTrigger value="checkout" className="gap-2 data-[state=active]:gradient-brand data-[state=active]:text-white data-[state=active]:shadow-md">
               <CreditCard className="w-4 h-4" /> Checkout
@@ -1366,6 +1452,55 @@ export default function Dashboard({ user, profile, onLogout }) {
             </Card>
           </TabsContent>
 
+          {/* Materiales Tab */}
+          <TabsContent value="materials">
+            <Card>
+              <CardHeader className="flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2"><Package className="w-5 h-5" /> Materiales / Insumos</CardTitle>
+                  <CardDescription>Compra materiales para sumar stock y descuéntalos manualmente cuando los uses.</CardDescription>
+                </div>
+                <Button onClick={() => setMaterialDialog({ open: true, data: { name: '', unit: 'un', stock_quantity: 0, unit_cost: 0 } })}>
+                  <Plus className="w-4 h-4 mr-2" /> Nuevo material
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {materials.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Package className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                    <p>No hay materiales aún</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {materials.map(m => (
+                      <div key={m.id} className="flex items-center gap-3 p-3 rounded-xl border bg-white/60">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate">{m.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Stock: <span className="font-semibold">{m.stock_quantity} {m.unit}</span>
+                            {m.unit_cost > 0 && <> · Costo unit.: {formatPrice(m.unit_cost)}</>}
+                          </p>
+                        </div>
+                        <Button size="sm" variant="outline" className="text-emerald-700 border-emerald-200" onClick={() => setMovementDialog({ open: true, material: m, type: 'purchase', quantity: '', unit_cost: m.unit_cost || '', note: '' })}>
+                          <Plus className="w-3 h-3 mr-1" /> Compra
+                        </Button>
+                        <Button size="sm" variant="outline" className="text-amber-700 border-amber-200" onClick={() => setMovementDialog({ open: true, material: m, type: 'usage', quantity: '', unit_cost: '', note: '' })}>
+                          Usar
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => setMaterialDialog({ open: true, data: m })}>
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        <Button size="sm" variant="ghost" className="text-destructive" onClick={() => deleteMaterial(m.id)}>
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           {/* Checkout Tab */}
           <TabsContent value="checkout">
             <Card>
@@ -1592,21 +1727,41 @@ export default function Dashboard({ user, profile, onLogout }) {
                           <p className="text-2xl font-bold">{formatPrice(reports.totalRevenue)}</p>
                         </CardContent>
                       </Card>
+                      <Card>
+                        <CardContent className="p-4">
+                          <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                            <Tag className="w-4 h-4" />
+                            <span className="text-sm">Costo</span>
+                          </div>
+                          <p className="text-2xl font-bold text-orange-600">{formatPrice(reports.totalCost || 0)}</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-gradient-to-br from-emerald-500 to-teal-600 text-white border-0">
+                        <CardContent className="p-4">
+                          <div className="flex items-center gap-2 opacity-90 mb-1">
+                            <TrendingUp className="w-4 h-4" />
+                            <span className="text-sm">Ganancia</span>
+                          </div>
+                          <p className="text-2xl font-extrabold">{formatPrice(reports.totalProfit || 0)}</p>
+                          {reports.totalDiscount > 0 && <p className="text-xs opacity-80 mt-1">Descuentos: {formatPrice(reports.totalDiscount)}</p>}
+                        </CardContent>
+                      </Card>
                     </div>
 
                     {/* Top Products */}
                     <div>
                       <h3 className="font-semibold mb-3 flex items-center gap-2">
                         <TrendingUp className="w-4 h-4" />
-                        Más Vendidos
+                        Ganancia por producto
                       </h3>
                       {reports.topProducts?.length > 0 ? (
                         <Table>
                           <TableHeader>
                             <TableRow>
                               <TableHead>Producto</TableHead>
-                              <TableHead className="text-right">Cantidad</TableHead>
+                              <TableHead className="text-right">Cant.</TableHead>
                               <TableHead className="text-right">Ingresos</TableHead>
+                              <TableHead className="text-right">Ganancia</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -1615,6 +1770,7 @@ export default function Dashboard({ user, profile, onLogout }) {
                                 <TableCell>{p.name}</TableCell>
                                 <TableCell className="text-right">{p.quantity}</TableCell>
                                 <TableCell className="text-right">{formatPrice(p.revenue)}</TableCell>
+                                <TableCell className={`text-right font-semibold ${(p.profit || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{formatPrice(p.profit || 0)}</TableCell>
                               </TableRow>
                             ))}
                           </TableBody>
@@ -1728,7 +1884,13 @@ export default function Dashboard({ user, profile, onLogout }) {
           <div className="space-y-4 p-1">
             {/* Product + quantity selector */}
             <div className="p-3 border rounded-lg bg-muted/30 space-y-3">
-              <Label className="text-sm">Agregar producto</Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-sm">Agregar producto</Label>
+                <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
+                  <Switch checked={saleLine.wholesale} onCheckedChange={(v) => setSaleLine({ ...saleLine, wholesale: v })} />
+                  Mayorista
+                </label>
+              </div>
               <div className="flex gap-2">
                 <Select value={saleLine.productId} onValueChange={(v) => setSaleLine({ ...saleLine, productId: v })}>
                   <SelectTrigger className="flex-1">
@@ -1747,7 +1909,7 @@ export default function Dashboard({ user, profile, onLogout }) {
                 <Input
                   type="number"
                   min="1"
-                  className="w-20"
+                  className="w-16"
                   value={saleLine.quantity}
                   onChange={(e) => setSaleLine({ ...saleLine, quantity: e.target.value })}
                 />
@@ -1755,6 +1917,18 @@ export default function Dashboard({ user, profile, onLogout }) {
                   <Plus className="w-4 h-4" />
                 </Button>
               </div>
+              {saleLine.wholesale && (
+                <div>
+                  <Label className="text-xs">Precio nuevo (mayorista) por unidad</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    placeholder="Ej: 8000"
+                    value={saleLine.price}
+                    onChange={(e) => setSaleLine({ ...saleLine, price: e.target.value })}
+                  />
+                </div>
+              )}
             </div>
 
             {/* Items list */}
@@ -1773,8 +1947,8 @@ export default function Dashboard({ user, profile, onLogout }) {
                   </div>
                 ))}
                 <div className="flex items-center justify-between pt-2 border-t">
-                  <span className="font-semibold">Total</span>
-                  <span className="text-lg font-extrabold text-emerald-600">{formatPrice(manualSaleTotal)}</span>
+                  <span className="text-sm text-muted-foreground">Subtotal</span>
+                  <span className="text-sm font-semibold">{formatPrice(manualSaleSubtotal)}</span>
                 </div>
               </div>
             )}
@@ -1796,6 +1970,45 @@ export default function Dashboard({ user, profile, onLogout }) {
                   onChange={(e) => setManualSale({ ...manualSale, saleDate: e.target.value })}
                 />
               </div>
+              <div>
+                <Label>Descuento (Gs/$)</Label>
+                <Input
+                  type="number" min="0" placeholder="0"
+                  value={manualSale.discount}
+                  onChange={(e) => setManualSale({ ...manualSale, discount: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Seña recibida</Label>
+                <Input
+                  type="number" min="0" placeholder="0"
+                  value={manualSale.deposit}
+                  onChange={(e) => setManualSale({ ...manualSale, deposit: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label>Estado de la venta</Label>
+              <Select value={manualSale.status} onValueChange={(v) => setManualSale({ ...manualSale, status: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="delivered">Entregada (pago completo)</SelectItem>
+                  <SelectItem value="preparing">En preparación (con seña / saldo pendiente)</SelectItem>
+                  <SelectItem value="pending">Pendiente</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Totals summary */}
+            <div className="rounded-lg border bg-muted/30 p-3 space-y-1">
+              <div className="flex justify-between text-sm"><span>Total</span><span className="font-extrabold text-emerald-600">{formatPrice(manualSaleTotal)}</span></div>
+              {manualSale.status !== 'delivered' && (
+                <>
+                  <div className="flex justify-between text-sm"><span>Seña</span><span>{formatPrice(manualSaleDeposit)}</span></div>
+                  <div className="flex justify-between text-sm font-semibold text-amber-600"><span>Saldo pendiente</span><span>{formatPrice(manualSaleBalance)}</span></div>
+                </>
+              )}
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
@@ -1804,6 +2017,81 @@ export default function Dashboard({ user, profile, onLogout }) {
                 {savingSale && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                 Registrar venta
               </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Material Dialog */}
+      <Dialog open={materialDialog.open} onOpenChange={(open) => setMaterialDialog({ ...materialDialog, open })}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{materialDialog.data?.id ? 'Editar' : 'Nuevo'} material</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 p-1">
+            <div>
+              <Label>Nombre *</Label>
+              <Input value={materialDialog.data?.name || ''} onChange={(e) => setMaterialDialog({ ...materialDialog, data: { ...materialDialog.data, name: e.target.value } })} placeholder="Ej: Papel sublimación" />
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <Label>Unidad</Label>
+                <Input value={materialDialog.data?.unit || ''} onChange={(e) => setMaterialDialog({ ...materialDialog, data: { ...materialDialog.data, unit: e.target.value } })} placeholder="un / m / kg" />
+              </div>
+              <div>
+                <Label>Stock inicial</Label>
+                <Input type="number" min="0" value={materialDialog.data?.stock_quantity ?? ''} onChange={(e) => setMaterialDialog({ ...materialDialog, data: { ...materialDialog.data, stock_quantity: e.target.value } })} />
+              </div>
+              <div>
+                <Label>Costo unit.</Label>
+                <Input type="number" min="0" value={materialDialog.data?.unit_cost ?? ''} onChange={(e) => setMaterialDialog({ ...materialDialog, data: { ...materialDialog.data, unit_cost: e.target.value } })} />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setMaterialDialog({ open: false, data: null })}>Cancelar</Button>
+              <Button onClick={saveMaterial} disabled={savingMaterial}>{savingMaterial && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}Guardar</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Material Movement Dialog */}
+      <Dialog open={movementDialog.open} onOpenChange={(open) => setMovementDialog({ ...movementDialog, open })}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{movementDialog.type === 'purchase' ? 'Registrar compra' : movementDialog.type === 'usage' ? 'Descontar uso' : 'Ajustar'} · {movementDialog.material?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 p-1">
+            <div>
+              <Label>Tipo</Label>
+              <Select value={movementDialog.type} onValueChange={(v) => setMovementDialog({ ...movementDialog, type: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="purchase">Compra (suma stock)</SelectItem>
+                  <SelectItem value="usage">Uso (descuenta stock)</SelectItem>
+                  <SelectItem value="adjust">Ajuste (fija el stock)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Cantidad</Label>
+                <Input type="number" min="0" value={movementDialog.quantity} onChange={(e) => setMovementDialog({ ...movementDialog, quantity: e.target.value })} />
+              </div>
+              {movementDialog.type === 'purchase' && (
+                <div>
+                  <Label>Costo unit.</Label>
+                  <Input type="number" min="0" value={movementDialog.unit_cost} onChange={(e) => setMovementDialog({ ...movementDialog, unit_cost: e.target.value })} />
+                </div>
+              )}
+            </div>
+            <div>
+              <Label>Nota (opcional)</Label>
+              <Input value={movementDialog.note} onChange={(e) => setMovementDialog({ ...movementDialog, note: e.target.value })} />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setMovementDialog({ ...movementDialog, open: false })}>Cancelar</Button>
+              <Button onClick={saveMovement} disabled={savingMaterial}>{savingMaterial && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}Guardar</Button>
             </div>
           </div>
         </DialogContent>
@@ -1916,6 +2204,59 @@ export default function Dashboard({ user, profile, onLogout }) {
                   />
                   <p className="text-xs text-muted-foreground mt-1">Se descuenta automáticamente con cada venta</p>
                 </div>
+                <div>
+                  <Label>Costo del producto</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="0"
+                    value={productDialog.data?.cost_price ?? ''}
+                    onChange={(e) => setProductDialog({ ...productDialog, data: { ...productDialog.data, cost_price: e.target.value } })}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">Se usa para calcular la ganancia en reportes</p>
+                </div>
+              </div>
+
+              {/* Combo / Kit */}
+              <div className="rounded-lg border p-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-base font-semibold">Es un Combo / Kit</Label>
+                    <p className="text-xs text-muted-foreground">Al venderse, descuenta el stock de cada producto incluido</p>
+                  </div>
+                  <Switch
+                    checked={!!productDialog.data?.is_combo}
+                    onCheckedChange={(v) => setProductDialog({ ...productDialog, data: { ...productDialog.data, is_combo: v, combo_items: productDialog.data?.combo_items || [] } })}
+                  />
+                </div>
+                {productDialog.data?.is_combo && (
+                  <div className="space-y-2">
+                    {(productDialog.data?.combo_items || []).map((ci, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <Select value={ci.component_product_id || ''} onValueChange={(v) => {
+                          const arr = [...(productDialog.data.combo_items || [])]; arr[idx] = { ...arr[idx], component_product_id: v }
+                          setProductDialog({ ...productDialog, data: { ...productDialog.data, combo_items: arr } })
+                        }}>
+                          <SelectTrigger className="flex-1"><SelectValue placeholder="Producto componente" /></SelectTrigger>
+                          <SelectContent>
+                            {products.filter(p => p.id !== productDialog.data?.id && !p.is_combo).map(p => (
+                              <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Input type="number" min="1" className="w-20" value={ci.quantity || 1}
+                          onChange={(e) => { const arr = [...(productDialog.data.combo_items || [])]; arr[idx] = { ...arr[idx], quantity: e.target.value }; setProductDialog({ ...productDialog, data: { ...productDialog.data, combo_items: arr } }) }} />
+                        <Button size="sm" variant="ghost" className="text-red-500 h-9 w-9 p-0" onClick={() => { const arr = (productDialog.data.combo_items || []).filter((_, i) => i !== idx); setProductDialog({ ...productDialog, data: { ...productDialog.data, combo_items: arr } }) }}>
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    ))}
+                    <Button size="sm" variant="outline" onClick={() => { const arr = [...(productDialog.data?.combo_items || []), { component_product_id: '', quantity: 1 }]; setProductDialog({ ...productDialog, data: { ...productDialog.data, combo_items: arr } }) }}>
+                      <Plus className="w-4 h-4 mr-1" /> Agregar componente
+                    </Button>
+                  </div>
+                )}
               </div>
 
               <div className="flex flex-wrap gap-6">
