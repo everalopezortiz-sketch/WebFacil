@@ -108,7 +108,10 @@ function pickProductFields(body) {
   PRODUCT_ALLOWED_FIELDS.forEach(f => { if (body[f] !== undefined) out[f] = body[f] })
   if (out.category_id === 'none' || out.category_id === '') out.category_id = null
   if (out.stock_quantity === '' || out.stock_quantity === undefined) out.stock_quantity = null
-  if (out.cost_price === '' || out.cost_price === undefined) out.cost_price = 0
+  // Only coerce cost_price when the field is actually present in the body.
+  // If it's undefined (partial update), leave it out so we never overwrite the saved cost with 0.
+  if (out.cost_price === '' || out.cost_price === null) out.cost_price = 0
+  else if (out.cost_price !== undefined) out.cost_price = parseFloat(out.cost_price) || 0
   return out
 }
 
@@ -206,7 +209,7 @@ export async function GET(request, { params }) {
       
       const { data, error } = await supabase
         .from('products')
-        .select('id,category_id,name,description,image_url,price,promo_price,promo_active,is_featured,is_active,stock_quantity,display_order,createdAt,categories(name)')
+        .select('id,category_id,name,description,image_url,price,promo_price,promo_active,is_featured,is_active,stock_quantity,display_order,cost_price,is_combo,createdAt,categories(name)')
         .eq('user_id', user.id)
         .order('createdAt', { ascending: false })
       
@@ -952,11 +955,12 @@ export async function POST(request, { params }) {
       // Whitelist fields; never trust user_id/timestamps/joins from client
       const productData = { ...pickProductFields(body), user_id: user.id }
       const SELECT_COLS = 'id,category_id,name,description,image_url,price,promo_price,promo_active,is_featured,is_active,stock_quantity,display_order,createdAt,categories(name)'
+      const SELECT_COLS_FULL = 'id,category_id,name,description,image_url,price,promo_price,promo_active,is_featured,is_active,stock_quantity,display_order,cost_price,is_combo,createdAt,categories(name)'
 
       let { data, error } = await supabaseAdmin
         .from('products')
         .insert(productData)
-        .select(SELECT_COLS)
+        .select(SELECT_COLS_FULL)
         .single()
 
       // Fallback if new columns (cost_price/is_combo) don't exist yet
@@ -1430,13 +1434,14 @@ export async function PUT(request, { params }) {
       // Whitelist fields only (supports partial updates like { stock_quantity })
       const productData = pickProductFields(body)
       const SELECT_COLS = 'id,category_id,name,description,image_url,price,promo_price,promo_active,is_featured,is_active,stock_quantity,display_order,createdAt,categories(name)'
+      const SELECT_COLS_FULL = 'id,category_id,name,description,image_url,price,promo_price,promo_active,is_featured,is_active,stock_quantity,display_order,cost_price,is_combo,createdAt,categories(name)'
 
       let { data, error } = await supabaseAdmin
         .from('products')
         .update(productData)
         .eq('id', id)
         .eq('user_id', user.id)
-        .select(SELECT_COLS)
+        .select(SELECT_COLS_FULL)
         .single()
 
       // Fallback if new columns (cost_price/is_combo) don't exist yet
