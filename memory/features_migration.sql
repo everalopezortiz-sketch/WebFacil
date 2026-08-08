@@ -18,6 +18,8 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_status text DEFAULT 'pending
 -- 3) GANANCIA: costo por producto + snapshot de costo en la venta
 ALTER TABLE products ADD COLUMN IF NOT EXISTS cost_price numeric DEFAULT 0;
 ALTER TABLE order_items ADD COLUMN IF NOT EXISTS cost_price numeric DEFAULT 0;
+-- precio original (minorista) para calcular el descuento aplicado en ventas por mayor
+ALTER TABLE order_items ADD COLUMN IF NOT EXISTS original_price numeric DEFAULT 0;
 
 -- 4) COMBOS / KITS -------------------------------------------
 ALTER TABLE products ADD COLUMN IF NOT EXISTS is_combo boolean DEFAULT false;

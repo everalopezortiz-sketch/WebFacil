@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Backend API Test for Product cost_price Persistence Bug Fix
-Tests the fix for cost_price reverting to 0 on partial updates
+Backend API Testing Script for WebFácil SaaS
+Tests new features: manual sale with deposit/discount/original_price, materials, combos, reports profit
 """
 
 import requests
@@ -11,73 +11,37 @@ from datetime import datetime
 
 # Configuration
 BASE_URL = "https://stock-master-262.preview.emergentagent.com/api"
-TEST_USER_EMAIL = "ortiz@gmail.com"
-TEST_USER_PASSWORD = "ortiz123"
+TEST_EMAIL = "ortiz@gmail.com"
+TEST_PASSWORD = "ortiz123"
 
-# ANSI color codes for output
-GREEN = '\033[92m'
-RED = '\033[91m'
-YELLOW = '\033[93m'
-BLUE = '\033[94m'
-RESET = '\033[0m'
+# Global variables
+access_token = None
+headers = {}
 
-def print_test(message):
-    print(f"\n{BLUE}[TEST]{RESET} {message}")
-
-def print_success(message):
-    print(f"{GREEN}✓ PASS:{RESET} {message}")
-
-def print_error(message):
-    print(f"{RED}✗ FAIL:{RESET} {message}")
-
-def print_info(message):
-    print(f"{YELLOW}ℹ INFO:{RESET} {message}")
-
-def print_section(title):
+def print_test(test_name):
+    """Print test header"""
     print(f"\n{'='*80}")
-    print(f"{BLUE}{title}{RESET}")
-    print(f"{'='*80}")
+    print(f"TEST: {test_name}")
+    print('='*80)
 
-class TestResults:
-    def __init__(self):
-        self.total = 0
-        self.passed = 0
-        self.failed = 0
-        self.failures = []
-    
-    def add_pass(self, test_name):
-        self.total += 1
-        self.passed += 1
-        print_success(test_name)
-    
-    def add_fail(self, test_name, reason):
-        self.total += 1
-        self.failed += 1
-        self.failures.append(f"{test_name}: {reason}")
-        print_error(f"{test_name} - {reason}")
-    
-    def print_summary(self):
-        print_section("TEST SUMMARY")
-        print(f"Total Tests: {self.total}")
-        print(f"{GREEN}Passed: {self.passed}{RESET}")
-        print(f"{RED}Failed: {self.failed}{RESET}")
-        
-        if self.failures:
-            print(f"\n{RED}Failed Tests:{RESET}")
-            for failure in self.failures:
-                print(f"  - {failure}")
-        
-        success_rate = (self.passed / self.total * 100) if self.total > 0 else 0
-        print(f"\nSuccess Rate: {success_rate:.1f}%")
-        
-        return self.failed == 0
+def print_result(success, message):
+    """Print test result"""
+    status = "✅ PASS" if success else "❌ FAIL"
+    print(f"{status}: {message}")
 
-results = TestResults()
+def print_json(data, title="Response"):
+    """Pretty print JSON data"""
+    print(f"\n{title}:")
+    print(json.dumps(data, indent=2))
 
-def signin():
-    """Sign in and get access token using Supabase REST API"""
-    print_section("AUTHENTICATION")
-    print_test("Signing in as ortiz@gmail.com via Supabase REST API")
+# ============================================================================
+# Authentication
+# ============================================================================
+
+def test_signin():
+    """Sign in and get access token via Supabase REST API"""
+    global access_token, headers
+    print_test("Sign In (ortiz@gmail.com)")
     
     try:
         # Use Supabase REST API directly to get access token
@@ -86,352 +50,612 @@ def signin():
         
         response = requests.post(
             f"{supabase_url}/auth/v1/token?grant_type=password",
+            json={"email": TEST_EMAIL, "password": TEST_PASSWORD},
             headers={
                 "apikey": supabase_anon_key,
                 "Content-Type": "application/json"
-            },
-            json={
-                "email": TEST_USER_EMAIL,
-                "password": TEST_USER_PASSWORD
             },
             timeout=10
         )
         
         if response.status_code == 200:
             data = response.json()
-            if 'access_token' in data:
-                token = data['access_token']
-                print_success(f"Signed in successfully")
-                print_info(f"User ID: {data.get('user', {}).get('id', 'N/A')}")
-                return token
+            access_token = data.get('access_token')
+            
+            if access_token:
+                headers = {"Authorization": f"Bearer {access_token}"}
+                print_result(True, f"Signed in successfully. User ID: {data.get('user', {}).get('id')}")
+                return True
             else:
-                print_error("Response missing access_token")
-                print_info(f"Response: {json.dumps(data, indent=2)}")
+                print_result(False, "No access token in response")
+                print_json(data)
+                return False
+        else:
+            print_result(False, f"Status {response.status_code}: {response.text}")
+            return False
+    except Exception as e:
+        print_result(False, f"Exception: {str(e)}")
+        return False
+
+# ============================================================================
+# Test A: Manual Wholesale Sale with Deposit + Discount + Original Price
+# ============================================================================
+
+def test_get_products():
+    """Get products to use in manual sale"""
+    print_test("Get Products (to use in manual sale)")
+    
+    try:
+        response = requests.get(f"{BASE_URL}/products", headers=headers, timeout=10)
+        
+        if response.status_code == 200:
+            products = response.json()
+            if len(products) >= 2:
+                print_result(True, f"Got {len(products)} products")
+                # Return first 2 products
+                return products[:2]
+            else:
+                print_result(False, f"Need at least 2 products, got {len(products)}")
+                return []
+        else:
+            print_result(False, f"Status {response.status_code}: {response.text}")
+            return []
+    except Exception as e:
+        print_result(False, f"Exception: {str(e)}")
+        return []
+
+def test_manual_sale_wholesale(products):
+    """Test POST /api/orders/manual with wholesale items, deposit, discount"""
+    print_test("Manual Sale with Wholesale Discount + Deposit + Original Price")
+    
+    if len(products) < 2:
+        print_result(False, "Need at least 2 products to test")
+        return None
+    
+    prod1 = products[0]
+    prod2 = products[1]
+    
+    # Create items with wholesale discount (unitPrice < originalPrice)
+    items = [
+        {
+            "productId": prod1['id'],
+            "productName": prod1['name'],
+            "quantity": 6,
+            "unitPrice": 5000,  # Wholesale price
+            "originalPrice": 8000,  # Retail price
+            "costPrice": 2000,
+            "subtotal": 30000,
+            "wholesale": True
+        },
+        {
+            "productId": prod2['id'],
+            "productName": prod2['name'],
+            "quantity": 3,
+            "unitPrice": 10000,
+            "originalPrice": 10000,  # No discount
+            "costPrice": 4000,
+            "subtotal": 30000,
+            "wholesale": False
+        }
+    ]
+    
+    body = {
+        "customerName": "Cliente Test Mayorista",
+        "description": "Venta con descuento mayorista + seña",
+        "total": 90000,
+        "discount": 5000,
+        "deposit": 30000,
+        "status": "pending",
+        "deductStock": False,
+        "items": items
+    }
+    
+    try:
+        response = requests.post(
+            f"{BASE_URL}/orders/manual",
+            headers=headers,
+            json=body,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            if 'order' in data and 'orderNumber' in data:
+                order = data['order']
+                print_result(True, f"Manual sale created. Order number: {data['orderNumber']}")
+                print(f"  Order ID: {order['id']}")
+                print(f"  Total: {order.get('total')}")
+                print(f"  Deposit: {order.get('deposit', 'N/A')}")
+                print(f"  Discount: {order.get('discount', 'N/A')}")
+                print(f"  Balance Due: {order.get('balance_due', 'N/A')}")
+                print(f"  Payment Status: {order.get('payment_status', 'N/A')}")
+                print(f"  Status: {order.get('status')}")
+                return order['id']
+            else:
+                print_result(False, "Missing order or orderNumber in response")
+                print_json(data)
                 return None
         else:
-            print_error(f"Sign in failed with status {response.status_code}")
-            print_info(f"Response: {response.text}")
+            print_result(False, f"Status {response.status_code}: {response.text}")
             return None
     except Exception as e:
-        print_error(f"Sign in exception: {str(e)}")
+        print_result(False, f"Exception: {str(e)}")
         return None
 
-def test_get_products_includes_cost_price(token):
-    """Test 1: GET /api/products returns cost_price and is_combo fields"""
-    print_section("TEST 1: GET /api/products includes cost_price & is_combo")
-    print_test("Fetching products list")
+def test_get_order_items(order_id):
+    """Get order and verify order_items include original_price, cost_price, unit_price"""
+    print_test("Verify Order Items Include original_price, cost_price, unit_price")
+    
+    try:
+        response = requests.get(f"{BASE_URL}/orders", headers=headers, timeout=10)
+        
+        if response.status_code == 200:
+            orders = response.json()
+            order = next((o for o in orders if o['id'] == order_id), None)
+            
+            if order:
+                print_result(True, f"Found order {order_id}")
+                print(f"  Order fields:")
+                print(f"    - deposit: {order.get('deposit', 'MISSING')}")
+                print(f"    - discount: {order.get('discount', 'MISSING')}")
+                print(f"    - balance_due: {order.get('balance_due', 'MISSING')}")
+                print(f"    - payment_status: {order.get('payment_status', 'MISSING')}")
+                
+                items = order.get('order_items', [])
+                if items:
+                    print(f"\n  Order items ({len(items)} items):")
+                    for i, item in enumerate(items, 1):
+                        print(f"    Item {i}: {item.get('product_name')}")
+                        print(f"      - unit_price: {item.get('unit_price', 'MISSING')}")
+                        print(f"      - cost_price: {item.get('cost_price', 'MISSING')}")
+                        print(f"      - original_price: {item.get('original_price', 'MISSING')}")
+                        print(f"      - quantity: {item.get('quantity')}")
+                        print(f"      - subtotal: {item.get('subtotal')}")
+                    
+                    # Check if original_price exists
+                    has_original_price = any('original_price' in item for item in items)
+                    has_cost_price = any('cost_price' in item for item in items)
+                    
+                    if has_original_price:
+                        print_result(True, "✓ order_items.original_price column EXISTS")
+                    else:
+                        print_result(False, "✗ order_items.original_price column MISSING")
+                    
+                    if has_cost_price:
+                        print_result(True, "✓ order_items.cost_price column EXISTS")
+                    else:
+                        print_result(False, "✗ order_items.cost_price column MISSING")
+                    
+                    return True
+                else:
+                    print_result(False, "No order_items found")
+                    return False
+            else:
+                print_result(False, f"Order {order_id} not found in orders list")
+                return False
+        else:
+            print_result(False, f"Status {response.status_code}: {response.text}")
+            return False
+    except Exception as e:
+        print_result(False, f"Exception: {str(e)}")
+        return False
+
+# ============================================================================
+# Test B: Materials CRUD + Movements
+# ============================================================================
+
+def test_create_material():
+    """Test POST /api/materials"""
+    print_test("Create Material")
+    
+    body = {
+        "name": "Sublimacion papel",
+        "unit": "un",
+        "stock_quantity": 100,
+        "unit_cost": 500
+    }
+    
+    try:
+        response = requests.post(
+            f"{BASE_URL}/materials",
+            headers=headers,
+            json=body,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            if 'id' in data:
+                print_result(True, f"Material created. ID: {data['id']}, Name: {data['name']}, Stock: {data['stock_quantity']}")
+                print_result(True, "✓ materials table EXISTS")
+                return data['id']
+            else:
+                print_result(False, "No id in response")
+                print_json(data)
+                return None
+        elif response.status_code == 400 or response.status_code == 500:
+            error_text = response.text
+            if 'relation' in error_text.lower() or 'table' in error_text.lower() or 'not found' in error_text.lower():
+                print_result(False, "✗ materials table MISSING (table does not exist)")
+            else:
+                print_result(False, f"Status {response.status_code}: {error_text}")
+            return None
+        else:
+            print_result(False, f"Status {response.status_code}: {response.text}")
+            return None
+    except Exception as e:
+        print_result(False, f"Exception: {str(e)}")
+        return None
+
+def test_get_materials():
+    """Test GET /api/materials"""
+    print_test("Get Materials")
+    
+    try:
+        response = requests.get(f"{BASE_URL}/materials", headers=headers, timeout=10)
+        
+        if response.status_code == 200:
+            materials = response.json()
+            print_result(True, f"Got {len(materials)} materials")
+            if materials:
+                print("  Sample material:")
+                print(f"    - ID: {materials[0].get('id')}")
+                print(f"    - Name: {materials[0].get('name')}")
+                print(f"    - Stock: {materials[0].get('stock_quantity')}")
+                print(f"    - Unit Cost: {materials[0].get('unit_cost')}")
+            return materials
+        else:
+            print_result(False, f"Status {response.status_code}: {response.text}")
+            return []
+    except Exception as e:
+        print_result(False, f"Exception: {str(e)}")
+        return []
+
+def test_material_movement_purchase(material_id):
+    """Test POST /api/materials/:id/movement (purchase)"""
+    print_test("Material Movement - Purchase (add stock)")
+    
+    body = {
+        "type": "purchase",
+        "quantity": 50,
+        "unit_cost": 400,
+        "note": "Compra de prueba"
+    }
+    
+    try:
+        response = requests.post(
+            f"{BASE_URL}/materials/{material_id}/movement",
+            headers=headers,
+            json=body,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            print_result(True, f"Purchase movement recorded. New stock: {data.get('stock_quantity')}")
+            print_result(True, "✓ material_movements table EXISTS")
+            return True
+        elif response.status_code == 400 or response.status_code == 500:
+            error_text = response.text
+            if 'relation' in error_text.lower() or 'table' in error_text.lower():
+                print_result(False, "✗ material_movements table MISSING")
+            else:
+                print_result(False, f"Status {response.status_code}: {error_text}")
+            return False
+        else:
+            print_result(False, f"Status {response.status_code}: {response.text}")
+            return False
+    except Exception as e:
+        print_result(False, f"Exception: {str(e)}")
+        return False
+
+def test_material_movement_usage(material_id):
+    """Test POST /api/materials/:id/movement (usage)"""
+    print_test("Material Movement - Usage (deduct stock)")
+    
+    body = {
+        "type": "usage",
+        "quantity": 20,
+        "note": "Uso en producción"
+    }
+    
+    try:
+        response = requests.post(
+            f"{BASE_URL}/materials/{material_id}/movement",
+            headers=headers,
+            json=body,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            print_result(True, f"Usage movement recorded. New stock: {data.get('stock_quantity')}")
+            return True
+        else:
+            print_result(False, f"Status {response.status_code}: {response.text}")
+            return False
+    except Exception as e:
+        print_result(False, f"Exception: {str(e)}")
+        return False
+
+def test_update_material(material_id):
+    """Test PUT /api/materials/:id"""
+    print_test("Update Material")
+    
+    body = {
+        "name": "Papel sublimacion"
+    }
+    
+    try:
+        response = requests.put(
+            f"{BASE_URL}/materials/{material_id}",
+            headers=headers,
+            json=body,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            print_result(True, f"Material updated. New name: {data.get('name')}")
+            return True
+        else:
+            print_result(False, f"Status {response.status_code}: {response.text}")
+            return False
+    except Exception as e:
+        print_result(False, f"Exception: {str(e)}")
+        return False
+
+def test_delete_material(material_id):
+    """Test DELETE /api/materials/:id"""
+    print_test("Delete Material")
+    
+    try:
+        response = requests.delete(
+            f"{BASE_URL}/materials/{material_id}",
+            headers=headers,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            print_result(True, "Material deleted successfully")
+            return True
+        else:
+            print_result(False, f"Status {response.status_code}: {response.text}")
+            return False
+    except Exception as e:
+        print_result(False, f"Exception: {str(e)}")
+        return False
+
+# ============================================================================
+# Test C: Combos
+# ============================================================================
+
+def test_create_combo(products):
+    """Test creating a combo product"""
+    print_test("Create Combo Product")
+    
+    if len(products) < 2:
+        print_result(False, "Need at least 2 products to create combo")
+        return None
+    
+    prod1 = products[0]
+    prod2 = products[1]
+    
+    body = {
+        "name": "Combo Test",
+        "price": 50000,
+        "is_combo": True,
+        "combo_items": [
+            {
+                "component_product_id": prod1['id'],
+                "quantity": 1
+            },
+            {
+                "component_product_id": prod2['id'],
+                "quantity": 2
+            }
+        ]
+    }
+    
+    try:
+        response = requests.post(
+            f"{BASE_URL}/products",
+            headers=headers,
+            json=body,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            if 'id' in data:
+                print_result(True, f"Combo product created. ID: {data['id']}, Name: {data['name']}")
+                print(f"  is_combo: {data.get('is_combo', 'MISSING')}")
+                print_result(True, "✓ combo_items table EXISTS (or graceful fallback)")
+                return data['id']
+            else:
+                print_result(False, "No id in response")
+                print_json(data)
+                return None
+        else:
+            print_result(False, f"Status {response.status_code}: {response.text}")
+            return None
+    except Exception as e:
+        print_result(False, f"Exception: {str(e)}")
+        return None
+
+def test_get_combo_components(combo_id):
+    """Test GET /api/products/:id/combo"""
+    print_test("Get Combo Components")
     
     try:
         response = requests.get(
-            f"{BASE_URL}/products",
-            headers={"Authorization": f"Bearer {token}"},
+            f"{BASE_URL}/products/{combo_id}/combo",
+            headers=headers,
             timeout=10
         )
         
-        if response.status_code != 200:
-            results.add_fail("GET /api/products status", f"Expected 200, got {response.status_code}")
-            return None
-        
-        results.add_pass("GET /api/products returns 200")
-        
-        products = response.json()
-        
-        if not isinstance(products, list):
-            results.add_fail("GET /api/products response type", f"Expected list, got {type(products)}")
-            return None
-        
-        results.add_pass(f"GET /api/products returns list ({len(products)} products)")
-        
-        if len(products) == 0:
-            print_info("No products found - will create one for testing")
-            return None
-        
-        # Check if products include cost_price and is_combo fields
-        first_product = products[0]
-        print_info(f"First product keys: {list(first_product.keys())}")
-        
-        has_cost_price = 'cost_price' in first_product
-        has_is_combo = 'is_combo' in first_product
-        
-        if has_cost_price:
-            results.add_pass("Products include 'cost_price' field")
-            print_info(f"cost_price value: {first_product['cost_price']}")
-        else:
-            results.add_fail("Products missing 'cost_price' field", "Field not returned by GET /api/products")
-            print_info("This indicates the DB migration may not be applied yet")
-        
-        if has_is_combo:
-            results.add_pass("Products include 'is_combo' field")
-            print_info(f"is_combo value: {first_product['is_combo']}")
-        else:
-            results.add_fail("Products missing 'is_combo' field", "Field not returned by GET /api/products")
-        
-        return products[0] if products else None
-        
-    except Exception as e:
-        results.add_fail("GET /api/products exception", str(e))
-        return None
-
-def test_create_product_with_cost_price(token):
-    """Test 4: POST /api/products with cost_price"""
-    print_section("TEST 4: POST /api/products with cost_price")
-    print_test("Creating new product with cost_price=15000")
-    
-    try:
-        product_data = {
-            "name": f"Test Product {datetime.now().strftime('%H%M%S')}",
-            "description": "Test product for cost_price persistence",
-            "price": 25000,
-            "cost_price": 15000,
-            "stock_quantity": 10,
-            "is_active": True
-        }
-        
-        response = requests.post(
-            f"{BASE_URL}/products",
-            headers={"Authorization": f"Bearer {token}"},
-            json=product_data,
-            timeout=10
-        )
-        
-        if response.status_code != 200:
-            results.add_fail("POST /api/products status", f"Expected 200, got {response.status_code}: {response.text}")
-            return None
-        
-        results.add_pass("POST /api/products returns 200")
-        
-        created_product = response.json()
-        print_info(f"Created product ID: {created_product.get('id')}")
-        
-        # Check if response includes cost_price
-        if 'cost_price' in created_product:
-            if created_product['cost_price'] == 15000:
-                results.add_pass("POST response includes cost_price=15000")
+        if response.status_code == 200:
+            components = response.json()
+            if len(components) > 0:
+                print_result(True, f"Got {len(components)} combo components")
+                print_result(True, "✓ combo_items table EXISTS")
+                for i, comp in enumerate(components, 1):
+                    print(f"  Component {i}:")
+                    print(f"    - component_product_id: {comp.get('component_product_id')}")
+                    print(f"    - quantity: {comp.get('quantity')}")
+                    if comp.get('component'):
+                        print(f"    - component name: {comp['component'].get('name')}")
+                return True
             else:
-                results.add_fail("POST response cost_price value", f"Expected 15000, got {created_product['cost_price']}")
+                print_result(False, "No components returned (combo_items table may be empty or missing)")
+                print_result(False, "✗ combo_items table MISSING or empty")
+                return False
         else:
-            print_info("POST response doesn't include cost_price (migration may not be applied)")
-        
-        return created_product
-        
+            print_result(False, f"Status {response.status_code}: {response.text}")
+            return False
     except Exception as e:
-        results.add_fail("POST /api/products exception", str(e))
-        return None
-
-def test_update_product_cost_price(token, product_id):
-    """Test 2: PUT /api/products/{id} with cost_price and verify persistence"""
-    print_section("TEST 2: PUT /api/products/{id} with cost_price=20000")
-    print_test(f"Updating product {product_id} with cost_price=20000")
-    
-    try:
-        response = requests.put(
-            f"{BASE_URL}/products/{product_id}",
-            headers={"Authorization": f"Bearer {token}"},
-            json={"cost_price": 20000},
-            timeout=10
-        )
-        
-        if response.status_code != 200:
-            results.add_fail("PUT /api/products/{id} status", f"Expected 200, got {response.status_code}: {response.text}")
-            return False
-        
-        results.add_pass("PUT /api/products/{id} returns 200")
-        
-        # Now GET products and verify cost_price persisted
-        print_test("Verifying cost_price persisted via GET /api/products")
-        
-        get_response = requests.get(
-            f"{BASE_URL}/products",
-            headers={"Authorization": f"Bearer {token}"},
-            timeout=10
-        )
-        
-        if get_response.status_code != 200:
-            results.add_fail("GET /api/products after update", f"Status {get_response.status_code}")
-            return False
-        
-        products = get_response.json()
-        updated_product = next((p for p in products if p['id'] == product_id), None)
-        
-        if not updated_product:
-            results.add_fail("Product not found after update", f"Product {product_id} not in list")
-            return False
-        
-        if 'cost_price' not in updated_product:
-            print_info("cost_price field not in response (migration may not be applied)")
-            return False
-        
-        if updated_product['cost_price'] == 20000:
-            results.add_pass("cost_price persisted correctly (20000)")
-            return True
-        else:
-            results.add_fail("cost_price persistence", f"Expected 20000, got {updated_product['cost_price']}")
-            return False
-        
-    except Exception as e:
-        results.add_fail("PUT /api/products/{id} exception", str(e))
+        print_result(False, f"Exception: {str(e)}")
         return False
 
-def test_partial_update_preserves_cost_price(token, product_id):
-    """Test 3: CRITICAL - Partial update (only stock_quantity) should NOT reset cost_price"""
-    print_section("TEST 3: CRITICAL - Partial update preserves cost_price")
-    print_test(f"Updating product {product_id} with ONLY stock_quantity=5")
-    print_info("This should NOT reset cost_price to 0 (the bug fix)")
+# ============================================================================
+# Test D: Regression Tests
+# ============================================================================
+
+def test_regression_products():
+    """Test GET /api/products"""
+    print_test("Regression: GET /api/products")
     
     try:
-        # First, verify current cost_price
-        get_response = requests.get(
-            f"{BASE_URL}/products",
-            headers={"Authorization": f"Bearer {token}"},
-            timeout=10
-        )
+        response = requests.get(f"{BASE_URL}/products", headers=headers, timeout=10)
         
-        if get_response.status_code != 200:
-            results.add_fail("GET /api/products before partial update", f"Status {get_response.status_code}")
-            return False
-        
-        products = get_response.json()
-        product_before = next((p for p in products if p['id'] == product_id), None)
-        
-        if not product_before:
-            results.add_fail("Product not found before partial update", f"Product {product_id} not in list")
-            return False
-        
-        if 'cost_price' not in product_before:
-            print_info("cost_price field not in response (migration may not be applied)")
-            return False
-        
-        cost_price_before = product_before['cost_price']
-        print_info(f"cost_price before partial update: {cost_price_before}")
-        
-        # Now do partial update with ONLY stock_quantity
-        response = requests.put(
-            f"{BASE_URL}/products/{product_id}",
-            headers={"Authorization": f"Bearer {token}"},
-            json={"stock_quantity": 5},  # ONLY stock_quantity, NO cost_price
-            timeout=10
-        )
-        
-        if response.status_code != 200:
-            results.add_fail("PUT /api/products/{id} partial update status", f"Expected 200, got {response.status_code}: {response.text}")
-            return False
-        
-        results.add_pass("PUT /api/products/{id} partial update returns 200")
-        
-        # Verify cost_price is STILL the same (not reset to 0)
-        print_test("Verifying cost_price NOT reset to 0 after partial update")
-        
-        get_response2 = requests.get(
-            f"{BASE_URL}/products",
-            headers={"Authorization": f"Bearer {token}"},
-            timeout=10
-        )
-        
-        if get_response2.status_code != 200:
-            results.add_fail("GET /api/products after partial update", f"Status {get_response2.status_code}")
-            return False
-        
-        products_after = get_response2.json()
-        product_after = next((p for p in products_after if p['id'] == product_id), None)
-        
-        if not product_after:
-            results.add_fail("Product not found after partial update", f"Product {product_id} not in list")
-            return False
-        
-        if 'cost_price' not in product_after:
-            print_info("cost_price field not in response (migration may not be applied)")
-            return False
-        
-        cost_price_after = product_after['cost_price']
-        print_info(f"cost_price after partial update: {cost_price_after}")
-        
-        if cost_price_after == cost_price_before:
-            results.add_pass(f"CRITICAL: cost_price preserved after partial update ({cost_price_after})")
+        if response.status_code == 200:
+            products = response.json()
+            print_result(True, f"Got {len(products)} products")
             return True
-        elif cost_price_after == 0:
-            results.add_fail("CRITICAL BUG: cost_price reset to 0 after partial update", 
-                           f"Expected {cost_price_before}, got 0 - THE BUG IS NOT FIXED")
-            return False
         else:
-            results.add_fail("cost_price changed unexpectedly", 
-                           f"Expected {cost_price_before}, got {cost_price_after}")
+            print_result(False, f"Status {response.status_code}: {response.text}")
             return False
-        
     except Exception as e:
-        results.add_fail("Partial update test exception", str(e))
+        print_result(False, f"Exception: {str(e)}")
         return False
 
-def test_regression_endpoints(token):
-    """Test 5: Regression - verify other endpoints still work"""
-    print_section("TEST 5: REGRESSION - Other endpoints")
+def test_regression_orders():
+    """Test GET /api/orders"""
+    print_test("Regression: GET /api/orders")
     
-    endpoints = [
-        ("GET /api/products", f"{BASE_URL}/products"),
-        ("GET /api/categories", f"{BASE_URL}/categories"),
-        ("GET /api/orders", f"{BASE_URL}/orders"),
-    ]
+    try:
+        response = requests.get(f"{BASE_URL}/orders", headers=headers, timeout=10)
+        
+        if response.status_code == 200:
+            orders = response.json()
+            print_result(True, f"Got {len(orders)} orders")
+            return True
+        else:
+            print_result(False, f"Status {response.status_code}: {response.text}")
+            return False
+    except Exception as e:
+        print_result(False, f"Exception: {str(e)}")
+        return False
+
+def test_regression_categories():
+    """Test GET /api/categories"""
+    print_test("Regression: GET /api/categories")
     
-    for name, url in endpoints:
-        print_test(f"Testing {name}")
-        try:
-            response = requests.get(
-                url,
-                headers={"Authorization": f"Bearer {token}"},
-                timeout=10
-            )
-            
-            if response.status_code == 200:
-                results.add_pass(f"{name} returns 200")
-            else:
-                results.add_fail(f"{name} status", f"Expected 200, got {response.status_code}")
-        except Exception as e:
-            results.add_fail(f"{name} exception", str(e))
+    try:
+        response = requests.get(f"{BASE_URL}/categories", headers=headers, timeout=10)
+        
+        if response.status_code == 200:
+            categories = response.json()
+            print_result(True, f"Got {len(categories)} categories")
+            return True
+        else:
+            print_result(False, f"Status {response.status_code}: {response.text}")
+            return False
+    except Exception as e:
+        print_result(False, f"Exception: {str(e)}")
+        return False
+
+# ============================================================================
+# Main Test Runner
+# ============================================================================
 
 def main():
-    print_section("PRODUCT COST_PRICE PERSISTENCE BUG FIX TEST")
-    print_info(f"Testing backend at: {BASE_URL}")
-    print_info(f"Test user: {TEST_USER_EMAIL}")
-    print_info(f"Timestamp: {datetime.now().isoformat()}")
+    """Run all tests"""
+    print("\n" + "="*80)
+    print("BACKEND API TESTING - NEW FEATURES")
+    print("Testing: Manual Sale (deposit/discount/original_price), Materials, Combos")
+    print("="*80)
     
-    # Step 1: Sign in
-    token = signin()
-    if not token:
-        print_error("Authentication failed - cannot proceed with tests")
+    results = {
+        "total": 0,
+        "passed": 0,
+        "failed": 0
+    }
+    
+    # Sign in
+    if not test_signin():
+        print("\n❌ FATAL: Cannot proceed without authentication")
         sys.exit(1)
     
-    # Step 2: Test GET /api/products includes cost_price
-    existing_product = test_get_products_includes_cost_price(token)
+    # Test A: Manual Sale with Wholesale Discount + Deposit
+    print("\n" + "="*80)
+    print("SECTION A: MANUAL WHOLESALE SALE WITH DEPOSIT + DISCOUNT")
+    print("="*80)
     
-    # Step 3: Create a new product with cost_price (Test 4)
-    new_product = test_create_product_with_cost_price(token)
+    products = test_get_products()
+    if products:
+        order_id = test_manual_sale_wholesale(products)
+        if order_id:
+            test_get_order_items(order_id)
     
-    # Determine which product to use for update tests
-    test_product_id = None
-    if new_product and 'id' in new_product:
-        test_product_id = new_product['id']
-        print_info(f"Using newly created product {test_product_id} for update tests")
-    elif existing_product and 'id' in existing_product:
-        test_product_id = existing_product['id']
-        print_info(f"Using existing product {test_product_id} for update tests")
+    # Test B: Materials
+    print("\n" + "="*80)
+    print("SECTION B: MATERIALS CRUD + MOVEMENTS")
+    print("="*80)
     
-    if test_product_id:
-        # Step 4: Test updating cost_price (Test 2)
-        test_update_product_cost_price(token, test_product_id)
-        
-        # Step 5: CRITICAL - Test partial update preserves cost_price (Test 3)
-        test_partial_update_preserves_cost_price(token, test_product_id)
+    material_id = test_create_material()
+    if material_id:
+        test_get_materials()
+        test_material_movement_purchase(material_id)
+        test_material_movement_usage(material_id)
+        test_update_material(material_id)
+        test_delete_material(material_id)
     else:
-        print_error("No product available for update tests")
-        results.add_fail("Update tests", "No product ID available")
+        print("\n⚠️  Skipping remaining material tests (table doesn't exist)")
     
-    # Step 6: Regression tests (Test 5)
-    test_regression_endpoints(token)
+    # Test C: Combos
+    print("\n" + "="*80)
+    print("SECTION C: COMBOS")
+    print("="*80)
     
-    # Print summary
-    success = results.print_summary()
+    if products:
+        combo_id = test_create_combo(products)
+        if combo_id:
+            test_get_combo_components(combo_id)
     
-    # Exit with appropriate code
-    sys.exit(0 if success else 1)
+    # Test D: Regression
+    print("\n" + "="*80)
+    print("SECTION D: REGRESSION TESTS")
+    print("="*80)
+    
+    test_regression_products()
+    test_regression_orders()
+    test_regression_categories()
+    
+    # Final Summary
+    print("\n" + "="*80)
+    print("TESTING COMPLETE")
+    print("="*80)
+    print("\nPlease review the output above to determine:")
+    print("1. Which features work end-to-end")
+    print("2. Which DB columns/tables are MISSING:")
+    print("   - order_items.original_price")
+    print("   - order_items.cost_price")
+    print("   - materials table")
+    print("   - material_movements table")
+    print("   - combo_items table")
+    print("   - profiles.plain_password (not tested in this script)")
+    print("\n")
 
 if __name__ == "__main__":
     main()

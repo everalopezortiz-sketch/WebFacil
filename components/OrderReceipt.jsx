@@ -31,6 +31,21 @@ export default function OrderReceipt({ order, settings, profile, open, onClose }
   const totalItems = order.order_items?.reduce((sum, i) => sum + (i.quantity || 0), 0) || 0
   const itemsCount = order.order_items?.length || 0
 
+  // Wholesale discount computation: compare original (retail) price vs the sale unit price
+  const itemsWithDiscount = (order.order_items || []).map((item) => {
+    const qty = item.quantity || 1
+    const unit = Number(item.unit_price != null ? item.unit_price : (item.price != null ? item.price : (item.subtotal || 0) / qty)) || 0
+    const original = Number(item.original_price || 0)
+    const hasDiscount = original > 0 && original > unit
+    const discountPct = hasDiscount ? Math.round((1 - unit / original) * 100) : 0
+    const saved = hasDiscount ? (original - unit) * qty : 0
+    return { ...item, _qty: qty, _unit: unit, _original: original, _hasDiscount: hasDiscount, _discountPct: discountPct, _saved: saved }
+  })
+  const itemsSaved = itemsWithDiscount.reduce((s, i) => s + (i._saved || 0), 0)
+  const orderDiscount = Number(order.discount || 0)
+  const totalSaved = itemsSaved + orderDiscount
+  const hasAnyDiscount = totalSaved > 0
+
   const formatPrice = (n) => {
     const num = Number(n || 0)
     return 'Gs. ' + num.toLocaleString('es-PY')
@@ -226,9 +241,9 @@ export default function OrderReceipt({ order, settings, profile, open, onClose }
 
             {/* Items */}
             <div style={{ borderTop: '1.5px solid #1a1a1a', paddingTop: 12, paddingBottom: 12 }}>
-              {order.order_items?.map((item, i) => {
-                const qty = item.quantity || 1
-                const price = item.price || (item.subtotal / qty) || 0
+              {itemsWithDiscount.map((item, i) => {
+                const qty = item._qty
+                const price = item._unit
                 return (
                   <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '10px 0' }}>
                     <div style={{ fontSize: 18, fontWeight: 700, color: '#1a1a1a', minWidth: 50 }}>
@@ -239,8 +254,21 @@ export default function OrderReceipt({ order, settings, profile, open, onClose }
                         {item.product_name}
                       </div>
                       <div style={{ fontSize: 12, color: '#999', marginTop: 2 }}>
-                        {formatPrice(price)}
+                        {item._hasDiscount ? (
+                          <span>
+                            <span style={{ textDecoration: 'line-through', color: '#bbb' }}>{formatPrice(item._original)}</span>
+                            {' '}
+                            <span style={{ color: brandColor, fontWeight: 700 }}>{formatPrice(price)}</span>
+                          </span>
+                        ) : (
+                          formatPrice(price)
+                        )}
                       </div>
+                      {item._hasDiscount && (
+                        <div style={{ fontSize: 11, color: '#16a34a', fontWeight: 700, marginTop: 3 }}>
+                          -{item._discountPct}% mayorista · ahorro {formatPrice(item._saved)}
+                        </div>
+                      )}
                     </div>
                     <div style={{ fontSize: 14, fontWeight: 700, color: '#1a1a1a', whiteSpace: 'nowrap' }}>
                       {formatPrice(item.subtotal || price * qty)}
@@ -252,9 +280,38 @@ export default function OrderReceipt({ order, settings, profile, open, onClose }
 
             {/* Total */}
             <div style={{ borderTop: '1.5px solid #1a1a1a', paddingTop: 16, textAlign: 'right' }}>
+              {hasAnyDiscount && (
+                <div style={{
+                  background: '#f0fdf4',
+                  border: '1px solid #bbf7d0',
+                  borderRadius: 8,
+                  padding: '8px 12px',
+                  marginBottom: 10,
+                  textAlign: 'right',
+                }}>
+                  <div style={{ fontSize: 13, color: '#15803d', fontWeight: 700 }}>
+                    Descuento total ahorrado: {formatPrice(totalSaved)}
+                  </div>
+                  {orderDiscount > 0 && (
+                    <div style={{ fontSize: 11, color: '#16a34a', marginTop: 2 }}>
+                      Incluye descuento adicional de {formatPrice(orderDiscount)}
+                    </div>
+                  )}
+                </div>
+              )}
               <div style={{ fontSize: 22, fontWeight: 800, color: '#1a1a1a' }}>
                 Total: {formatPrice(order.total)}
               </div>
+              {Number(order.deposit) > 0 && (
+                <>
+                  <div style={{ fontSize: 13, color: '#666', marginTop: 6 }}>
+                    Seña / Adelanto: {formatPrice(order.deposit)}
+                  </div>
+                  <div style={{ fontSize: 15, color: brandColor, fontWeight: 700, marginTop: 2 }}>
+                    Saldo pendiente: {formatPrice(order.balance_due != null ? order.balance_due : Math.max(0, Number(order.total || 0) - Number(order.deposit || 0)))}
+                  </div>
+                </>
+              )}
               {order.payment_method && (
                 <div style={{ fontSize: 13, color: '#666', marginTop: 6 }}>
                   {paymentLabel(order.payment_method)}: {formatPrice(order.total)}

@@ -1092,13 +1092,14 @@ export async function POST(request, { params }) {
           quantity: item.quantity || 1,
           unit_price: item.unitPrice || 0,
           subtotal: item.subtotal != null ? item.subtotal : (item.unitPrice || 0) * (item.quantity || 1),
-          cost_price: item.costPrice != null ? item.costPrice : 0
+          cost_price: item.costPrice != null ? item.costPrice : 0,
+          original_price: item.originalPrice != null ? item.originalPrice : (item.unitPrice || 0)
         }))
         let itErr
         ;({ error: itErr } = await supabaseAdmin.from('order_items').insert(orderItems))
         if (itErr) {
-          // retry without cost_price (pre-migration)
-          const oi = orderItems.map(({ cost_price, ...rest }) => rest)
+          // retry without new columns (pre-migration)
+          const oi = orderItems.map(({ cost_price, original_price, ...rest }) => rest)
           await supabaseAdmin.from('order_items').insert(oi)
         }
 

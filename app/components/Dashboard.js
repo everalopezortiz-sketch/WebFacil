@@ -233,16 +233,17 @@ export default function Dashboard({ user, profile, onLogout }) {
     if (!product) return
     const qty = Math.max(1, parseInt(saleLine.quantity) || 1)
     // Wholesale: use the custom "precio nuevo" typed by the user
+    const retail = getUnitPrice(product)
     const unit = (saleLine.wholesale && saleLine.price !== '' && !isNaN(parseFloat(saleLine.price)))
       ? parseFloat(saleLine.price)
-      : getUnitPrice(product)
+      : retail
     const cost = parseFloat(product.cost_price) || 0
     const existing = manualSale.items.find(i => i.productId === product.id && i.unitPrice === unit)
     let newItems
     if (existing) {
       newItems = manualSale.items.map(i => (i.productId === product.id && i.unitPrice === unit) ? { ...i, quantity: i.quantity + qty, subtotal: (i.quantity + qty) * unit } : i)
     } else {
-      newItems = [...manualSale.items, { productId: product.id, productName: product.name, quantity: qty, unitPrice: unit, costPrice: cost, subtotal: unit * qty, wholesale: saleLine.wholesale }]
+      newItems = [...manualSale.items, { productId: product.id, productName: product.name, quantity: qty, unitPrice: unit, originalPrice: retail, costPrice: cost, subtotal: unit * qty, wholesale: saleLine.wholesale }]
     }
     setManualSale({ ...manualSale, items: newItems })
     setSaleLine({ productId: '', quantity: 1, wholesale: false, price: '' })
