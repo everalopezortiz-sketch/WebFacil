@@ -197,12 +197,27 @@ export default function Dashboard({ user, profile, onLogout }) {
     if (res.ok) setInfoContent(await res.json())
   }
 
-  const loadReports = async () => {
+  const loadReports = async (override) => {
+    const range = override || reportDateRange
+    if (override) setReportDateRange(override)
     const params = new URLSearchParams()
-    if (reportDateRange.start) params.set('startDate', reportDateRange.start)
-    if (reportDateRange.end) params.set('endDate', reportDateRange.end)
+    if (range.start) params.set('startDate', range.start)
+    if (range.end) params.set('endDate', range.end)
     const res = await authFetch(supabase, `/api/reports?${params}`)
     if (res.ok) setReports(await res.json())
+  }
+
+  // Quick date presets for profit reports (daily / monthly)
+  const reportPreset = (key) => {
+    const now = new Date()
+    const fmt = (d) => d.toISOString().split('T')[0]
+    let start, end
+    if (key === 'today') { start = fmt(now); end = fmt(now) }
+    else if (key === 'week') { const s = new Date(now); s.setDate(s.getDate() - 6); start = fmt(s); end = fmt(now) }
+    else if (key === 'month') { start = fmt(new Date(now.getFullYear(), now.getMonth(), 1)); end = fmt(now) }
+    else if (key === 'lastMonth') { start = fmt(new Date(now.getFullYear(), now.getMonth() - 1, 1)); end = fmt(new Date(now.getFullYear(), now.getMonth(), 0)) }
+    else { start = fmt(now); end = fmt(now) }
+    loadReports({ start, end })
   }
 
   // Dashboard stats (visits, sales, low stock)
@@ -773,6 +788,32 @@ export default function Dashboard({ user, profile, onLogout }) {
                   </CardContent>
                 </Card>
               )}
+
+              {(() => {
+                const lowMaterials = (materials || []).filter(m => Number(m.stock_quantity) <= 5)
+                if (lowMaterials.length === 0) return null
+                return (
+                  <Card className="border-orange-200 bg-orange-50">
+                    <CardContent className="p-4">
+                      <div className="flex items-start gap-3">
+                        <AlertTriangle className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                          <p className="font-semibold text-orange-800">Materiales por agotarse</p>
+                          <p className="text-sm text-orange-700 mb-2">{lowMaterials.length} material(es) con poco stock</p>
+                          <div className="flex flex-wrap gap-2">
+                            {lowMaterials.map(m => (
+                              <Badge key={m.id} className={`${Number(m.stock_quantity) <= 0 ? 'bg-red-500' : 'bg-orange-500'} text-white`}>
+                                {m.name}: {Number(m.stock_quantity) <= 0 ? 'Agotado' : `${m.stock_quantity} ${m.unit || ''}`}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                        <Button size="sm" variant="outline" onClick={() => setActiveTab('materials')}>Ver materiales</Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )
+              })()}
 
               {/* Stat cards */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1676,8 +1717,8 @@ export default function Dashboard({ user, profile, onLogout }) {
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between flex-wrap gap-4">
-                  <CardTitle>Reportes de Ventas Entregadas</CardTitle>
-                  <div className="flex items-center gap-2">
+                  <CardTitle>Reportes de Ganancia</CardTitle>
+                  <div className="flex items-center gap-2 flex-wrap">
                     <Input
                       type="date"
                       value={reportDateRange.start}
@@ -1691,14 +1732,20 @@ export default function Dashboard({ user, profile, onLogout }) {
                       onChange={(e) => setReportDateRange({ ...reportDateRange, end: e.target.value })}
                       className="w-auto"
                     />
-                    <Button onClick={loadReports}>Generar</Button>
+                    <Button onClick={() => loadReports()}>Generar</Button>
                   </div>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap mt-3">
+                  <Button size="sm" variant="outline" onClick={() => reportPreset('today')}>Hoy</Button>
+                  <Button size="sm" variant="outline" onClick={() => reportPreset('week')}>Últimos 7 días</Button>
+                  <Button size="sm" variant="outline" onClick={() => reportPreset('month')}>Este mes</Button>
+                  <Button size="sm" variant="outline" onClick={() => reportPreset('lastMonth')}>Mes anterior</Button>
                 </div>
               </CardHeader>
               <CardContent>
                 {!reports ? (
                   <div className="text-center py-8">
-                    <Button onClick={loadReports} size="lg">
+                    <Button onClick={() => loadReports()} size="lg">
                       <BarChart3 className="w-5 h-5 mr-2" />
                       Cargar Reporte del Día
                     </Button>
