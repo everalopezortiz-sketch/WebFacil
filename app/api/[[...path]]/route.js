@@ -3,6 +3,7 @@ import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { v4 as uuidv4 } from 'uuid'
+import { handleBookingRoute } from '@/lib/booking/api'
 
 // Route segment config - allow custom Cache-Control headers
 export const dynamic = 'force-dynamic'
@@ -152,6 +153,10 @@ export async function GET(request, { params }) {
   const { searchParams } = new URL(request.url)
 
   try {
+    // Booking module dispatcher (authenticated + public booking routes)
+    const bookingRes = await handleBookingRoute({ method: 'GET', supabase, supabaseAdmin, path, pathStr, searchParams })
+    if (bookingRes) return handleCORS(bookingRes)
+
     // Health check
     if (pathStr === 'health') {
       return handleCORS(NextResponse.json({ status: 'ok', timestamp: new Date().toISOString() }))
@@ -709,6 +714,10 @@ export async function POST(request, { params }) {
       // Body might be empty for some requests like signout
     }
 
+    // Booking module dispatcher (authenticated + public booking routes)
+    const bookingRes = await handleBookingRoute({ method: 'POST', supabase, supabaseAdmin, path, pathStr, body, searchParams: new URL(request.url).searchParams })
+    if (bookingRes) return handleCORS(bookingRes)
+
     // Public: register a store visit (max 1 per browser per day via cookie)
     if (path[0] === 'store' && path[2] === 'visit') {
       const slug = path[1]
@@ -803,6 +812,33 @@ export async function POST(request, { params }) {
         { user_id: authData.user.id, field_name: 'address', field_label: 'Dirección', field_type: 'textarea', is_required: false, display_order: 4 }
       ]
       await supabaseAdmin.from('checkout_fields').insert(defaultFields)
+      
+      // For booking (Agendamientos + Tienda) accounts, seed booking config + initial staff.
+      // Do NOT create schedules automatically (the onboarding wizard handles that).
+      if (businessType === 'booking') {
+        try {
+          await supabaseAdmin.from('booking_settings').insert({
+            user_id: authData.user.id,
+            timezone: 'America/Asuncion',
+            slot_interval_minutes: 30,
+            min_booking_notice_minutes: 60,
+            max_advance_days: 60,
+            auto_confirm: true,
+            allow_staff_choice: true,
+            allow_multiple_services: true,
+            require_phone: true,
+            whatsapp_notifications: true,
+            week_starts_on: 1
+          })
+          await supabaseAdmin.from('booking_staff').insert({
+            user_id: authData.user.id,
+            name: 'Profesional principal',
+            color: '#7c3aed',
+            display_order: 0,
+            is_active: true
+          })
+        } catch (e) { console.error('booking seed error:', e?.message) }
+      }
       
       return handleCORS(NextResponse.json({ user: authData.user, role, message: 'Account created successfully' }))
     }
@@ -1381,6 +1417,10 @@ export async function PUT(request, { params }) {
 
   try {
     const body = await request.json()
+
+    // Booking module dispatcher (authenticated booking routes)
+    const bookingRes = await handleBookingRoute({ method: 'PUT', supabase, supabaseAdmin, path, pathStr, body, searchParams: new URL(request.url).searchParams })
+    if (bookingRes) return handleCORS(bookingRes)
     
     // Try to get user from cookies first
     let user = null
@@ -1545,6 +1585,10 @@ export async function DELETE(request, { params }) {
   const supabaseAdmin = createSupabaseAdmin()
 
   try {
+    // Booking module dispatcher (authenticated booking routes)
+    const bookingRes = await handleBookingRoute({ method: 'DELETE', supabase, supabaseAdmin, path, pathStr, searchParams: new URL(request.url).searchParams })
+    if (bookingRes) return handleCORS(bookingRes)
+
     // Try to get user from cookies first
     let user = null
     const { data: cookieAuth } = await supabase.auth.getUser()

@@ -17,9 +17,10 @@ import {
   MessageCircle, QrCode, Building,
   Star, Tag, Truck, Banknote, Link2, Search, Clock,
   ChevronLeft, ChevronRight, ZoomIn,
-  Heart, ShieldCheck, BadgeCheck, Home, LayoutGrid, Award, Zap, Flame
+  Heart, ShieldCheck, BadgeCheck, Home, LayoutGrid, Award, Zap, Flame, CalendarDays
 } from 'lucide-react'
 import { normalizeImageSrc, parseImages } from '@/lib/imageUtils'
+import StoreBooking from '@/components/booking/StoreBooking'
 
 const CURRENCIES = {
   USD: { symbol: '$', name: 'USD' },
@@ -32,6 +33,7 @@ const CURRENCIES = {
 
 const BUSINESS_CONFIG = {
   ecommerce: { icon: Store, title: 'Tienda', productLabel: 'Productos' },
+  booking: { icon: CalendarDays, title: 'Tienda', productLabel: 'Productos' },
   personal: { icon: User, title: 'Servicios', productLabel: 'Servicios' },
   restaurant: { icon: Utensils, title: 'Menú', productLabel: 'Menú' }
 }
@@ -439,6 +441,9 @@ export default function StorePage() {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-6 pb-24 flex-1">
+        {profile?.business_type === 'booking' && (
+          <StoreBooking slug={slug} brandColor={buttonColor} formatPrice={formatPrice} businessPhone={settings?.whatsapp_number} />
+        )}
         {filteredProducts.length === 0 ? (
           <div className="text-center py-16">
             <Store className="w-16 h-16 mx-auto mb-4 opacity-30" />

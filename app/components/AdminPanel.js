@@ -25,6 +25,7 @@ import {
 
 const BUSINESS_TYPES = [
   { value: 'ecommerce', label: 'Tienda', icon: Store },
+  { value: 'booking', label: 'Agendamientos + Tienda', icon: Calendar },
   { value: 'personal', label: 'Personal', icon: User },
   { value: 'restaurant', label: 'Restaurante', icon: Utensils }
 ]

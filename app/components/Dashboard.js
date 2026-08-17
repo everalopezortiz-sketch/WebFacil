@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase'
 import { normalizeImageSrc, parseImages, serializeImages } from '@/lib/imageUtils'
 import ImageUpload from '@/components/ImageUpload'
 import OrderReceipt from '@/components/OrderReceipt'
+import BookingManager from '@/components/booking/BookingManager'
+import { hasBookings } from '@/lib/business'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -23,7 +25,7 @@ import {
   Plus, Pencil, Trash2, Loader2, Image, DollarSign, Tag,
   MessageSquare, Bell, QrCode, Link2, Copy, ExternalLink,
   Calendar, TrendingUp, Users, Store, AlertTriangle, X, Check,
-  Phone, Mail, MapPin, CreditCard, Truck, Eye, FileText, Boxes, Home, Lock
+  Phone, Mail, MapPin, CreditCard, Truck, Eye, FileText, Boxes, Home, Lock, CalendarDays
 } from 'lucide-react'
 
 const CURRENCIES = [
@@ -56,6 +58,7 @@ const ORDER_STATUS_LABELS = {
 
 const BUSINESS_LABELS = {
   ecommerce: { label: 'Tienda', icon: Store, productLabel: 'Productos' },
+  booking: { label: 'Agendamientos + Tienda', icon: CalendarDays, productLabel: 'Productos' },
   personal: { label: 'Personal', icon: Users, productLabel: 'Servicios' },
   restaurant: { label: 'Restaurante', icon: Package, productLabel: 'Menú' }
 }
@@ -737,6 +740,11 @@ export default function Dashboard({ user, profile, onLogout }) {
             <TabsTrigger value="inicio" className="gap-2 data-[state=active]:gradient-brand data-[state=active]:text-white data-[state=active]:shadow-md">
               <Home className="w-4 h-4" /> Inicio
             </TabsTrigger>
+            {hasBookings(profile.business_type) && (
+              <TabsTrigger value="agenda" className="gap-2 data-[state=active]:gradient-brand data-[state=active]:text-white data-[state=active]:shadow-md">
+                <CalendarDays className="w-4 h-4" /> Agenda
+              </TabsTrigger>
+            )}
             <TabsTrigger value="settings" className="gap-2 data-[state=active]:gradient-brand data-[state=active]:text-white data-[state=active]:shadow-md">
               <Settings className="w-4 h-4" /> Configuración
             </TabsTrigger>
@@ -764,6 +772,12 @@ export default function Dashboard({ user, profile, onLogout }) {
           </TabsList>
 
           {/* Inicio / Dashboard Tab */}
+          {hasBookings(profile.business_type) && (
+            <TabsContent value="agenda">
+              <BookingManager supabase={supabase} profile={profile} />
+            </TabsContent>
+          )}
+
           <TabsContent value="inicio">
             <div className="space-y-6">
               {/* Low stock alert */}

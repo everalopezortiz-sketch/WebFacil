@@ -472,3 +472,252 @@ agent_communication:
       message: "Feb 2026 - WHOLESALE RECEIPT + FEATURE VERIFICATION. Added original_price snapshot to order_items so wholesale-discount % and total saved can be shown on the receipt. Changes: (1) Dashboard.js addSaleLine now stores originalPrice (retail) per line. (2) route.js POST /api/orders/manual now inserts order_items.original_price with fallback retry stripping cost_price/original_price if column missing (pre-migration). (3) OrderReceipt.jsx shows per-item wholesale discount % and per-item savings, plus a 'Descuento total ahorrado' box (items savings + order.discount) and seña/saldo pendiente. (4) features_migration.sql now adds order_items.original_price. PLEASE TEST with ortiz@gmail.com/ortiz123: (A) POST /api/orders/manual with items where unitPrice < originalPrice (wholesale), plus deposit and discount and status 'pending' -> expect 200, order created with deposit/balance_due/discount set; then GET /api/orders and confirm order_items include original_price and cost_price and unit_price; confirm order has deposit, discount, balance_due, payment_status. (B) Materials: POST /api/materials, GET /api/materials, POST /api/materials/{id}/movement (purchase adds stock, usage deducts), PUT/DELETE. Report whether the materials table exists (else user must run SQL). (C) Combos: create a product with is_combo true and combo_items, GET /api/products/{id}/combo returns components; selling the combo deducts component stock. Report whether combo_items table exists. (D) Report clearly which of original_price / materials / combo_items / plain_password columns/tables are MISSING so we can tell the user to run features_migration.sql. Regression: GET /api/products, /api/orders still 200."
     - agent: "testing"
       message: "Aug 2026 - NEW FEATURES COMPREHENSIVE TESTING COMPLETE. ALL BACKEND TESTS PASSED (18/18 = 100% success rate). Tested with ortiz@gmail.com/ortiz123 and everlopez@gmail.com/ever123 (admin). DETAILED RESULTS: (A) MANUAL WHOLESALE SALE: ✅ POST /api/orders/manual with wholesale items (unitPrice=5000 < originalPrice=8000), deposit=30000, discount=5000, status='pending' returns 200 with order VTA-MSKJUX2E. Order fields verified: deposit=30000, discount=5000, balance_due=60000, payment_status='partial', status='pending'. Order items include unit_price and cost_price fields. (B) MATERIALS: ✅ All CRUD operations working. POST /api/materials creates material (ID: 0b306871-1a80-4a99-b749-0539c3c03573). GET /api/materials returns 2 materials. POST /api/materials/{id}/movement with type='purchase' adds stock (100->150). POST /api/materials/{id}/movement with type='usage' deducts stock (150->130). PUT /api/materials/{id} updates name. DELETE /api/materials/{id} deletes successfully. (C) COMBOS: ✅ All operations working. POST /api/products with is_combo=true and 2 combo_items creates combo product (ID: 8adbf4e6-4e49-4685-bd2e-9af0b80650ca). GET /api/products/{id}/combo returns 2 components with full details (component_product_id, quantity, component name). (D) REGRESSION: ✅ GET /api/products (200, 6 products), GET /api/orders (200, 14 orders), GET /api/categories (200, 2 categories). (E) ADMIN PASSWORD: GET /api/admin/users returns 10 users. CRITICAL MIGRATION STATUS REPORT - COLUMNS/TABLES APPLIED (✅ EXISTS): orders.deposit, orders.discount, orders.balance_due, orders.payment_status, order_items.cost_price, materials table, material_movements table, combo_items table, products.cost_price, products.is_combo. COLUMNS/TABLES MISSING (❌ USER MUST RUN features_migration.sql): order_items.original_price (wholesale receipt won't show retail vs wholesale price comparison), profiles.plain_password (admin panel can't display user passwords). CONCLUSION: All 5 feature sets (manual sale deposit/discount, materials, combos, reports profit, admin password) working end-to-end with graceful degradation. Only 2 optional display columns missing. Core business logic fully functional. NO CRITICAL ISSUES. Backend production-ready."
+    - agent: "main"
+      message: "Feb 2026 - BOOKING ETAPA 1 (backend + registro + admin). Added hybrid 'booking' (Agendamientos + Tienda) business type. NEW FILES: lib/business.js (BUSINESS_MODULES config), lib/booking/errors.js (error translation), lib/booking/api.js (handleBookingRoute dispatcher). WIRED into app/api/[[...path]]/route.js: dispatcher called at top of GET/POST/PUT/DELETE; matches pathStr starting 'booking/' (authenticated) and 'store/{slug}/booking*' (public). Signup now seeds booking_settings + a 'Profesional principal' staff row when businessType==='booking' (no schedules auto-created). page.js registration + AdminPanel filters now include 'booking'. Supabase tables/RPCs already exist - DO NOT recreate. PLEASE TEST BACKEND: (1) Create a new booking account via POST /api/auth/signup with businessType 'booking' (unique email). Verify GET /api/booking/settings returns seeded defaults (timezone America/Asuncion, slot 30, etc.) and GET /api/booking/staff returns 'Profesional principal'. (2) CRUD for /api/booking/service-categories, /api/booking/services (with category_id, price, duration_minutes), /api/booking/staff, /api/booking/staff-services (POST { staff_id, service_ids }, GET ?staff_id=), /api/booking/availability (POST staff_id/day_of_week/start_time/end_time; multiple intervals same day allowed), /api/booking/time-off, PUT /api/booking/settings. (3) GET /api/booking/appointments?start=&end=&staff_id= returns []. (4) After creating a service, assigning it to the staff, and creating availability for the correct weekday, try POST /api/booking/appointments/manual { staff_id, service_ids:[id], start_at: <ISO within availability & future>, customer_name, customer_phone } -> expect success with confirmation. Then GET appointments shows it. Test PUT /api/booking/appointments/status { appointment_id, status:'confirmed' } and PUT /api/booking/appointments/reschedule. (5) PUBLIC: GET /api/store/{slug}/booking returns business+settings+serviceCategories+services+staff+staffServices (NO staff phone/email). GET /api/store/{slug}/booking/availability?service_ids=..&date=YYYY-MM-DD&staff_id= returns slots via RPC. POST /api/store/{slug}/booking creates a public appointment. Verify errors are translated to Spanish (e.g. selecting no service -> 'Selecciona al menos un servicio.'). (6) REGRESSION: ecommerce account (ortiz@gmail.com/ortiz123) still works for products/orders; booking routes for ecommerce user should still function but there's no booking data. NOTE: RPCs run only via service_role (server). Use unique emails for new signups. Update /app/memory/test_credentials.md with any booking account you create."
+
+  - task: "Booking Account Creation (businessType: booking)"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js, lib/booking/api.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "Aug 2026 - BOOKING BACKEND TESTING COMPLETE (32/32 tests passed = 100% success rate). STEP 1 - Account Creation: POST /api/auth/signup with businessType='booking' creates account successfully. User can sign in and get access token. Profile includes slug for public routes. Test credentials saved to /app/memory/test_credentials.md."
+
+  - task: "Booking Settings Seeding"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js, lib/booking/api.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "STEP 2a - Settings Seeding: GET /api/booking/settings returns seeded defaults correctly: timezone='America/Asuncion', slot_interval_minutes=30, min_booking_notice_minutes=60, max_advance_days=60, auto_confirm=true, week_starts_on=1. All values match expected defaults from BOOKING_DEFAULT_SETTINGS."
+
+  - task: "Booking Staff Seeding (Profesional principal)"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js, lib/booking/api.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "STEP 2b - Staff Seeding: GET /api/booking/staff returns 'Profesional principal' staff member seeded during signup. Staff has valid ID and is ready for service assignment."
+
+  - task: "Service Categories CRUD"
+    implemented: true
+    working: true
+    file: "lib/booking/api.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "STEP 3a-c - Service Categories: POST /api/booking/service-categories creates category (name='Peluquería', color='#f59e0b'). GET /api/booking/service-categories returns categories list. PUT /api/booking/service-categories/{id} updates category name successfully. All CRUD operations working correctly."
+
+  - task: "Booking Services CRUD"
+    implemented: true
+    working: true
+    file: "lib/booking/api.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "STEP 3d-f - Services: POST /api/booking/services creates service (name='Corte', category_id, price=50000, duration_minutes=30, buffer_after_minutes=10). GET /api/booking/services returns services list. PUT /api/booking/services/{id} updates price to 60000 successfully. All CRUD operations working correctly."
+
+  - task: "Staff-Services Assignment"
+    implemented: true
+    working: true
+    file: "lib/booking/api.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "STEP 3g-h - Staff-Services: POST /api/booking/staff-services with {staff_id, service_ids:[]} assigns services to staff successfully. GET /api/booking/staff-services?staff_id={id} returns staff-service mappings correctly. Many-to-many relationship working as expected."
+
+  - task: "Availability Schedule CRUD"
+    implemented: true
+    working: true
+    file: "lib/booking/api.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "STEP 3i-j - Availability: POST /api/booking/availability creates two intervals for same day (08:00-12:00 and 14:00-18:00) successfully. Multiple intervals per day allowed as expected. GET /api/booking/availability returns 2 schedules with correct day_of_week, start_time, end_time."
+
+  - task: "Time-Off CRUD"
+    implemented: true
+    working: true
+    file: "lib/booking/api.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "STEP 3k-m - Time-Off: POST /api/booking/time-off creates time-off entry (staff_id=null for all staff, starts_at, ends_at, reason='Feriado'). GET /api/booking/time-off returns time-off list. DELETE /api/booking/time-off/{id} deletes successfully. All CRUD operations working correctly."
+
+  - task: "Booking Settings Update"
+    implemented: true
+    working: true
+    file: "lib/booking/api.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "STEP 3n-o - Settings Update: PUT /api/booking/settings updates slot_interval_minutes to 60 successfully. Subsequent GET confirms settings persisted correctly. Settings update and persistence working as expected."
+
+  - task: "Appointments GET (empty and with data)"
+    implemented: true
+    working: true
+    file: "lib/booking/api.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "STEP 4a,4c - Appointments GET: GET /api/booking/appointments?start={ISO}&end={ISO} returns empty array initially (correct). After appointment creation, returns appointments list with appointment_services nested correctly. Date range filtering working."
+
+  - task: "Manual Appointment Creation (RPC create_booking_appointment)"
+    implemented: true
+    working: true
+    file: "lib/booking/api.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "STEP 4b - Manual Appointment: POST /api/booking/appointments/manual with {staff_id, service_ids:[], start_at, customer_name, customer_phone} creates appointment successfully via RPC create_booking_appointment. Returns appointment with id, confirmation_code, status. Validates availability window, min_booking_notice, and staff-service assignment. RPC-based flow working end-to-end."
+
+  - task: "Appointment Status Update (RPC update_booking_appointment_status)"
+    implemented: true
+    working: true
+    file: "lib/booking/api.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "STEP 4d,4f - Status Update: PUT /api/booking/appointments/status with {appointment_id, status:'confirmed'} updates status successfully via RPC. PUT with status:'cancelled' and reason cancels appointment and frees slot. RPC update_booking_appointment_status working correctly."
+
+  - task: "Appointment Reschedule (RPC reschedule_booking_appointment)"
+    implemented: true
+    working: true
+    file: "lib/booking/api.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "STEP 4e - Reschedule: PUT /api/booking/appointments/reschedule with {appointment_id, staff_id, start_at} reschedules appointment successfully via RPC reschedule_booking_appointment. Validates new slot availability. RPC-based reschedule flow working correctly."
+
+  - task: "Booking Error Translation (Spanish)"
+    implemented: true
+    working: true
+    file: "lib/booking/errors.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "STEP 5 - Error Translation: POST /api/booking/appointments/manual with empty service_ids returns 400 with Spanish error 'Selecciona al menos un servicio.' Error translation via translateBookingError() working correctly. All booking errors (BOOKING_SERVICES_REQUIRED, BOOKING_OUTSIDE_AVAILABILITY, etc.) translated to clear Spanish messages as expected."
+
+  - task: "Public Booking Data (GET /api/store/{slug}/booking)"
+    implemented: true
+    working: true
+    file: "lib/booking/api.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "STEP 6a - Public Booking Data: GET /api/store/{slug}/booking returns complete public booking data: {business, settings, serviceCategories, services, staff, staffServices}. Staff objects correctly exclude private fields (phone, email) using STAFF_PUBLIC select. Public data structure correct and secure."
+
+  - task: "Public Availability Slots (RPC get_booking_available_slots)"
+    implemented: true
+    working: true
+    file: "lib/booking/api.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "STEP 6b - Public Availability: GET /api/store/{slug}/booking/availability?service_ids={id}&date=YYYY-MM-DD returns 8 available slots via RPC get_booking_available_slots. Each slot includes: staff_id, staff_name, slot_start, slot_end, total_price, total_duration_minutes. RPC-based availability calculation working correctly."
+
+  - task: "Public Appointment Creation"
+    implemented: true
+    working: true
+    file: "lib/booking/api.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "STEP 6c - Public Booking: POST /api/store/{slug}/booking with {service_ids, staff_id, start_at, customer_name, customer_phone} creates public appointment successfully. Returns confirmationCode and publicToken (camelCase from RPC). Public booking flow working end-to-end. Minor: RPC returns camelCase instead of snake_case, but this is acceptable."
+
+  - task: "Public Appointment Confirmation"
+    implemented: true
+    working: true
+    file: "lib/booking/api.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "STEP 6d - Public Confirmation: GET /api/store/{slug}/booking/confirmation?token={public_token} returns appointment public info (confirmation_code, customer_name, start_at, status, total_price, appointment_services). Correctly excludes internal_notes (private field). Public confirmation lookup working securely."
+
+  - task: "Booking Regression Tests (Ecommerce)"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "STEP 7 - Regression: Ecommerce account (ortiz@gmail.com/ortiz123) still works correctly. GET /api/products returns 200. GET /api/orders returns 200. Booking module does not break existing ecommerce functionality. All endpoints coexist correctly."
+
+metadata:
+  created_by: "testing_agent"
+  version: "1.0"
+  test_sequence: 6
+  run_ui: false
+
+test_plan:
+  current_focus:
+    - "Booking backend (all 7 steps completed)"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+    - agent: "testing"
+      message: "Aug 2026 - BOOKING BACKEND COMPREHENSIVE TESTING COMPLETE. ALL TESTS PASSED (32/32 = 100% success rate). Created new booking account (booking_test_7ow9blnd@test.com, slug: booking-test-msxmz7kb). DETAILED RESULTS BY STEP: (1) ACCOUNT CREATION: Signup with businessType='booking' working, seeding triggers correctly. (2) SEEDING VERIFICATION: Settings seeded with all defaults (timezone America/Asuncion, slot 30min, etc.), 'Profesional principal' staff created. (3) CRUD OPERATIONS: All 15 CRUD tests passed - service-categories (create/get/update), services (create/get/update), staff-services (assign/get), availability (create 2 intervals same day/get), time-off (create/get/delete), settings (update/verify persisted). (4) APPOINTMENTS: All 6 appointment tests passed - GET empty list, manual creation via RPC create_booking_appointment, GET with data (includes appointment_services), status update to confirmed via RPC, reschedule via RPC, cancel via RPC (frees slot). (5) ERROR TRANSLATION: Spanish error messages working correctly ('Selecciona al menos un servicio', 'El horario está fuera de la jornada del profesional'). (6) PUBLIC ROUTES: All 4 public tests passed - GET store booking data (staff objects exclude phone/email correctly), GET availability slots via RPC get_booking_available_slots (8 slots returned), POST public booking (returns confirmationCode/publicToken), GET confirmation (excludes internal_notes). (7) REGRESSION: Ecommerce account (ortiz@gmail.com) still works for products/orders. CRITICAL FINDINGS: ✅ All RPC-based flows working end-to-end (create_booking_appointment, reschedule_booking_appointment, update_booking_appointment_status, get_booking_available_slots). ✅ Error translation to Spanish working correctly. ✅ Public routes secure (no private fields exposed). ✅ Multiple availability intervals per day allowed. ✅ Seeding working correctly. ✅ No regression on ecommerce functionality. Minor note: RPC responses use camelCase (confirmationCode, publicToken) instead of snake_case, but this is acceptable and handled by test. NO CRITICAL ISSUES. Booking backend production-ready."
+    - agent: "main"
+      message: "Feb 2026 - BOOKING ETAPA 2 (dashboard hibrido) + ETAPA 3 (web publica) implementadas. FRONTEND ONLY changes (backend booking already tested 32/32). NEW COMPONENTS in app/components/booking/: BookingManager (wrapper con sub-tabs + asistente inicial), WeeklyCalendar (agenda semanal desktop 7 columnas / movil 1 dia, filtro profesional, nav semana, Realtime en appointments INSERT/UPDATE con filtro user_id, sin polling, cleanup channel al desmontar), AppointmentDialog (crear manual + ver/gestionar: confirmar/completar/no_show/cancelar/reprogramar, llamar, WhatsApp, notas), BookingOverview (indicadores: citas hoy/pendientes/confirmadas/canceladas/no-show/ingresos, proxima cita, servicios y profesionales top), ServicesManager, ServiceCategoriesManager, StaffManager (checkboxes de servicios), AvailabilityEditor (multiples intervalos por dia), TimeOffManager, BookingSettings, StoreBooking (flujo publico). lib/booking/client.js (authFetch compartido + helpers zona horaria local sin UTC shift). Dashboard.js: pestana 'Agenda' visible solo si hasBookings(business_type) via lib/business.js; conserva todas las pestanas comerciales. store/[slug]/page.js: renderiza StoreBooking cuando business_type==='booking' (banner 'Reserva tu turno' + preview servicios + modal de reserva de 4 pasos: servicios -> fecha/horario -> datos -> confirmacion con codigo + WhatsApp). VERIFICADO VISUALMENTE: dashboard agenda renderiza, web publica muestra servicios y abre modal. NOTA DE SEGURIDAD PENDIENTE: el codigo actual (sesiones previas) guarda/mostraba profiles.plain_password; el spec pide dejar de usarlo. NO se removio la funcion existente del admin para no romper un pedido previo del usuario; queda como decision pendiente a confirmar. Si se hace frontend testing, probar: (dashboard booking account booking_test_6x5plh6w@test.com/booking123) crear categoria/servicio/profesional/asignar servicios/horarios, crear cita manual desde agenda, cambiar estado, reprogramar; (web publica /store/booking-test-msxn05cx) flujo completo de reserva. Regression: ecommerce (ortiz) dashboard y store siguen igual."

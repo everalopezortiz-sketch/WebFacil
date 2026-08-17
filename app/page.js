@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
-import { Loader2, Store, User, Utensils, Eye, EyeOff } from 'lucide-react'
+import { Loader2, Store, User, Utensils, Eye, EyeOff, CalendarClock } from 'lucide-react'
 import { normalizeImageSrc } from '@/lib/imageUtils'
 
 // Dashboard imports
@@ -429,6 +429,12 @@ export default function App() {
                           <div className="flex items-center gap-2">
                             <Store className="w-4 h-4" />
                             Tienda / Ecommerce
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="booking">
+                          <div className="flex items-center gap-2">
+                            <CalendarClock className="w-4 h-4" />
+                            Agendamientos + Tienda
                           </div>
                         </SelectItem>
                         <SelectItem value="personal">
