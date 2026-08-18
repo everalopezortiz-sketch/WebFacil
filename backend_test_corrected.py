@@ -11,7 +11,7 @@ import os
 from datetime import datetime
 
 # Get base URL from environment
-BASE_URL = "https://stock-master-262.preview.emergentagent.com/api"
+BASE_URL = "https://hybrid-booking-shop.preview.emergentagent.com/api"
 
 # Test credentials
 ADMIN_CREDENTIALS = {
