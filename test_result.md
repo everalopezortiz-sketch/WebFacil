@@ -703,15 +703,27 @@ agent_communication:
           agent: "testing"
           comment: "STEP 7 - Regression: Ecommerce account (ortiz@gmail.com/ortiz123) still works correctly. GET /api/products returns 200. GET /api/orders returns 200. Booking module does not break existing ecommerce functionality. All endpoints coexist correctly."
 
+  - task: "Booking import path build fix (Vercel deploy)"
+    implemented: true
+    working: "NA"
+    file: "app/components/Dashboard.js, app/store/[slug]/page.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "BUG FIX (Vercel build failure): Vercel deployments of 81b27a6/91e2cb9 failed with 'Module not found: Can't resolve @/components/booking/BookingManager' and '@/components/booking/StoreBooking'. Root cause: jsconfig.json maps @/components/* to ./components/* (root), but these components live in ./app/components/booking/. FIX: Changed import in Dashboard.js to '@/app/components/booking/BookingManager' and in store/[slug]/page.js to '@/app/components/booking/StoreBooking'. Verified: no '@/components/booking' imports remain; yarn build completes with exit code 0 (Done in 15.19s, Compiled successfully). Booking components internal imports use relative './' and '@/components/ui/*' (unchanged, correct). NEEDS TESTING: confirm no regression on booking backend endpoints (route.js untouched) and ecommerce."
+
 metadata:
   created_by: "testing_agent"
   version: "1.0"
-  test_sequence: 6
+  test_sequence: 7
   run_ui: false
 
 test_plan:
   current_focus:
-    - "Booking backend (all 7 steps completed)"
+    - "Booking import path build fix (Vercel deploy)"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"

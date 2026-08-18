@@ -20,7 +20,7 @@ import {
   Heart, ShieldCheck, BadgeCheck, Home, LayoutGrid, Award, Zap, Flame, CalendarDays
 } from 'lucide-react'
 import { normalizeImageSrc, parseImages } from '@/lib/imageUtils'
-import StoreBooking from '@/components/booking/StoreBooking'
+import StoreBooking from '@/app/components/booking/StoreBooking'
 
 const CURRENCIES = {
   USD: { symbol: '$', name: 'USD' },
