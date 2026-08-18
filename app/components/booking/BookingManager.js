@@ -4,7 +4,8 @@ import { authFetch } from '@/lib/booking/client'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { CalendarDays, LayoutGrid, Scissors, Tag, UserRound, Clock, CalendarX, Settings, ExternalLink, CheckCircle2, Circle } from 'lucide-react'
+import { CalendarDays, LayoutGrid, Scissors, Tag, UserRound, Clock, CalendarX, Settings, ExternalLink, CheckCircle2, Circle, Copy, Link2 } from 'lucide-react'
+import { toast } from 'sonner'
 import BookingOverview from './BookingOverview'
 import WeeklyCalendar from './WeeklyCalendar'
 import ServicesManager from './ServicesManager'
@@ -18,7 +19,24 @@ export default function BookingManager({ supabase, profile }) {
   const [sub, setSub] = useState('agenda')
   const [data, setData] = useState({ settings: null, categories: [], services: [], staff: [], staffServices: [], availability: [], timeOff: [], appts: [] })
   const [loading, setLoading] = useState(true)
-  const storeUrl = `${process.env.NEXT_PUBLIC_BASE_URL}/store/${profile.slug}`
+  // Build public links from the browser origin (never rely on NEXT_PUBLIC_BASE_URL)
+  const origin = typeof window !== 'undefined' ? window.location.origin : ''
+  const storeUrl = `${origin}/s/${profile.slug}`
+  const reservaUrl = `${storeUrl}/r`
+
+  const copyLink = async (url, label) => {
+    try {
+      if (navigator.share && /Mobi|Android/i.test(navigator.userAgent || '')) {
+        await navigator.share({ title: 'Mi web', url }); return
+      }
+    } catch (e) { if (e && e.name === 'AbortError') return }
+    try { await navigator.clipboard.writeText(url); toast.success(`${label} copiado`) }
+    catch {
+      try {
+        const ta = document.createElement('textarea'); ta.value = url; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); toast.success(`${label} copiado`)
+      } catch { toast.error('No se pudo copiar el enlace') }
+    }
+  }
 
   const loadAll = useCallback(async () => {
     const get = async (url) => { const r = await authFetch(supabase, url); return r.ok ? r.json() : [] }
@@ -72,6 +90,12 @@ export default function BookingManager({ supabase, profile }) {
           </CardContent>
         </Card>
       )}
+
+      <div className="flex flex-wrap gap-2">
+        <a href={storeUrl} target="_blank" rel="noreferrer"><Button variant="outline" size="sm" className="gap-2"><ExternalLink className="w-4 h-4" />Ver web</Button></a>
+        <Button variant="outline" size="sm" className="gap-2" onClick={() => copyLink(storeUrl, 'Enlace de la web')}><Copy className="w-4 h-4" />Copiar web</Button>
+        <Button variant="outline" size="sm" className="gap-2" onClick={() => copyLink(reservaUrl, 'Enlace de reservas')}><Link2 className="w-4 h-4" />Copiar enlace de reservas</Button>
+      </div>
 
       <Tabs value={sub} onValueChange={setSub}>
         <TabsList className="flex-wrap h-auto gap-1 bg-white/60 backdrop-blur p-1.5 shadow-sm">

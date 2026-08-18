@@ -18,7 +18,7 @@ function fmtSlot(iso) {
   try { return new Date(iso).toLocaleTimeString('es-PY', { hour: '2-digit', minute: '2-digit', hour12: false }) } catch { return '' }
 }
 
-export default function StoreBooking({ slug, brandColor = '#7c3aed', formatPrice, businessPhone }) {
+export default function StoreBooking({ slug, brandColor = '#7c3aed', formatPrice, businessPhone, autoOpen = false }) {
   const fp = formatPrice || ((n) => `${n}`)
   const [open, setOpen] = useState(false)
   const [data, setData] = useState(null)
@@ -37,6 +37,14 @@ export default function StoreBooking({ slug, brandColor = '#7c3aed', formatPrice
   useEffect(() => {
     fetch(`/api/store/${slug}/booking`).then(r => r.ok ? r.json() : null).then(d => { setData(d); setLoading(false) }).catch(() => setLoading(false))
   }, [slug])
+
+  // Auto-open the reservation dialog when reached via /s/[slug]/r
+  useEffect(() => {
+    if (autoOpen && data && !loading) {
+      setOpen(true)
+      try { document.getElementById('servicios')?.scrollIntoView({ behavior: 'smooth' }) } catch { /* noop */ }
+    }
+  }, [autoOpen, data, loading])
 
   const services = data?.services || []
   const categories = data?.serviceCategories || []

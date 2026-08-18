@@ -6,6 +6,7 @@ import { normalizeImageSrc, parseImages, serializeImages } from '@/lib/imageUtil
 import ImageUpload from '@/components/ImageUpload'
 import OrderReceipt from '@/components/OrderReceipt'
 import BookingManager from '@/app/components/booking/BookingManager'
+import DiagnosticsManager from '@/app/components/diagnostics/DiagnosticsManager'
 import { hasBookings } from '@/lib/business'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -100,7 +101,7 @@ export default function Dashboard({ user, profile, onLogout }) {
   const supabase = createClient()
   const businessConfig = BUSINESS_LABELS[profile.business_type] || BUSINESS_LABELS.ecommerce
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
-  const storeUrl = `${baseUrl}/store/${profile.slug}`
+  const storeUrl = `${baseUrl}/s/${profile.slug}`
 
   useEffect(() => {
     loadAllData()
@@ -745,6 +746,11 @@ export default function Dashboard({ user, profile, onLogout }) {
                 <CalendarDays className="w-4 h-4" /> Agenda
               </TabsTrigger>
             )}
+            {hasBookings(profile.business_type) && (
+              <TabsTrigger value="fichas" className="gap-2 data-[state=active]:gradient-brand data-[state=active]:text-white data-[state=active]:shadow-md">
+                <FileText className="w-4 h-4" /> Fichas capilares
+              </TabsTrigger>
+            )}
             <TabsTrigger value="settings" className="gap-2 data-[state=active]:gradient-brand data-[state=active]:text-white data-[state=active]:shadow-md">
               <Settings className="w-4 h-4" /> Configuración
             </TabsTrigger>
@@ -775,6 +781,11 @@ export default function Dashboard({ user, profile, onLogout }) {
           {hasBookings(profile.business_type) && (
             <TabsContent value="agenda">
               <BookingManager supabase={supabase} profile={profile} />
+            </TabsContent>
+          )}
+          {hasBookings(profile.business_type) && (
+            <TabsContent value="fichas">
+              <DiagnosticsManager supabase={supabase} profile={profile} userId={user.id} businessPhone={settings?.whatsapp_number} />
             </TabsContent>
           )}
 

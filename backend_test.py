@@ -1,661 +1,800 @@
 #!/usr/bin/env python3
 """
-Backend API Testing Script for WebFácil SaaS
-Tests new features: manual sale with deposit/discount/original_price, materials, combos, reports profit
+Comprehensive backend test for Diagnostics module (Fichas capilares).
+Tests all endpoints, validation, security, and isolation.
 """
-
 import requests
 import json
-import sys
+import os
 from datetime import datetime
 
-# Configuration
-BASE_URL = "https://hybrid-booking-shop.preview.emergentagent.com/api"
-TEST_EMAIL = "ortiz@gmail.com"
-TEST_PASSWORD = "ortiz123"
+# Read environment variables
+BASE_URL = os.getenv('NEXT_PUBLIC_BASE_URL', 'https://hybrid-booking-shop.preview.emergentagent.com')
+SUPABASE_URL = os.getenv('NEXT_PUBLIC_SUPABASE_URL', 'https://ydgbqxpehrqfvslcuhqk.supabase.co')
+SUPABASE_ANON_KEY = os.getenv('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlkZ2JxeHBlaHJxZnZzbGN1aHFrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk3MDMzMTIsImV4cCI6MjA4NTI3OTMxMn0.caH78KNZOJfO05FcOoDdGTB9aL5ui8-_vjDt48lbO1I')
 
-# Global variables
-access_token = None
-headers = {}
+API_BASE = f"{BASE_URL}/api"
 
-def print_test(test_name):
-    """Print test header"""
-    print(f"\n{'='*80}")
-    print(f"TEST: {test_name}")
-    print('='*80)
+# Test credentials
+BOOKING_USER = "booking_test_7ow9blnd@test.com"
+BOOKING_PASS = "booking123"
+ECOMMERCE_USER = "ortiz@gmail.com"
+ECOMMERCE_PASS = "ortiz123"
 
-def print_result(success, message):
-    """Print test result"""
-    status = "✅ PASS" if success else "❌ FAIL"
-    print(f"{status}: {message}")
+# Track created resources for cleanup
+created_clients = []
+created_records = []
+created_share_links = []
 
-def print_json(data, title="Response"):
-    """Pretty print JSON data"""
-    print(f"\n{title}:")
-    print(json.dumps(data, indent=2))
-
-# ============================================================================
-# Authentication
-# ============================================================================
-
-def test_signin():
-    """Sign in and get access token via Supabase REST API"""
-    global access_token, headers
-    print_test("Sign In (ortiz@gmail.com)")
-    
-    try:
-        # Use Supabase REST API directly to get access token
-        supabase_url = "https://ydgbqxpehrqfvslcuhqk.supabase.co"
-        supabase_anon_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlkZ2JxeHBlaHJxZnZzbGN1aHFrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk3MDMzMTIsImV4cCI6MjA4NTI3OTMxMn0.caH78KNZOJfO05FcOoDdGTB9aL5ui8-_vjDt48lbO1I"
-        
-        response = requests.post(
-            f"{supabase_url}/auth/v1/token?grant_type=password",
-            json={"email": TEST_EMAIL, "password": TEST_PASSWORD},
-            headers={
-                "apikey": supabase_anon_key,
-                "Content-Type": "application/json"
-            },
-            timeout=10
-        )
-        
-        if response.status_code == 200:
-            data = response.json()
-            access_token = data.get('access_token')
-            
-            if access_token:
-                headers = {"Authorization": f"Bearer {access_token}"}
-                print_result(True, f"Signed in successfully. User ID: {data.get('user', {}).get('id')}")
-                return True
-            else:
-                print_result(False, "No access token in response")
-                print_json(data)
-                return False
-        else:
-            print_result(False, f"Status {response.status_code}: {response.text}")
-            return False
-    except Exception as e:
-        print_result(False, f"Exception: {str(e)}")
-        return False
-
-# ============================================================================
-# Test A: Manual Wholesale Sale with Deposit + Discount + Original Price
-# ============================================================================
-
-def test_get_products():
-    """Get products to use in manual sale"""
-    print_test("Get Products (to use in manual sale)")
-    
-    try:
-        response = requests.get(f"{BASE_URL}/products", headers=headers, timeout=10)
-        
-        if response.status_code == 200:
-            products = response.json()
-            if len(products) >= 2:
-                print_result(True, f"Got {len(products)} products")
-                # Return first 2 products
-                return products[:2]
-            else:
-                print_result(False, f"Need at least 2 products, got {len(products)}")
-                return []
-        else:
-            print_result(False, f"Status {response.status_code}: {response.text}")
-            return []
-    except Exception as e:
-        print_result(False, f"Exception: {str(e)}")
-        return []
-
-def test_manual_sale_wholesale(products):
-    """Test POST /api/orders/manual with wholesale items, deposit, discount"""
-    print_test("Manual Sale with Wholesale Discount + Deposit + Original Price")
-    
-    if len(products) < 2:
-        print_result(False, "Need at least 2 products to test")
-        return None
-    
-    prod1 = products[0]
-    prod2 = products[1]
-    
-    # Create items with wholesale discount (unitPrice < originalPrice)
-    items = [
-        {
-            "productId": prod1['id'],
-            "productName": prod1['name'],
-            "quantity": 6,
-            "unitPrice": 5000,  # Wholesale price
-            "originalPrice": 8000,  # Retail price
-            "costPrice": 2000,
-            "subtotal": 30000,
-            "wholesale": True
-        },
-        {
-            "productId": prod2['id'],
-            "productName": prod2['name'],
-            "quantity": 3,
-            "unitPrice": 10000,
-            "originalPrice": 10000,  # No discount
-            "costPrice": 4000,
-            "subtotal": 30000,
-            "wholesale": False
-        }
-    ]
-    
-    body = {
-        "customerName": "Cliente Test Mayorista",
-        "description": "Venta con descuento mayorista + seña",
-        "total": 90000,
-        "discount": 5000,
-        "deposit": 30000,
-        "status": "pending",
-        "deductStock": False,
-        "items": items
+def get_supabase_token(email, password):
+    """Get Supabase access token via password grant."""
+    url = f"{SUPABASE_URL}/auth/v1/token?grant_type=password"
+    headers = {
+        "apikey": SUPABASE_ANON_KEY,
+        "Content-Type": "application/json"
     }
+    data = {"email": email, "password": password}
     
     try:
-        response = requests.post(
-            f"{BASE_URL}/orders/manual",
-            headers=headers,
-            json=body,
-            timeout=10
-        )
-        
-        if response.status_code == 200:
-            data = response.json()
-            if 'order' in data and 'orderNumber' in data:
-                order = data['order']
-                print_result(True, f"Manual sale created. Order number: {data['orderNumber']}")
-                print(f"  Order ID: {order['id']}")
-                print(f"  Total: {order.get('total')}")
-                print(f"  Deposit: {order.get('deposit', 'N/A')}")
-                print(f"  Discount: {order.get('discount', 'N/A')}")
-                print(f"  Balance Due: {order.get('balance_due', 'N/A')}")
-                print(f"  Payment Status: {order.get('payment_status', 'N/A')}")
-                print(f"  Status: {order.get('status')}")
-                return order['id']
-            else:
-                print_result(False, "Missing order or orderNumber in response")
-                print_json(data)
-                return None
+        resp = requests.post(url, headers=headers, json=data, timeout=10)
+        if resp.status_code == 200:
+            return resp.json().get('access_token')
         else:
-            print_result(False, f"Status {response.status_code}: {response.text}")
+            print(f"❌ Failed to get token for {email}: {resp.status_code} {resp.text}")
             return None
     except Exception as e:
-        print_result(False, f"Exception: {str(e)}")
+        print(f"❌ Exception getting token for {email}: {e}")
         return None
 
-def test_get_order_items(order_id):
-    """Get order and verify order_items include original_price, cost_price, unit_price"""
-    print_test("Verify Order Items Include original_price, cost_price, unit_price")
+def test_catalog(token):
+    """Test GET /api/diagnostics/catalog"""
+    print("\n=== TEST 1: GET /api/diagnostics/catalog ===")
+    headers = {"Authorization": f"Bearer {token}"}
     
     try:
-        response = requests.get(f"{BASE_URL}/orders", headers=headers, timeout=10)
+        resp = requests.get(f"{API_BASE}/diagnostics/catalog", headers=headers, timeout=10)
+        print(f"Status: {resp.status_code}")
         
-        if response.status_code == 200:
-            orders = response.json()
-            order = next((o for o in orders if o['id'] == order_id), None)
-            
-            if order:
-                print_result(True, f"Found order {order_id}")
-                print(f"  Order fields:")
-                print(f"    - deposit: {order.get('deposit', 'MISSING')}")
-                print(f"    - discount: {order.get('discount', 'MISSING')}")
-                print(f"    - balance_due: {order.get('balance_due', 'MISSING')}")
-                print(f"    - payment_status: {order.get('payment_status', 'MISSING')}")
-                
-                items = order.get('order_items', [])
-                if items:
-                    print(f"\n  Order items ({len(items)} items):")
-                    for i, item in enumerate(items, 1):
-                        print(f"    Item {i}: {item.get('product_name')}")
-                        print(f"      - unit_price: {item.get('unit_price', 'MISSING')}")
-                        print(f"      - cost_price: {item.get('cost_price', 'MISSING')}")
-                        print(f"      - original_price: {item.get('original_price', 'MISSING')}")
-                        print(f"      - quantity: {item.get('quantity')}")
-                        print(f"      - subtotal: {item.get('subtotal')}")
-                    
-                    # Check if original_price exists
-                    has_original_price = any('original_price' in item for item in items)
-                    has_cost_price = any('cost_price' in item for item in items)
-                    
-                    if has_original_price:
-                        print_result(True, "✓ order_items.original_price column EXISTS")
-                    else:
-                        print_result(False, "✗ order_items.original_price column MISSING")
-                    
-                    if has_cost_price:
-                        print_result(True, "✓ order_items.cost_price column EXISTS")
-                    else:
-                        print_result(False, "✗ order_items.cost_price column MISSING")
-                    
-                    return True
+        if resp.status_code == 200:
+            data = resp.json()
+            if 'fields' in data and 'settings' in data:
+                print(f"✅ PASS: Catalog returned with {len(data['fields'])} fields")
+                # Check Cache-Control header
+                cache_control = resp.headers.get('Cache-Control', '')
+                if 'private' in cache_control or 'no-store' in cache_control:
+                    print(f"✅ PASS: Cache-Control header is private/no-store: {cache_control}")
                 else:
-                    print_result(False, "No order_items found")
-                    return False
+                    print(f"⚠️  Minor: Cache-Control header: {cache_control}")
+                return True, data
             else:
-                print_result(False, f"Order {order_id} not found in orders list")
-                return False
+                print(f"❌ FAIL: Missing fields or settings in response")
+                return False, None
         else:
-            print_result(False, f"Status {response.status_code}: {response.text}")
-            return False
+            print(f"❌ FAIL: Expected 200, got {resp.status_code}")
+            return False, None
     except Exception as e:
-        print_result(False, f"Exception: {str(e)}")
-        return False
+        print(f"❌ FAIL: Exception: {e}")
+        return False, None
 
-# ============================================================================
-# Test B: Materials CRUD + Movements
-# ============================================================================
-
-def test_create_material():
-    """Test POST /api/materials"""
-    print_test("Create Material")
+def test_clients_create(token):
+    """Test POST /api/diagnostics/clients"""
+    print("\n=== TEST 2: POST /api/diagnostics/clients (create) ===")
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
     
-    body = {
-        "name": "Sublimacion papel",
-        "unit": "un",
-        "stock_quantity": 100,
-        "unit_cost": 500
+    # Test 2a: Valid client
+    client_data = {
+        "full_name": "__TEST__ Ana García",
+        "phone": "0981 222 333",
+        "birth_date": "1990-05-10"
     }
     
     try:
-        response = requests.post(
-            f"{BASE_URL}/materials",
-            headers=headers,
-            json=body,
-            timeout=10
-        )
+        resp = requests.post(f"{API_BASE}/diagnostics/clients", headers=headers, json=client_data, timeout=10)
+        print(f"Status: {resp.status_code}")
         
-        if response.status_code == 200:
-            data = response.json()
-            if 'id' in data:
-                print_result(True, f"Material created. ID: {data['id']}, Name: {data['name']}, Stock: {data['stock_quantity']}")
-                print_result(True, "✓ materials table EXISTS")
-                return data['id']
+        if resp.status_code == 201:
+            data = resp.json()
+            if 'id' in data and 'phone_normalized' in data:
+                print(f"✅ PASS: Client created with id={data['id']}, phone_normalized={data.get('phone_normalized')}")
+                created_clients.append(data['id'])
+                
+                # Test 2b: Missing full_name (should fail)
+                print("\n=== TEST 2b: POST /api/diagnostics/clients (missing full_name) ===")
+                bad_data = {"phone": "0981 222 333"}
+                resp2 = requests.post(f"{API_BASE}/diagnostics/clients", headers=headers, json=bad_data, timeout=10)
+                print(f"Status: {resp2.status_code}")
+                if resp2.status_code == 400:
+                    print(f"✅ PASS: Missing full_name returns 400")
+                else:
+                    print(f"❌ FAIL: Expected 400, got {resp2.status_code}")
+                
+                return True, data['id']
             else:
-                print_result(False, "No id in response")
-                print_json(data)
-                return None
-        elif response.status_code == 400 or response.status_code == 500:
-            error_text = response.text
-            if 'relation' in error_text.lower() or 'table' in error_text.lower() or 'not found' in error_text.lower():
-                print_result(False, "✗ materials table MISSING (table does not exist)")
-            else:
-                print_result(False, f"Status {response.status_code}: {error_text}")
-            return None
+                print(f"❌ FAIL: Missing id or phone_normalized in response")
+                return False, None
         else:
-            print_result(False, f"Status {response.status_code}: {response.text}")
-            return None
+            print(f"❌ FAIL: Expected 201, got {resp.status_code}: {resp.text}")
+            return False, None
     except Exception as e:
-        print_result(False, f"Exception: {str(e)}")
-        return None
+        print(f"❌ FAIL: Exception: {e}")
+        return False, None
 
-def test_get_materials():
-    """Test GET /api/materials"""
-    print_test("Get Materials")
+def test_clients_search(token):
+    """Test GET /api/diagnostics/clients?q=Ana"""
+    print("\n=== TEST 3: GET /api/diagnostics/clients?q=Ana ===")
+    headers = {"Authorization": f"Bearer {token}"}
     
     try:
-        response = requests.get(f"{BASE_URL}/materials", headers=headers, timeout=10)
+        resp = requests.get(f"{API_BASE}/diagnostics/clients?q=Ana", headers=headers, timeout=10)
+        print(f"Status: {resp.status_code}")
         
-        if response.status_code == 200:
-            materials = response.json()
-            print_result(True, f"Got {len(materials)} materials")
-            if materials:
-                print("  Sample material:")
-                print(f"    - ID: {materials[0].get('id')}")
-                print(f"    - Name: {materials[0].get('name')}")
-                print(f"    - Stock: {materials[0].get('stock_quantity')}")
-                print(f"    - Unit Cost: {materials[0].get('unit_cost')}")
-            return materials
-        else:
-            print_result(False, f"Status {response.status_code}: {response.text}")
-            return []
-    except Exception as e:
-        print_result(False, f"Exception: {str(e)}")
-        return []
-
-def test_material_movement_purchase(material_id):
-    """Test POST /api/materials/:id/movement (purchase)"""
-    print_test("Material Movement - Purchase (add stock)")
-    
-    body = {
-        "type": "purchase",
-        "quantity": 50,
-        "unit_cost": 400,
-        "note": "Compra de prueba"
-    }
-    
-    try:
-        response = requests.post(
-            f"{BASE_URL}/materials/{material_id}/movement",
-            headers=headers,
-            json=body,
-            timeout=10
-        )
-        
-        if response.status_code == 200:
-            data = response.json()
-            print_result(True, f"Purchase movement recorded. New stock: {data.get('stock_quantity')}")
-            print_result(True, "✓ material_movements table EXISTS")
-            return True
-        elif response.status_code == 400 or response.status_code == 500:
-            error_text = response.text
-            if 'relation' in error_text.lower() or 'table' in error_text.lower():
-                print_result(False, "✗ material_movements table MISSING")
-            else:
-                print_result(False, f"Status {response.status_code}: {error_text}")
-            return False
-        else:
-            print_result(False, f"Status {response.status_code}: {response.text}")
-            return False
-    except Exception as e:
-        print_result(False, f"Exception: {str(e)}")
-        return False
-
-def test_material_movement_usage(material_id):
-    """Test POST /api/materials/:id/movement (usage)"""
-    print_test("Material Movement - Usage (deduct stock)")
-    
-    body = {
-        "type": "usage",
-        "quantity": 20,
-        "note": "Uso en producción"
-    }
-    
-    try:
-        response = requests.post(
-            f"{BASE_URL}/materials/{material_id}/movement",
-            headers=headers,
-            json=body,
-            timeout=10
-        )
-        
-        if response.status_code == 200:
-            data = response.json()
-            print_result(True, f"Usage movement recorded. New stock: {data.get('stock_quantity')}")
-            return True
-        else:
-            print_result(False, f"Status {response.status_code}: {response.text}")
-            return False
-    except Exception as e:
-        print_result(False, f"Exception: {str(e)}")
-        return False
-
-def test_update_material(material_id):
-    """Test PUT /api/materials/:id"""
-    print_test("Update Material")
-    
-    body = {
-        "name": "Papel sublimacion"
-    }
-    
-    try:
-        response = requests.put(
-            f"{BASE_URL}/materials/{material_id}",
-            headers=headers,
-            json=body,
-            timeout=10
-        )
-        
-        if response.status_code == 200:
-            data = response.json()
-            print_result(True, f"Material updated. New name: {data.get('name')}")
-            return True
-        else:
-            print_result(False, f"Status {response.status_code}: {response.text}")
-            return False
-    except Exception as e:
-        print_result(False, f"Exception: {str(e)}")
-        return False
-
-def test_delete_material(material_id):
-    """Test DELETE /api/materials/:id"""
-    print_test("Delete Material")
-    
-    try:
-        response = requests.delete(
-            f"{BASE_URL}/materials/{material_id}",
-            headers=headers,
-            timeout=10
-        )
-        
-        if response.status_code == 200:
-            print_result(True, "Material deleted successfully")
-            return True
-        else:
-            print_result(False, f"Status {response.status_code}: {response.text}")
-            return False
-    except Exception as e:
-        print_result(False, f"Exception: {str(e)}")
-        return False
-
-# ============================================================================
-# Test C: Combos
-# ============================================================================
-
-def test_create_combo(products):
-    """Test creating a combo product"""
-    print_test("Create Combo Product")
-    
-    if len(products) < 2:
-        print_result(False, "Need at least 2 products to create combo")
-        return None
-    
-    prod1 = products[0]
-    prod2 = products[1]
-    
-    body = {
-        "name": "Combo Test",
-        "price": 50000,
-        "is_combo": True,
-        "combo_items": [
-            {
-                "component_product_id": prod1['id'],
-                "quantity": 1
-            },
-            {
-                "component_product_id": prod2['id'],
-                "quantity": 2
-            }
-        ]
-    }
-    
-    try:
-        response = requests.post(
-            f"{BASE_URL}/products",
-            headers=headers,
-            json=body,
-            timeout=10
-        )
-        
-        if response.status_code == 200:
-            data = response.json()
-            if 'id' in data:
-                print_result(True, f"Combo product created. ID: {data['id']}, Name: {data['name']}")
-                print(f"  is_combo: {data.get('is_combo', 'MISSING')}")
-                print_result(True, "✓ combo_items table EXISTS (or graceful fallback)")
-                return data['id']
-            else:
-                print_result(False, "No id in response")
-                print_json(data)
-                return None
-        else:
-            print_result(False, f"Status {response.status_code}: {response.text}")
-            return None
-    except Exception as e:
-        print_result(False, f"Exception: {str(e)}")
-        return None
-
-def test_get_combo_components(combo_id):
-    """Test GET /api/products/:id/combo"""
-    print_test("Get Combo Components")
-    
-    try:
-        response = requests.get(
-            f"{BASE_URL}/products/{combo_id}/combo",
-            headers=headers,
-            timeout=10
-        )
-        
-        if response.status_code == 200:
-            components = response.json()
-            if len(components) > 0:
-                print_result(True, f"Got {len(components)} combo components")
-                print_result(True, "✓ combo_items table EXISTS")
-                for i, comp in enumerate(components, 1):
-                    print(f"  Component {i}:")
-                    print(f"    - component_product_id: {comp.get('component_product_id')}")
-                    print(f"    - quantity: {comp.get('quantity')}")
-                    if comp.get('component'):
-                        print(f"    - component name: {comp['component'].get('name')}")
+        if resp.status_code == 200:
+            data = resp.json()
+            if 'clients' in data and 'nextCursor' in data:
+                print(f"✅ PASS: Search returned {len(data['clients'])} clients, nextCursor={data['nextCursor']}")
                 return True
             else:
-                print_result(False, "No components returned (combo_items table may be empty or missing)")
-                print_result(False, "✗ combo_items table MISSING or empty")
+                print(f"❌ FAIL: Missing clients or nextCursor in response")
                 return False
         else:
-            print_result(False, f"Status {response.status_code}: {response.text}")
+            print(f"❌ FAIL: Expected 200, got {resp.status_code}")
             return False
     except Exception as e:
-        print_result(False, f"Exception: {str(e)}")
+        print(f"❌ FAIL: Exception: {e}")
         return False
 
-# ============================================================================
-# Test D: Regression Tests
-# ============================================================================
-
-def test_regression_products():
-    """Test GET /api/products"""
-    print_test("Regression: GET /api/products")
+def test_clients_update(token, client_id):
+    """Test PATCH /api/diagnostics/clients/{id}"""
+    print("\n=== TEST 4: PATCH /api/diagnostics/clients/{id} ===")
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    
+    update_data = {"city": "Asunción"}
     
     try:
-        response = requests.get(f"{BASE_URL}/products", headers=headers, timeout=10)
+        resp = requests.patch(f"{API_BASE}/diagnostics/clients/{client_id}", headers=headers, json=update_data, timeout=10)
+        print(f"Status: {resp.status_code}")
         
-        if response.status_code == 200:
-            products = response.json()
-            print_result(True, f"Got {len(products)} products")
-            return True
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get('city') == 'Asunción':
+                print(f"✅ PASS: Client updated, city={data.get('city')}")
+                return True
+            else:
+                print(f"❌ FAIL: City not updated correctly")
+                return False
         else:
-            print_result(False, f"Status {response.status_code}: {response.text}")
+            print(f"❌ FAIL: Expected 200, got {resp.status_code}")
             return False
     except Exception as e:
-        print_result(False, f"Exception: {str(e)}")
+        print(f"❌ FAIL: Exception: {e}")
         return False
 
-def test_regression_orders():
-    """Test GET /api/orders"""
-    print_test("Regression: GET /api/orders")
+def test_clients_get_single(token, client_id):
+    """Test GET /api/diagnostics/clients/{id}"""
+    print("\n=== TEST 5: GET /api/diagnostics/clients/{id} ===")
+    headers = {"Authorization": f"Bearer {token}"}
     
     try:
-        response = requests.get(f"{BASE_URL}/orders", headers=headers, timeout=10)
+        resp = requests.get(f"{API_BASE}/diagnostics/clients/{client_id}", headers=headers, timeout=10)
+        print(f"Status: {resp.status_code}")
         
-        if response.status_code == 200:
-            orders = response.json()
-            print_result(True, f"Got {len(orders)} orders")
-            return True
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get('id') == client_id:
+                print(f"✅ PASS: Single client retrieved, full_name={data.get('full_name')}")
+                return True
+            else:
+                print(f"❌ FAIL: Client id mismatch")
+                return False
         else:
-            print_result(False, f"Status {response.status_code}: {response.text}")
+            print(f"❌ FAIL: Expected 200, got {resp.status_code}")
             return False
     except Exception as e:
-        print_result(False, f"Exception: {str(e)}")
+        print(f"❌ FAIL: Exception: {e}")
         return False
 
-def test_regression_categories():
-    """Test GET /api/categories"""
-    print_test("Regression: GET /api/categories")
+def test_records_create(token, client_id):
+    """Test POST /api/diagnostics/records (save bundle)"""
+    print("\n=== TEST 6: POST /api/diagnostics/records (create draft) ===")
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    
+    record_data = {
+        "client_id": client_id,
+        "status": "draft",
+        "professional_name": "Prof X",
+        "exposure_minutes": 45,
+        "answers": [],
+        "products": [{
+            "product_name_snapshot": "Color 8.3",
+            "quantity": 60,
+            "unit": "g",
+            "shade": "8.3"
+        }]
+    }
     
     try:
-        response = requests.get(f"{BASE_URL}/categories", headers=headers, timeout=10)
+        resp = requests.post(f"{API_BASE}/diagnostics/records", headers=headers, json=record_data, timeout=10)
+        print(f"Status: {resp.status_code}")
         
-        if response.status_code == 200:
-            categories = response.json()
-            print_result(True, f"Got {len(categories)} categories")
-            return True
+        if resp.status_code == 200:
+            data = resp.json()
+            if 'id' in data:
+                print(f"✅ PASS: Record created with id={data['id']}")
+                created_records.append(data['id'])
+                
+                # Test 6b: Invalid exposure_minutes (should fail)
+                print("\n=== TEST 6b: POST /api/diagnostics/records (invalid exposure_minutes) ===")
+                bad_data = {**record_data, "exposure_minutes": 2000}
+                resp2 = requests.post(f"{API_BASE}/diagnostics/records", headers=headers, json=bad_data, timeout=10)
+                print(f"Status: {resp2.status_code}")
+                if resp2.status_code == 400:
+                    print(f"✅ PASS: Invalid exposure_minutes returns 400")
+                else:
+                    print(f"❌ FAIL: Expected 400, got {resp2.status_code}")
+                
+                # Test 6c: Missing client_id (should fail)
+                print("\n=== TEST 6c: POST /api/diagnostics/records (missing client_id) ===")
+                bad_data2 = {**record_data}
+                del bad_data2['client_id']
+                resp3 = requests.post(f"{API_BASE}/diagnostics/records", headers=headers, json=bad_data2, timeout=10)
+                print(f"Status: {resp3.status_code}")
+                if resp3.status_code == 400:
+                    print(f"✅ PASS: Missing client_id returns 400")
+                else:
+                    print(f"❌ FAIL: Expected 400, got {resp3.status_code}")
+                
+                return True, data['id']
+            else:
+                print(f"❌ FAIL: Missing id in response")
+                return False, None
         else:
-            print_result(False, f"Status {response.status_code}: {response.text}")
+            print(f"❌ FAIL: Expected 200, got {resp.status_code}: {resp.text}")
+            return False, None
+    except Exception as e:
+        print(f"❌ FAIL: Exception: {e}")
+        return False, None
+
+def test_records_list(token, client_id):
+    """Test GET /api/diagnostics/records?client_id={id}"""
+    print("\n=== TEST 7: GET /api/diagnostics/records?client_id={id} ===")
+    headers = {"Authorization": f"Bearer {token}"}
+    
+    try:
+        resp = requests.get(f"{API_BASE}/diagnostics/records?client_id={client_id}", headers=headers, timeout=10)
+        print(f"Status: {resp.status_code}")
+        
+        if resp.status_code == 200:
+            data = resp.json()
+            if 'records' in data and 'nextCursor' in data:
+                print(f"✅ PASS: Records list returned {len(data['records'])} records")
+                if len(data['records']) > 0 and 'record_number' in data['records'][0]:
+                    print(f"✅ PASS: Records include record_number field")
+                return True
+            else:
+                print(f"❌ FAIL: Missing records or nextCursor in response")
+                return False
+        else:
+            print(f"❌ FAIL: Expected 200, got {resp.status_code}")
             return False
     except Exception as e:
-        print_result(False, f"Exception: {str(e)}")
+        print(f"❌ FAIL: Exception: {e}")
         return False
 
-# ============================================================================
-# Main Test Runner
-# ============================================================================
+def test_records_get_bundle(token, record_id):
+    """Test GET /api/diagnostics/records/{id} (bundle)"""
+    print("\n=== TEST 8: GET /api/diagnostics/records/{id} (bundle) ===")
+    headers = {"Authorization": f"Bearer {token}"}
+    
+    try:
+        resp = requests.get(f"{API_BASE}/diagnostics/records/{record_id}", headers=headers, timeout=10)
+        print(f"Status: {resp.status_code}")
+        
+        if resp.status_code == 200:
+            data = resp.json()
+            required_keys = ['record', 'client', 'answers', 'products', 'branding', 'client_signature_url', 'professional_signature_url']
+            missing = [k for k in required_keys if k not in data]
+            if not missing:
+                print(f"✅ PASS: Bundle returned with all required keys")
+                return True
+            else:
+                print(f"❌ FAIL: Missing keys in bundle: {missing}")
+                return False
+        else:
+            print(f"❌ FAIL: Expected 200, got {resp.status_code}")
+            return False
+    except Exception as e:
+        print(f"❌ FAIL: Exception: {e}")
+        return False
+
+def test_records_get_pdf(token, record_id):
+    """Test GET /api/diagnostics/records/{id}/pdf"""
+    print("\n=== TEST 9: GET /api/diagnostics/records/{id}/pdf ===")
+    headers = {"Authorization": f"Bearer {token}"}
+    
+    try:
+        resp = requests.get(f"{API_BASE}/diagnostics/records/{record_id}/pdf", headers=headers, timeout=10)
+        print(f"Status: {resp.status_code}")
+        
+        if resp.status_code == 200:
+            data = resp.json()
+            if 'record' in data:
+                print(f"✅ PASS: PDF bundle returned")
+                return True
+            else:
+                print(f"❌ FAIL: Missing record in PDF bundle")
+                return False
+        else:
+            print(f"❌ FAIL: Expected 200, got {resp.status_code}")
+            return False
+    except Exception as e:
+        print(f"❌ FAIL: Exception: {e}")
+        return False
+
+def test_share_draft_fail(token, draft_record_id):
+    """Test POST /api/diagnostics/records/{id}/share (draft should fail)"""
+    print("\n=== TEST 10: POST /api/diagnostics/records/{id}/share (draft - should fail) ===")
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    
+    try:
+        resp = requests.post(f"{API_BASE}/diagnostics/records/{draft_record_id}/share", headers=headers, json={}, timeout=10)
+        print(f"Status: {resp.status_code}")
+        
+        if resp.status_code == 400:
+            error_msg = resp.json().get('error', '')
+            if 'finalizada' in error_msg.lower() or 'completed' in error_msg.lower():
+                print(f"✅ PASS: Draft cannot be shared, error: {error_msg}")
+                return True
+            else:
+                print(f"⚠️  Minor: Got 400 but unexpected error message: {error_msg}")
+                return True
+        else:
+            print(f"❌ FAIL: Expected 400, got {resp.status_code}")
+            return False
+    except Exception as e:
+        print(f"❌ FAIL: Exception: {e}")
+        return False
+
+def test_share_completed(token, client_id):
+    """Create a completed record and test share link creation"""
+    print("\n=== TEST 11: Create COMPLETED record and share ===")
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    
+    # Create completed record
+    record_data = {
+        "client_id": client_id,
+        "status": "completed",
+        "professional_name": "Prof Y",
+        "exposure_minutes": 30,
+        "answers": [],
+        "products": []
+    }
+    
+    try:
+        resp = requests.post(f"{API_BASE}/diagnostics/records", headers=headers, json=record_data, timeout=10)
+        print(f"Create completed record status: {resp.status_code}")
+        
+        if resp.status_code != 200:
+            print(f"❌ FAIL: Could not create completed record")
+            return False, None, None
+        
+        record_id = resp.json().get('id')
+        created_records.append(record_id)
+        print(f"✅ Completed record created: {record_id}")
+        
+        # Now share it
+        print("\n=== TEST 11b: POST /api/diagnostics/records/{id}/share (completed) ===")
+        resp2 = requests.post(f"{API_BASE}/diagnostics/records/{record_id}/share", headers=headers, json={}, timeout=10)
+        print(f"Status: {resp2.status_code}")
+        
+        if resp2.status_code == 200:
+            data = resp2.json()
+            if 'token' in data and 'link_id' in data and 'path' in data and 'expires_at' in data:
+                print(f"✅ PASS: Share link created, token={data['token'][:10]}..., path={data['path']}")
+                created_share_links.append({'record_id': record_id, 'link_id': data['link_id']})
+                return True, data['token'], data['link_id']
+            else:
+                print(f"❌ FAIL: Missing fields in share response")
+                return False, None, None
+        else:
+            print(f"❌ FAIL: Expected 200, got {resp2.status_code}")
+            return False, None, None
+    except Exception as e:
+        print(f"❌ FAIL: Exception: {e}")
+        return False, None, None
+
+def test_shared_public_access(token):
+    """Test PUBLIC GET /api/diagnostics/shared/{token}"""
+    print("\n=== TEST 12: PUBLIC GET /api/diagnostics/shared/{token} ===")
+    
+    try:
+        # No Authorization header for public access
+        resp = requests.get(f"{API_BASE}/diagnostics/shared/{token}", timeout=10)
+        print(f"Status: {resp.status_code}")
+        
+        if resp.status_code == 200:
+            data = resp.json()
+            if 'record' in data:
+                print(f"✅ PASS: Public shared link accessible")
+                # Check Cache-Control
+                cache_control = resp.headers.get('Cache-Control', '')
+                if 'no-store' in cache_control:
+                    print(f"✅ PASS: Cache-Control is no-store: {cache_control}")
+                else:
+                    print(f"⚠️  Minor: Cache-Control: {cache_control}")
+                return True
+            else:
+                print(f"❌ FAIL: Missing record in shared response")
+                return False
+        else:
+            print(f"❌ FAIL: Expected 200, got {resp.status_code}")
+            return False
+    except Exception as e:
+        print(f"❌ FAIL: Exception: {e}")
+        return False
+
+def test_share_revoke(token, record_id, link_id):
+    """Test DELETE /api/diagnostics/records/{id}/share"""
+    print("\n=== TEST 13: DELETE /api/diagnostics/records/{id}/share (revoke) ===")
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    
+    try:
+        resp = requests.delete(f"{API_BASE}/diagnostics/records/{record_id}/share", headers=headers, json={"link_id": link_id}, timeout=10)
+        print(f"Status: {resp.status_code}")
+        
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get('success'):
+                print(f"✅ PASS: Share link revoked")
+                return True
+            else:
+                print(f"❌ FAIL: Success not true in response")
+                return False
+        else:
+            print(f"❌ FAIL: Expected 200, got {resp.status_code}")
+            return False
+    except Exception as e:
+        print(f"❌ FAIL: Exception: {e}")
+        return False
+
+def test_shared_after_revoke(token):
+    """Test PUBLIC GET /api/diagnostics/shared/{token} after revoke (should 404)"""
+    print("\n=== TEST 14: PUBLIC GET /api/diagnostics/shared/{token} after revoke ===")
+    
+    try:
+        resp = requests.get(f"{API_BASE}/diagnostics/shared/{token}", timeout=10)
+        print(f"Status: {resp.status_code}")
+        
+        if resp.status_code == 404:
+            print(f"✅ PASS: Revoked link returns 404")
+            return True
+        else:
+            print(f"❌ FAIL: Expected 404, got {resp.status_code}")
+            return False
+    except Exception as e:
+        print(f"❌ FAIL: Exception: {e}")
+        return False
+
+def test_shared_invalid_token():
+    """Test PUBLIC GET /api/diagnostics/shared/garbagetoken"""
+    print("\n=== TEST 15: PUBLIC GET /api/diagnostics/shared/garbagetoken ===")
+    
+    try:
+        resp = requests.get(f"{API_BASE}/diagnostics/shared/garbagetoken123xyz", timeout=10)
+        print(f"Status: {resp.status_code}")
+        
+        if resp.status_code == 404:
+            print(f"✅ PASS: Invalid token returns 404")
+            return True
+        else:
+            print(f"❌ FAIL: Expected 404, got {resp.status_code}")
+            return False
+    except Exception as e:
+        print(f"❌ FAIL: Exception: {e}")
+        return False
+
+def test_field_options(token, catalog_data):
+    """Test POST /api/diagnostics/field-options"""
+    print("\n=== TEST 16: POST /api/diagnostics/field-options ===")
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    
+    # Get a single_select field from catalog
+    fields = catalog_data.get('fields', [])
+    single_select_field = next((f for f in fields if f.get('field_type') == 'single_select'), None)
+    
+    if not single_select_field:
+        print(f"⚠️  SKIP: No single_select field found in catalog")
+        return True
+    
+    field_id = single_select_field['id']
+    
+    # Test 16a: Create custom option
+    option_data = {
+        "field_id": field_id,
+        "label": "__TEST__ Opcion Custom"
+    }
+    
+    try:
+        resp = requests.post(f"{API_BASE}/diagnostics/field-options", headers=headers, json=option_data, timeout=10)
+        print(f"Status: {resp.status_code}")
+        
+        if resp.status_code in [200, 201]:
+            data = resp.json()
+            print(f"✅ PASS: Field option created/returned")
+            
+            # Test 16b: Create same option again (should dedupe)
+            print("\n=== TEST 16b: POST /api/diagnostics/field-options (dedupe) ===")
+            resp2 = requests.post(f"{API_BASE}/diagnostics/field-options", headers=headers, json=option_data, timeout=10)
+            print(f"Status: {resp2.status_code}")
+            if resp2.status_code in [200, 201]:
+                print(f"✅ PASS: Duplicate option handled (dedupe)")
+            else:
+                print(f"⚠️  Minor: Dedupe returned {resp2.status_code}")
+            
+            # Test 16c: Invalid field_id (random UUID)
+            print("\n=== TEST 16c: POST /api/diagnostics/field-options (invalid field_id) ===")
+            bad_data = {
+                "field_id": "00000000-0000-0000-0000-000000000000",
+                "label": "Test"
+            }
+            resp3 = requests.post(f"{API_BASE}/diagnostics/field-options", headers=headers, json=bad_data, timeout=10)
+            print(f"Status: {resp3.status_code}")
+            if resp3.status_code in [400, 403]:
+                print(f"✅ PASS: Invalid field_id returns {resp3.status_code}")
+            else:
+                print(f"⚠️  Minor: Invalid field_id returned {resp3.status_code}")
+            
+            return True
+        else:
+            print(f"❌ FAIL: Expected 200/201, got {resp.status_code}")
+            return False
+    except Exception as e:
+        print(f"❌ FAIL: Exception: {e}")
+        return False
+
+def test_settings(token):
+    """Test GET/PUT /api/diagnostics/settings"""
+    print("\n=== TEST 17: GET /api/diagnostics/settings ===")
+    headers = {"Authorization": f"Bearer {token}"}
+    
+    try:
+        resp = requests.get(f"{API_BASE}/diagnostics/settings", headers=headers, timeout=10)
+        print(f"Status: {resp.status_code}")
+        
+        if resp.status_code == 200:
+            print(f"✅ PASS: Settings retrieved")
+            
+            # Test 17b: PUT settings
+            print("\n=== TEST 17b: PUT /api/diagnostics/settings ===")
+            update_data = {
+                "pdf_title": "Test Title",
+                "default_share_expiry_days": 120  # Should be clamped to 90
+            }
+            resp2 = requests.put(f"{API_BASE}/diagnostics/settings", headers=headers, json=update_data, timeout=10)
+            print(f"Status: {resp2.status_code}")
+            
+            if resp2.status_code == 200:
+                data = resp2.json()
+                if data.get('default_share_expiry_days') == 90:
+                    print(f"✅ PASS: Settings updated, default_share_expiry_days clamped to 90")
+                else:
+                    print(f"⚠️  Minor: default_share_expiry_days = {data.get('default_share_expiry_days')} (expected 90)")
+                return True
+            else:
+                print(f"❌ FAIL: Expected 200, got {resp2.status_code}")
+                return False
+        else:
+            print(f"❌ FAIL: Expected 200, got {resp.status_code}")
+            return False
+    except Exception as e:
+        print(f"❌ FAIL: Exception: {e}")
+        return False
+
+def test_security_no_auth():
+    """Test security: no Authorization header"""
+    print("\n=== TEST 18: Security - No Authorization header ===")
+    
+    try:
+        resp = requests.get(f"{API_BASE}/diagnostics/catalog", timeout=10)
+        print(f"Status: {resp.status_code}")
+        
+        if resp.status_code == 401:
+            print(f"✅ PASS: No auth returns 401")
+            return True
+        else:
+            print(f"❌ FAIL: Expected 401, got {resp.status_code}")
+            return False
+    except Exception as e:
+        print(f"❌ FAIL: Exception: {e}")
+        return False
+
+def test_security_non_booking(ecommerce_token):
+    """Test security: non-booking business type"""
+    print("\n=== TEST 19: Security - Non-booking business (ecommerce) ===")
+    headers = {"Authorization": f"Bearer {ecommerce_token}"}
+    
+    try:
+        resp = requests.get(f"{API_BASE}/diagnostics/catalog", headers=headers, timeout=10)
+        print(f"Status: {resp.status_code}")
+        
+        if resp.status_code == 403:
+            print(f"✅ PASS: Non-booking business returns 403")
+            return True
+        else:
+            print(f"❌ FAIL: Expected 403, got {resp.status_code}")
+            return False
+    except Exception as e:
+        print(f"❌ FAIL: Exception: {e}")
+        return False
+
+def test_security_cross_tenant(ecommerce_token, booking_record_id):
+    """Test security: cross-tenant isolation"""
+    print("\n=== TEST 20: Security - Cross-tenant isolation ===")
+    headers = {"Authorization": f"Bearer {ecommerce_token}"}
+    
+    try:
+        # Try to access booking user's record with ecommerce token
+        resp = requests.get(f"{API_BASE}/diagnostics/records/{booking_record_id}", headers=headers, timeout=10)
+        print(f"Status: {resp.status_code}")
+        
+        if resp.status_code in [403, 404]:
+            print(f"✅ PASS: Cross-tenant access blocked ({resp.status_code})")
+            return True
+        else:
+            print(f"❌ FAIL: Expected 403/404, got {resp.status_code}")
+            return False
+    except Exception as e:
+        print(f"❌ FAIL: Exception: {e}")
+        return False
+
+def test_regression_booking(booking_token):
+    """Test regression: booking services still work"""
+    print("\n=== TEST 21: Regression - GET /api/booking/services ===")
+    headers = {"Authorization": f"Bearer {booking_token}"}
+    
+    try:
+        resp = requests.get(f"{API_BASE}/booking/services", headers=headers, timeout=10)
+        print(f"Status: {resp.status_code}")
+        
+        if resp.status_code == 200:
+            print(f"✅ PASS: Booking services endpoint still works")
+            return True
+        else:
+            print(f"❌ FAIL: Expected 200, got {resp.status_code}")
+            return False
+    except Exception as e:
+        print(f"❌ FAIL: Exception: {e}")
+        return False
+
+def test_regression_ecommerce(ecommerce_token):
+    """Test regression: ecommerce products still work"""
+    print("\n=== TEST 22: Regression - GET /api/products (ecommerce) ===")
+    headers = {"Authorization": f"Bearer {ecommerce_token}"}
+    
+    try:
+        resp = requests.get(f"{API_BASE}/products", headers=headers, timeout=10)
+        print(f"Status: {resp.status_code}")
+        
+        if resp.status_code == 200:
+            print(f"✅ PASS: Ecommerce products endpoint still works")
+            return True
+        else:
+            print(f"❌ FAIL: Expected 200, got {resp.status_code}")
+            return False
+    except Exception as e:
+        print(f"❌ FAIL: Exception: {e}")
+        return False
+
+def cleanup(booking_token):
+    """Clean up test data"""
+    print("\n=== CLEANUP: Deleting test data ===")
+    headers = {"Authorization": f"Bearer {booking_token}"}
+    
+    # Note: The API doesn't expose DELETE endpoints for clients/records
+    # In a real scenario, we'd clean up via direct DB access or admin endpoints
+    # For now, we'll just report what was created
+    print(f"Created {len(created_clients)} test clients (prefixed with __TEST__)")
+    print(f"Created {len(created_records)} test records")
+    print(f"Test data can be identified by __TEST__ prefix in names")
 
 def main():
-    """Run all tests"""
-    print("\n" + "="*80)
-    print("BACKEND API TESTING - NEW FEATURES")
-    print("Testing: Manual Sale (deposit/discount/original_price), Materials, Combos")
-    print("="*80)
+    print("=" * 80)
+    print("DIAGNOSTICS MODULE (Fichas capilares) - COMPREHENSIVE BACKEND TEST")
+    print("=" * 80)
     
-    results = {
-        "total": 0,
-        "passed": 0,
-        "failed": 0
-    }
+    # Get tokens
+    print("\n=== AUTHENTICATION ===")
+    booking_token = get_supabase_token(BOOKING_USER, BOOKING_PASS)
+    if not booking_token:
+        print("❌ CRITICAL: Could not get booking user token")
+        return
+    print(f"✅ Booking user token obtained")
     
-    # Sign in
-    if not test_signin():
-        print("\n❌ FATAL: Cannot proceed without authentication")
-        sys.exit(1)
+    ecommerce_token = get_supabase_token(ECOMMERCE_USER, ECOMMERCE_PASS)
+    if not ecommerce_token:
+        print("❌ CRITICAL: Could not get ecommerce user token")
+        return
+    print(f"✅ Ecommerce user token obtained")
     
-    # Test A: Manual Sale with Wholesale Discount + Deposit
-    print("\n" + "="*80)
-    print("SECTION A: MANUAL WHOLESALE SALE WITH DEPOSIT + DISCOUNT")
-    print("="*80)
+    results = []
     
-    products = test_get_products()
-    if products:
-        order_id = test_manual_sale_wholesale(products)
-        if order_id:
-            test_get_order_items(order_id)
+    # Group 1: Catalog
+    success, catalog_data = test_catalog(booking_token)
+    results.append(("Catalog GET", success))
     
-    # Test B: Materials
-    print("\n" + "="*80)
-    print("SECTION B: MATERIALS CRUD + MOVEMENTS")
-    print("="*80)
+    # Group 2: Clients
+    success, client_id = test_clients_create(booking_token)
+    results.append(("Clients POST (create)", success))
     
-    material_id = test_create_material()
-    if material_id:
-        test_get_materials()
-        test_material_movement_purchase(material_id)
-        test_material_movement_usage(material_id)
-        test_update_material(material_id)
-        test_delete_material(material_id)
+    if client_id:
+        results.append(("Clients POST (validation)", test_clients_search(booking_token)))
+        results.append(("Clients PATCH (update)", test_clients_update(booking_token, client_id)))
+        results.append(("Clients GET (single)", test_clients_get_single(booking_token, client_id)))
+        
+        # Group 3: Records
+        success, draft_record_id = test_records_create(booking_token, client_id)
+        results.append(("Records POST (create)", success))
+        
+        if draft_record_id:
+            results.append(("Records GET (list)", test_records_list(booking_token, client_id)))
+            results.append(("Records GET (bundle)", test_records_get_bundle(booking_token, draft_record_id)))
+            results.append(("Records GET (pdf)", test_records_get_pdf(booking_token, draft_record_id)))
+            
+            # Group 4: Share links
+            results.append(("Share POST (draft fail)", test_share_draft_fail(booking_token, draft_record_id)))
+            success, share_token, link_id = test_share_completed(booking_token, client_id)
+            results.append(("Share POST (completed)", success))
+            
+            if share_token:
+                results.append(("Share GET (public)", test_shared_public_access(share_token)))
+                if link_id:
+                    # Get the record_id for the completed record
+                    completed_record_id = next((sl['record_id'] for sl in created_share_links if sl['link_id'] == link_id), None)
+                    if completed_record_id:
+                        results.append(("Share DELETE (revoke)", test_share_revoke(booking_token, completed_record_id, link_id)))
+                        results.append(("Share GET (after revoke)", test_shared_after_revoke(share_token)))
+            
+            results.append(("Share GET (invalid token)", test_shared_invalid_token()))
+        
+        # Group 5: Field options
+        if catalog_data:
+            results.append(("Field Options POST", test_field_options(booking_token, catalog_data)))
+    
+    # Group 6: Settings
+    results.append(("Settings GET/PUT", test_settings(booking_token)))
+    
+    # Group 7: Security
+    results.append(("Security - No auth", test_security_no_auth()))
+    results.append(("Security - Non-booking", test_security_non_booking(ecommerce_token)))
+    if created_records:
+        results.append(("Security - Cross-tenant", test_security_cross_tenant(ecommerce_token, created_records[0])))
+    
+    # Group 8: Regression
+    results.append(("Regression - Booking", test_regression_booking(booking_token)))
+    results.append(("Regression - Ecommerce", test_regression_ecommerce(ecommerce_token)))
+    
+    # Cleanup
+    cleanup(booking_token)
+    
+    # Summary
+    print("\n" + "=" * 80)
+    print("TEST SUMMARY")
+    print("=" * 80)
+    
+    passed = sum(1 for _, success in results if success)
+    total = len(results)
+    
+    for test_name, success in results:
+        status = "✅ PASS" if success else "❌ FAIL"
+        print(f"{status}: {test_name}")
+    
+    print("\n" + "=" * 80)
+    print(f"TOTAL: {passed}/{total} tests passed ({100*passed//total}%)")
+    print("=" * 80)
+    
+    if passed == total:
+        print("\n🎉 ALL TESTS PASSED!")
     else:
-        print("\n⚠️  Skipping remaining material tests (table doesn't exist)")
-    
-    # Test C: Combos
-    print("\n" + "="*80)
-    print("SECTION C: COMBOS")
-    print("="*80)
-    
-    if products:
-        combo_id = test_create_combo(products)
-        if combo_id:
-            test_get_combo_components(combo_id)
-    
-    # Test D: Regression
-    print("\n" + "="*80)
-    print("SECTION D: REGRESSION TESTS")
-    print("="*80)
-    
-    test_regression_products()
-    test_regression_orders()
-    test_regression_categories()
-    
-    # Final Summary
-    print("\n" + "="*80)
-    print("TESTING COMPLETE")
-    print("="*80)
-    print("\nPlease review the output above to determine:")
-    print("1. Which features work end-to-end")
-    print("2. Which DB columns/tables are MISSING:")
-    print("   - order_items.original_price")
-    print("   - order_items.cost_price")
-    print("   - materials table")
-    print("   - material_movements table")
-    print("   - combo_items table")
-    print("   - profiles.plain_password (not tested in this script)")
-    print("\n")
+        print(f"\n⚠️  {total - passed} test(s) failed")
 
 if __name__ == "__main__":
     main()

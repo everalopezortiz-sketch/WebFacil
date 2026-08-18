@@ -650,7 +650,7 @@ export default function AdminPanel({ user, profile, onLogout }) {
                             <TableCell>
                               <div className="flex gap-1">
                                 <Button size="sm" variant="ghost" title="Ver tienda" asChild>
-                                  <a href={`${baseUrl}/store/${u.slug}`} target="_blank" rel="noopener">
+                                  <a href={`${baseUrl}/s/${u.slug}`} target="_blank" rel="noopener">
                                     <Eye className="w-4 h-4" />
                                   </a>
                                 </Button>
