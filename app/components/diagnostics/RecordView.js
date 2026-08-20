@@ -7,17 +7,19 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { ArrowLeft, Pencil, FileDown, Share2, Loader2, MessageCircle, Copy, Link2, Ban, Clock } from 'lucide-react'
+import { ArrowLeft, Pencil, FileDown, Share2, Loader2, MessageCircle, Copy, Link2, Ban, Clock, Trash2 } from 'lucide-react'
 import { authFetch, fmtDate, fmtDateTime, calcAge, answerToText, STATUS_LABELS } from '@/lib/diagnostics/helpers'
 import { buildDiagnosticPdf, pdfFilename } from '@/lib/diagnostics/pdf'
 import { toast } from 'sonner'
 
-export default function RecordView({ supabase, recordId, businessPhone, onBack, onEdit }) {
+export default function RecordView({ supabase, recordId, businessPhone, onBack, onEdit, onDeleted }) {
   const [bundle, setBundle] = useState(null)
   const [loading, setLoading] = useState(true)
   const [pdfBusy, setPdfBusy] = useState(false)
   const [shareBusy, setShareBusy] = useState(false)
   const [shareDialog, setShareDialog] = useState({ open: false, link: null })
+  const [delDialog, setDelDialog] = useState(false)
+  const [delBusy, setDelBusy] = useState(false)
 
   useEffect(() => { load() }, [recordId])
   const load = async () => {
@@ -94,6 +96,17 @@ export default function RecordView({ supabase, recordId, businessPhone, onBack, 
     } catch { toast.error('No se pudo revocar') }
   }
 
+  const deleteRecord = async () => {
+    setDelBusy(true)
+    try {
+      const res = await authFetch(supabase, `/api/diagnostics/records/${recordId}`, { method: 'DELETE' })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok) { toast.success('Ficha eliminada'); setDelDialog(false); onDeleted ? onDeleted() : onBack?.() }
+      else toast.error(data.error || 'No se pudo eliminar la ficha')
+    } catch { toast.error('No se pudo eliminar la ficha') }
+    finally { setDelBusy(false) }
+  }
+
   if (loading) return <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-violet-500" /></div>
   if (!bundle) return null
 
@@ -116,10 +129,11 @@ export default function RecordView({ supabase, recordId, businessPhone, onBack, 
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Button variant="ghost" size="sm" onClick={onBack} className="gap-1"><ArrowLeft className="w-4 h-4" />Volver</Button>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => onEdit(bundle)} className="gap-1"><Pencil className="w-4 h-4" />Editar</Button>
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" size="sm" onClick={() => onEdit(bundle)} className="gap-1"><Pencil className="w-4 h-4" />Editar ficha</Button>
           <Button variant="outline" size="sm" onClick={downloadPdf} disabled={pdfBusy} className="gap-1">{pdfBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}PDF</Button>
           <Button size="sm" onClick={share} disabled={shareBusy || rec.status !== 'completed'} className="gap-1 gradient-brand text-white">{shareBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Share2 className="w-4 h-4" />}Compartir</Button>
+          <Button variant="outline" size="sm" onClick={() => setDelDialog(true)} className="gap-1 text-red-600 border-red-200 hover:bg-red-50"><Trash2 className="w-4 h-4" />Eliminar ficha</Button>
         </div>
       </div>
 
@@ -198,6 +212,20 @@ export default function RecordView({ supabase, recordId, businessPhone, onBack, 
               <p className="text-xs text-muted-foreground flex items-center gap-1"><Clock className="w-3 h-3" />El enlace vence autom\u00e1ticamente. Pod\u00e9s revocarlo cuando quieras.</p>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={delDialog} onOpenChange={setDelDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle className="flex items-center gap-2 text-red-600"><Trash2 className="w-5 h-5" />Eliminar ficha</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm">Vas a eliminar de forma <strong>permanente</strong> la <strong>Ficha N° {rec.record_number ?? '—'}</strong> de <strong>{client.full_name}</strong>.</p>
+            <p className="text-sm text-muted-foreground">Se borrarán también sus respuestas, productos, enlaces compartidos y firmas. Esta acción no se puede deshacer.</p>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setDelDialog(false)} disabled={delBusy}>Cancelar</Button>
+              <Button variant="destructive" onClick={deleteRecord} disabled={delBusy} className="gap-1">{delBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}Eliminar definitivamente</Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

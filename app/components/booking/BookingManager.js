@@ -114,7 +114,7 @@ export default function BookingManager({ supabase, profile }) {
           <TabsContent value="resumen"><BookingOverview appts={data.appts} staff={data.staff} /></TabsContent>
           <TabsContent value="servicios"><ServicesManager supabase={supabase} services={data.services} categories={data.categories} onReload={loadAll} /></TabsContent>
           <TabsContent value="categorias"><ServiceCategoriesManager supabase={supabase} categories={data.categories} onReload={loadAll} /></TabsContent>
-          <TabsContent value="profesionales"><StaffManager supabase={supabase} staff={data.staff} services={data.services} staffServices={data.staffServices} onReload={loadAll} /></TabsContent>
+          <TabsContent value="profesionales"><StaffManager supabase={supabase} staff={data.staff} services={data.services} staffServices={data.staffServices} categories={data.categories} onReload={loadAll} /></TabsContent>
           <TabsContent value="horarios"><AvailabilityEditor supabase={supabase} staff={data.staff} availability={data.availability} onReload={loadAll} /></TabsContent>
           <TabsContent value="bloqueos"><TimeOffManager supabase={supabase} staff={data.staff} timeOff={data.timeOff} onReload={loadAll} /></TabsContent>
           <TabsContent value="config"><BookingSettings supabase={supabase} settings={data.settings} onReload={loadAll} /></TabsContent>

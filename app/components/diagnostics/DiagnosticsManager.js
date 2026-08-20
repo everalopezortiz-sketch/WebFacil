@@ -26,6 +26,7 @@ export default function DiagnosticsManager({ supabase, profile, userId, business
   const [editingRecord, setEditingRecord] = useState(null)
   const [activeRecordId, setActiveRecordId] = useState(null)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [catalogDirty, setCatalogDirty] = useState(false)
 
   useEffect(() => { init() }, [])
   const init = async () => {
@@ -55,7 +56,18 @@ export default function DiagnosticsManager({ supabase, profile, userId, business
     } catch { return null }
   }
 
-  const startNewRecord = (client) => { setActiveClient(client); setEditingRecord(null); setView('record-form') }
+  const refreshCatalog = async () => {
+    try {
+      const res = await authFetch(supabase, '/api/diagnostics/catalog')
+      const cat = await res.json()
+      if (res.ok) setCatalog(cat)
+    } catch { /* ignore */ }
+  }
+
+  const startNewRecord = async (client) => {
+    if (catalogDirty) { await refreshCatalog(); setCatalogDirty(false) }
+    setActiveClient(client); setEditingRecord(null); setView('record-form')
+  }
   const openRecord = (r) => { setActiveRecordId(r.id); setView('record-view') }
   const editFromView = (bundle) => { setActiveClient(bundle.client); setEditingRecord(bundle); setView('record-form') }
   const afterSave = () => { setRefreshKey(k => k + 1); setView(activeClient ? 'client' : 'recent') }
@@ -113,18 +125,20 @@ export default function DiagnosticsManager({ supabase, profile, userId, business
       )}
 
       {view === 'record-form' && activeClient && catalog && (
-        <DiagnosticForm supabase={supabase} userId={userId} client={activeClient} catalog={catalog} staff={staff}
-          record={editingRecord} onSaveOption={saveOption}
+        <DiagnosticForm key={editingRecord?.record?.id ? `edit-${editingRecord.record.id}` : `new-${activeClient.id}-${refreshKey}`}
+          supabase={supabase} userId={userId} client={activeClient} catalog={catalog} staff={staff}
+          record={editingRecord} mode={editingRecord ? 'edit' : 'new'} onSaveOption={saveOption}
           onCancel={() => setView(activeClient && !editingRecord ? 'client' : 'recent')}
           onSaved={afterSave} />
       )}
 
       {view === 'record-view' && activeRecordId && (
         <RecordView supabase={supabase} recordId={activeRecordId} businessPhone={businessPhone}
-          onBack={() => setView(activeClient ? 'client' : 'recent')} onEdit={editFromView} />
+          onBack={() => setView(activeClient ? 'client' : 'recent')} onEdit={editFromView}
+          onDeleted={() => { setActiveRecordId(null); setRefreshKey(k => k + 1); setView(activeClient ? 'client' : 'recent') }} />
       )}
 
-      {view === 'settings' && <DiagnosticSettings supabase={supabase} settings={catalog?.settings} onSaved={s => setCatalog(c => ({ ...c, settings: s }))} />}
+      {view === 'settings' && <DiagnosticSettings supabase={supabase} settings={catalog?.settings} onSaved={s => setCatalog(c => ({ ...c, settings: s }))} onFieldsChanged={() => setCatalogDirty(true)} />}
 
       <ClientFormDialog supabase={supabase} open={clientDialog.open} client={clientDialog.client}
         onOpenChange={o => setClientDialog(d => ({ ...d, open: o }))}

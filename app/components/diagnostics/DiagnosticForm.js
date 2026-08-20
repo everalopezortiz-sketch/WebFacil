@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
-import { ChevronDown, ChevronRight, Plus, Trash2, Save, CheckCircle2, Loader2, ArrowLeft, FlaskConical, Clock, PenLine, UserCog } from 'lucide-react'
+import { ChevronDown, ChevronRight, Plus, Trash2, Save, CheckCircle2, Loader2, ArrowLeft, FlaskConical, Clock, PenLine, UserCog, Pencil, X } from 'lucide-react'
 import DynamicField from './DynamicField'
 import SignaturePad from './SignaturePad'
 import { authFetch, uploadSignature, calcAge, fmtDate } from '@/lib/diagnostics/helpers'
@@ -49,6 +49,9 @@ export default function DiagnosticForm({ supabase, userId, client, catalog, staf
   const [exposureMin, setExposureMin] = useState(rec?.exposure_minutes ?? '')
   const [exposureNotes, setExposureNotes] = useState(rec?.exposure_notes || '')
   const [products, setProducts] = useState(() => (record?.products || []).map(p => ({ ...emptyProduct(), ...p, quantity: p.quantity ?? '' })))
+  const [draftProduct, setDraftProduct] = useState(null) // temp product being added/edited
+  const [draftIndex, setDraftIndex] = useState(null)      // null = adding new, number = editing existing
+  const [dirty, setDirty] = useState(false)
   const [consent, setConsent] = useState(!!rec?.consent_accepted_at)
   const [recordId, setRecordId] = useState(rec?.id || null)
   const [saving, setSaving] = useState(false)
@@ -65,7 +68,7 @@ export default function DiagnosticForm({ supabase, userId, client, catalog, staf
   }, [fields])
 
   const toggle = (k) => setOpen(o => ({ ...o, [k]: !o[k] }))
-  const setAnswer = (fid, v) => setAnswers(a => ({ ...a, [fid]: v }))
+  const setAnswer = (fid, v) => { setAnswers(a => ({ ...a, [fid]: v })); setDirty(true) }
 
   const loadInventory = async () => {
     if (inventory !== null) return
@@ -76,8 +79,27 @@ export default function DiagnosticForm({ supabase, userId, client, catalog, staf
     } catch { setInventory([]) }
   }
 
+  // ---- Products (temporary form with explicit Save/Cancel) ----
+  const setDraft = (patch) => setDraftProduct(d => ({ ...d, ...patch }))
+  const startAddProduct = () => { loadInventory(); setDraftIndex(null); setDraftProduct(emptyProduct()) }
+  const startEditProduct = (i) => { loadInventory(); setDraftIndex(i); setDraftProduct({ ...products[i] }) }
+  const cancelDraft = () => { setDraftProduct(null); setDraftIndex(null) }
+  const saveDraft = () => {
+    const p = draftProduct
+    const name = (p.product_name_snapshot || '').trim()
+    if (!name) { toast.error('Ingresá el nombre del producto'); return }
+    const qty = parseFloat(p.quantity)
+    if (p.quantity === '' || p.quantity == null || isNaN(qty) || qty <= 0) { toast.error('La cantidad debe ser mayor que cero'); return }
+    const clean = { ...p, product_name_snapshot: name }
+    setProducts(ps => draftIndex == null ? [...ps, clean] : ps.map((x, j) => j === draftIndex ? clean : x))
+    setDraftProduct(null); setDraftIndex(null); setDirty(true)
+    toast.success('Producto agregado. Guardá la ficha para conservar todos los cambios')
+  }
+  const removeProduct = (i) => { setProducts(ps => ps.filter((_, j) => j !== i)); setDirty(true) }
+
   const serializeAnswers = () => {
     const out = []
+    const activeIds = new Set(fields.map(f => f.id))
     fields.forEach(f => {
       const v = answers[f.id]
       if (v === undefined || v === null) return
@@ -90,6 +112,20 @@ export default function DiagnosticForm({ supabase, userId, client, catalog, staf
         case 'multi_select': if (Array.isArray(v) && v.length) out.push({ field_id: f.id, selected_values: v }); break
         default: break
       }
+    })
+    // Preserve answers for fields that were hidden AFTER this record was created,
+    // so editing a historical ficha never drops previously saved data.
+    ;(record?.answers || []).forEach(a => {
+      if (!a.field_id || activeIds.has(a.field_id)) return
+      const e = { field_id: a.field_id }
+      if (a.text_value != null && a.text_value !== '') e.text_value = a.text_value
+      else if (a.number_value != null) e.number_value = a.number_value
+      else if (a.boolean_value != null) e.boolean_value = a.boolean_value
+      else if (a.date_value) e.date_value = a.date_value
+      else if (a.option_id) e.option_id = a.option_id
+      else if (Array.isArray(a.selected_values) && a.selected_values.length) e.selected_values = a.selected_values
+      else return
+      out.push(e)
     })
     return out
   }
@@ -106,7 +142,6 @@ export default function DiagnosticForm({ supabase, userId, client, catalog, staf
     }))
 
   const buildPayload = (status, extra = {}) => ({
-    record_id: recordId || undefined,
     client_id: client.id,
     status,
     professional_id: professionalMode === 'select' ? (professionalId || null) : null,
@@ -119,31 +154,41 @@ export default function DiagnosticForm({ supabase, userId, client, catalog, staf
     ...extra,
   })
 
-  const doSave = async (payload) => {
+  // CREATE a brand-new record (POST). Never used to update.
+  const doCreate = async (payload) => {
     const res = await authFetch(supabase, '/api/diagnostics/records', { method: 'POST', body: JSON.stringify(payload) })
     const data = await res.json()
     if (!res.ok) throw new Error(data.error || 'No se pudo guardar')
     return data.id
   }
+  // UPDATE an existing record (PUT with id in the route).
+  const doUpdate = async (id, payload) => {
+    const res = await authFetch(supabase, `/api/diagnostics/records/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'No se pudo guardar')
+    return data.id || id
+  }
 
   const persist = async (status) => {
     if (exposureMin !== '' && (parseInt(exposureMin) < 0 || parseInt(exposureMin) > 1440)) { toast.error('El tiempo de exposici\u00f3n debe estar entre 0 y 1440 min'); return }
+    if (draftProduct) { toast.error('Guardá o cancelá el producto que estás editando'); return }
     setSaving(true)
     try {
       // gather signature blobs
       const cBlob = clientSig.current ? await clientSig.current.getBlob() : null
       const pBlob = proSig.current ? await proSig.current.getBlob() : null
 
+      // In edit mode we already have a persisted id; otherwise create first.
       let id = recordId
-      // initial save to obtain an id if we need to upload signatures
-      if (!id) { id = await doSave(buildPayload(status)); setRecordId(id) }
+      if (!id) { id = await doCreate(buildPayload(status)); setRecordId(id) }
 
       const sigExtra = {}
       if (cBlob) { const path = await uploadSignature(supabase, userId, id, 'client', cBlob); sigExtra.client_signature_path = path; sigExtra.client_signed_at = new Date().toISOString() }
       if (pBlob) { const path = await uploadSignature(supabase, userId, id, 'professional', pBlob); sigExtra.professional_signature_path = path; sigExtra.professional_signed_at = new Date().toISOString() }
 
-      // final save (with id + signatures + status)
-      const finalId = await doSave(buildPayload(status, { record_id: id, ...sigExtra }))
+      // Final save is ALWAYS an update against the known id (prevents duplicates)
+      const finalId = await doUpdate(id, buildPayload(status, sigExtra))
+      setDirty(false)
       toast.success(status === 'completed' ? 'Ficha finalizada' : 'Borrador guardado')
       onSaved && onSaved(finalId)
     } catch (e) {
@@ -208,15 +253,36 @@ export default function DiagnosticForm({ supabase, userId, client, catalog, staf
       {/* Formula & products */}
       <Section title="Fórmula y productos" icon={FlaskConical} open={open.formula} onToggle={() => { toggle('formula'); loadInventory() }}>
         <div className="space-y-3">
-          {products.map((p, i) => (
-            <div key={i} className="border rounded-lg p-3 space-y-2 bg-muted/30">
+          {/* Saved products list */}
+          {products.length === 0 && !draftProduct && <p className="text-sm text-muted-foreground">Todavía no agregaste productos a la fórmula.</p>}
+          {products.map((p, i) => (draftProduct && draftIndex === i) ? null : (
+            <div key={i} className="border rounded-lg p-3 flex items-start justify-between gap-2 bg-muted/30">
+              <div className="text-sm min-w-0">
+                <p className="font-medium truncate">{p.product_name_snapshot}{p.brand ? ` · ${p.brand}` : ''}</p>
+                <p className="text-muted-foreground text-xs">
+                  {(p.quantity !== '' && p.quantity != null) ? `${p.quantity} ${p.unit || ''}` : ''}
+                  {p.shade ? ` · Tono ${p.shade}` : ''}{p.oxidant_volume ? ` · Oxid. ${p.oxidant_volume}` : ''}{p.mixing_ratio ? ` · Mezcla ${p.mixing_ratio}` : ''}
+                </p>
+                {p.instructions && <p className="text-xs text-muted-foreground truncate">{p.instructions}</p>}
+              </div>
+              <div className="flex gap-1 flex-shrink-0">
+                <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => startEditProduct(i)}><Pencil className="w-4 h-4" /></Button>
+                <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => removeProduct(i)}><Trash2 className="w-4 h-4" /></Button>
+              </div>
+            </div>
+          ))}
+
+          {/* Temporary add/edit form */}
+          {draftProduct && (
+            <div className="border-2 border-violet-200 rounded-lg p-3 space-y-2 bg-violet-50/40">
+              <p className="text-sm font-semibold text-violet-700">{draftIndex == null ? 'Nuevo producto' : 'Editar producto'}</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <div className="col-span-2 space-y-1">
                   <Label className="text-xs">Producto</Label>
-                  {inventory && inventory.length > 0 ? (
-                    <Select value={p.product_id || '__manual__'} onValueChange={v => {
-                      if (v === '__manual__') setProducts(ps => ps.map((x, j) => j === i ? { ...x, product_id: '' } : x))
-                      else { const prod = inventory.find(pr => pr.id === v); setProducts(ps => ps.map((x, j) => j === i ? { ...x, product_id: v, product_name_snapshot: prod?.name || x.product_name_snapshot } : x)) }
+                  {inventory && inventory.length > 0 && (
+                    <Select value={draftProduct.product_id || '__manual__'} onValueChange={v => {
+                      if (v === '__manual__') setDraft({ product_id: '' })
+                      else { const prod = inventory.find(pr => pr.id === v); setDraft({ product_id: v, product_name_snapshot: prod?.name || draftProduct.product_name_snapshot }) }
                     }}>
                       <SelectTrigger className="h-9"><SelectValue placeholder="Elegir del inventario" /></SelectTrigger>
                       <SelectContent>
@@ -224,28 +290,31 @@ export default function DiagnosticForm({ supabase, userId, client, catalog, staf
                         {inventory.map(pr => <SelectItem key={pr.id} value={pr.id}>{pr.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
-                  ) : null}
-                  <Input className="h-9" placeholder="Nombre del producto" value={p.product_name_snapshot} onChange={e => setProducts(ps => ps.map((x, j) => j === i ? { ...x, product_name_snapshot: e.target.value } : x))} />
+                  )}
+                  <Input className="h-9" placeholder="Nombre del producto *" value={draftProduct.product_name_snapshot} onChange={e => setDraft({ product_name_snapshot: e.target.value })} />
                 </div>
-                <div className="space-y-1"><Label className="text-xs">Cantidad</Label><Input className="h-9" type="number" step="0.01" value={p.quantity} onChange={e => setProducts(ps => ps.map((x, j) => j === i ? { ...x, quantity: e.target.value } : x))} /></div>
+                <div className="space-y-1"><Label className="text-xs">Cantidad *</Label><Input className="h-9" type="number" step="0.01" min="0" value={draftProduct.quantity} onChange={e => setDraft({ quantity: e.target.value })} /></div>
                 <div className="space-y-1"><Label className="text-xs">Unidad</Label>
-                  <Select value={p.unit || 'g'} onValueChange={v => setProducts(ps => ps.map((x, j) => j === i ? { ...x, unit: v } : x))}>
+                  <Select value={draftProduct.unit || 'g'} onValueChange={v => setDraft({ unit: v })}>
                     <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                     <SelectContent><SelectItem value="g">g</SelectItem><SelectItem value="ml">ml</SelectItem><SelectItem value="unidad">unidad</SelectItem></SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-1"><Label className="text-xs">Tono</Label><Input className="h-9" value={p.shade} onChange={e => setProducts(ps => ps.map((x, j) => j === i ? { ...x, shade: e.target.value } : x))} /></div>
-                <div className="space-y-1"><Label className="text-xs">Vol. oxidante</Label><Input className="h-9" value={p.oxidant_volume} onChange={e => setProducts(ps => ps.map((x, j) => j === i ? { ...x, oxidant_volume: e.target.value } : x))} /></div>
-                <div className="space-y-1"><Label className="text-xs">Mezcla</Label><Input className="h-9" value={p.mixing_ratio} onChange={e => setProducts(ps => ps.map((x, j) => j === i ? { ...x, mixing_ratio: e.target.value } : x))} /></div>
-                <div className="space-y-1"><Label className="text-xs">Marca</Label><Input className="h-9" value={p.brand} onChange={e => setProducts(ps => ps.map((x, j) => j === i ? { ...x, brand: e.target.value } : x))} /></div>
+                <div className="space-y-1"><Label className="text-xs">Marca</Label><Input className="h-9" value={draftProduct.brand} onChange={e => setDraft({ brand: e.target.value })} /></div>
+                <div className="space-y-1"><Label className="text-xs">Tono</Label><Input className="h-9" value={draftProduct.shade} onChange={e => setDraft({ shade: e.target.value })} /></div>
+                <div className="space-y-1"><Label className="text-xs">Vol. oxidante</Label><Input className="h-9" value={draftProduct.oxidant_volume} onChange={e => setDraft({ oxidant_volume: e.target.value })} /></div>
+                <div className="space-y-1"><Label className="text-xs">Mezcla</Label><Input className="h-9" value={draftProduct.mixing_ratio} onChange={e => setDraft({ mixing_ratio: e.target.value })} /></div>
               </div>
-              <div className="flex items-center justify-between gap-2">
-                <Input className="h-9 flex-1" placeholder="Instrucciones / orden de aplicación" value={p.instructions} onChange={e => setProducts(ps => ps.map((x, j) => j === i ? { ...x, instructions: e.target.value } : x))} />
-                <Button type="button" variant="ghost" size="icon" className="text-red-500" onClick={() => setProducts(ps => ps.filter((_, j) => j !== i))}><Trash2 className="w-4 h-4" /></Button>
+              <div className="space-y-1"><Label className="text-xs">Instrucciones / orden de aplicación</Label><Input className="h-9" value={draftProduct.instructions} onChange={e => setDraft({ instructions: e.target.value })} /></div>
+              <div className="flex gap-2 justify-end">
+                <Button type="button" variant="outline" size="sm" onClick={cancelDraft} className="gap-1"><X className="w-4 h-4" />Cancelar</Button>
+                <Button type="button" size="sm" onClick={saveDraft} className="gap-1 gradient-brand text-white"><Save className="w-4 h-4" />Guardar producto</Button>
               </div>
             </div>
-          ))}
-          <Button type="button" variant="outline" onClick={() => setProducts(ps => [...ps, emptyProduct()])} className="gap-1"><Plus className="w-4 h-4" />Agregar producto</Button>
+          )}
+
+          {!draftProduct && <Button type="button" variant="outline" onClick={startAddProduct} className="gap-1"><Plus className="w-4 h-4" />Agregar producto</Button>}
+          {dirty && <p className="text-xs text-amber-600">Tenés cambios sin guardar. Finalizá o guardá el borrador para conservarlos.</p>}
         </div>
       </Section>
 

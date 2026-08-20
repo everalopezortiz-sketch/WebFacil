@@ -17,13 +17,14 @@ export default function AppointmentDialog({ supabase, open, onClose, mode, initi
   const [serviceIds, setServiceIds] = useState([])
   const [busy, setBusy] = useState(false)
   const [reschedule, setReschedule] = useState(null)
+  const [notify, setNotify] = useState(null) // { message, phone, previousStartAt, startAt }
 
   useEffect(() => {
     if (open && mode === 'create') {
       setForm({ staff_id: initial?.staffId || staff.find(s => s.is_active)?.id || '', date: initial?.date || '', time: initial?.time || '09:00', customerName: '', customerPhone: '', customerEmail: '', customerNotes: '' })
       setServiceIds([])
     }
-    if (open && mode === 'view') { setReschedule(null) }
+    if (open && mode === 'view') { setReschedule(null); setNotify(null) }
   }, [open, mode, initial])
 
   // Only services the selected staff can perform
@@ -72,12 +73,28 @@ export default function AppointmentDialog({ supabase, open, onClose, mode, initi
     const res = await authFetch(supabase, '/api/booking/appointments/reschedule', { method: 'PUT', body: JSON.stringify({ appointment_id: appointment.id, staff_id: reschedule.staff_id, start_at }) })
     setBusy(false)
     const data = await res.json().catch(() => ({}))
-    if (res.ok) { toast.success('Reserva reprogramada'); onChanged?.(); onClose?.() }
+    if (res.ok) {
+      toast.success('Cita reprogramada correctamente')
+      onChanged?.() // refresh agenda without reloading the whole app
+      const msg = data.notificationMessage || data.notification_message ||
+        `Hola ${appointment.customer_name}! Te avisamos que tu cita fue reprogramada para el ${fmtDateTime(data.startAt || start_at)}. ¡Te esperamos!`
+      const phone = data.customerPhone || data.customer_phone || appointment.customer_phone || ''
+      setReschedule(null)
+      setNotify({ message: msg, phone, previousStartAt: data.previousStartAt || data.previous_start_at || appointment.start_at, startAt: data.startAt || data.start_at || start_at })
+    }
     else toast.error(data.error || 'No se pudo reprogramar')
+  }
+
+  const sendWhatsapp = () => {
+    const digits = (notify.phone || '').replace(/\D/g, '')
+    if (digits.length < 6) return
+    window.open(`https://wa.me/${digits}?text=${encodeURIComponent(notify.message)}`, '_blank')
   }
 
   const staffName = (id) => staff.find(s => s.id === id)?.name || ''
   const waLink = (phone) => `https://wa.me/${(phone || '').replace(/[^0-9]/g, '')}`
+  const fmtDateTime = (iso) => { try { return new Date(iso).toLocaleString('es-PY', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) } catch { return '' } }
+  const notifyPhoneValid = notify && (notify.phone || '').replace(/\D/g, '').length >= 6
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose?.()}>
@@ -140,7 +157,24 @@ export default function AppointmentDialog({ supabase, open, onClose, mode, initi
                 </div>
               )}
             </div>
-            {reschedule ? (
+            {notify ? (
+              <div className="space-y-3 border-t pt-3 mt-2">
+                <p className="font-medium text-green-600 flex items-center gap-1"><CalendarClock className="w-4 h-4" />Cita reprogramada correctamente</p>
+                <div className="text-xs rounded-md bg-amber-50 border border-amber-200 p-2 text-amber-800">
+                  <p>Fecha anterior: <span className="line-through">{fmtDateTime(notify.previousStartAt)}</span></p>
+                  <p>Nueva fecha: <span className="font-semibold">{fmtDateTime(notify.startAt)}</span></p>
+                </div>
+                <div>
+                  <Label>Mensaje para el cliente</Label>
+                  <Textarea rows={5} value={notify.message} onChange={(e) => setNotify({ ...notify, message: e.target.value })} />
+                </div>
+                {!notifyPhoneValid && <p className="text-xs text-red-500">El cliente no tiene un número válido de WhatsApp.</p>}
+                <div className="flex gap-2">
+                  <Button className="flex-1 bg-green-500 hover:bg-green-600 text-white gap-1" onClick={sendWhatsapp} disabled={!notifyPhoneValid}><MessageCircle className="w-4 h-4" />Avisar por WhatsApp</Button>
+                  <Button variant="outline" onClick={onClose}>Cerrar</Button>
+                </div>
+              </div>
+            ) : reschedule ? (
               <div className="space-y-3 border-t pt-3 mt-2">
                 <p className="font-medium">Reprogramar</p>
                 <div><Label>Profesional</Label>

@@ -1,31 +1,66 @@
 'use client'
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import { authFetch } from '@/lib/booking/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
-import { Checkbox } from '@/components/ui/checkbox'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
-import { Plus, Pencil, Trash2, UserRound } from 'lucide-react'
+import { Plus, Pencil, Trash2, UserRound, X } from 'lucide-react'
 import { toast } from 'sonner'
 
-export default function StaffManager({ supabase, staff = [], services = [], staffServices = [], onReload }) {
+const NO_CAT = '__none__'
+
+export default function StaffManager({ supabase, staff = [], services = [], staffServices = [], categories = [], onReload }) {
   const [dialog, setDialog] = useState({ open: false, data: null, serviceIds: [] })
   const [saving, setSaving] = useState(false)
+  const [catSel, setCatSel] = useState('')      // selected category in the picker
+  const [svcSel, setSvcSel] = useState('')      // selected service in the picker
 
   const blank = { name: '', description: '', phone: '', email: '', photo_url: '', color: '#7c3aed', is_active: true }
+
+  // Active services only, grouped by category (services with no/inactive category -> "Sin categoría")
+  const activeCategories = useMemo(() => (categories || []).filter(c => c.is_active !== false), [categories])
+  const activeServices = useMemo(() => (services || []).filter(s => s.is_active !== false), [services])
+  const catIdSet = useMemo(() => new Set(activeCategories.map(c => c.id)), [activeCategories])
+
+  // Categories that actually have at least one active service (plus "Sin categoría" bucket)
+  const pickerCategories = useMemo(() => {
+    const out = activeCategories.filter(c => activeServices.some(s => s.category_id === c.id))
+    if (activeServices.some(s => !s.category_id || !catIdSet.has(s.category_id))) {
+      out.push({ id: NO_CAT, name: 'Sin categoría' })
+    }
+    return out
+  }, [activeCategories, activeServices, catIdSet])
+
+  const servicesOfCat = (catId) => {
+    if (catId === NO_CAT) return activeServices.filter(s => !s.category_id || !catIdSet.has(s.category_id))
+    return activeServices.filter(s => s.category_id === catId)
+  }
+
+  const serviceInfo = (id) => services.find(s => s.id === id)
+  const catNameOf = (svc) => {
+    if (!svc) return 'Sin categoría'
+    const c = activeCategories.find(x => x.id === svc.category_id)
+    return c ? c.name : 'Sin categoría'
+  }
+
   const open = (s) => {
     const ids = s ? staffServices.filter(ss => ss.staff_id === s.id).map(ss => ss.service_id) : []
     setDialog({ open: true, data: s ? { ...s } : { ...blank }, serviceIds: ids })
+    setCatSel(''); setSvcSel('')
   }
+  const closeDialog = () => { setDialog({ open: false, data: null, serviceIds: [] }); setCatSel(''); setSvcSel('') }
 
-  const toggleService = (id) => {
-    setDialog(d => ({ ...d, serviceIds: d.serviceIds.includes(id) ? d.serviceIds.filter(x => x !== id) : [...d.serviceIds, id] }))
+  const addService = () => {
+    if (!svcSel) { toast.error('Elegí un servicio'); return }
+    setDialog(d => d.serviceIds.includes(svcSel) ? d : { ...d, serviceIds: [...d.serviceIds, svcSel] })
+    setSvcSel('')
   }
+  const removeService = (id) => setDialog(d => ({ ...d, serviceIds: d.serviceIds.filter(x => x !== id) }))
 
   const save = async () => {
     const d = { ...dialog.data, service_ids: dialog.serviceIds }
@@ -34,7 +69,7 @@ export default function StaffManager({ supabase, staff = [], services = [], staf
     const isEdit = !!d.id
     const res = await authFetch(supabase, isEdit ? `/api/booking/staff/${d.id}` : '/api/booking/staff', { method: isEdit ? 'PUT' : 'POST', body: JSON.stringify(d) })
     setSaving(false)
-    if (res.ok) { toast.success('Profesional guardado'); setDialog({ open: false, data: null, serviceIds: [] }); onReload?.() }
+    if (res.ok) { toast.success('Profesional guardado'); closeDialog(); onReload?.() }
     else { const e = await res.json().catch(() => ({})); toast.error(e.error || 'Error al guardar') }
   }
 
@@ -46,6 +81,7 @@ export default function StaffManager({ supabase, staff = [], services = [], staf
   }
 
   const svcCount = (id) => staffServices.filter(ss => ss.staff_id === id).length
+  const availableInCat = servicesOfCat(catSel).filter(s => !dialog.serviceIds.includes(s.id))
 
   return (
     <div className="space-y-4">
@@ -80,7 +116,7 @@ export default function StaffManager({ supabase, staff = [], services = [], staf
         </div>
       )}
 
-      <Dialog open={dialog.open} onOpenChange={(o) => !o && setDialog({ open: false, data: null, serviceIds: [] })}>
+      <Dialog open={dialog.open} onOpenChange={(o) => !o && closeDialog()}>
         <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{dialog.data?.id ? 'Editar' : 'Nuevo'} profesional</DialogTitle></DialogHeader>
           {dialog.data && (
@@ -92,24 +128,66 @@ export default function StaffManager({ supabase, staff = [], services = [], staf
               </div>
               <div><Label>Foto (URL)</Label><Input value={dialog.data.photo_url || ''} onChange={(e) => setDialog({ ...dialog, data: { ...dialog.data, photo_url: e.target.value } })} placeholder="https://..." /></div>
               <div><Label>Color</Label><Input type="color" value={dialog.data.color || '#7c3aed'} onChange={(e) => setDialog({ ...dialog, data: { ...dialog.data, color: e.target.value } })} className="h-10 w-20 p-1" /></div>
-              <div>
+
+              {/* Service assignment by category */}
+              <div className="space-y-2 rounded-md border p-3">
                 <Label>Servicios que realiza</Label>
-                {services.length === 0 ? <p className="text-sm text-muted-foreground mt-1">Crea servicios primero.</p> : (
-                  <div className="mt-2 space-y-2 max-h-48 overflow-y-auto rounded-md border p-2">
-                    {services.map(sv => (
-                      <label key={sv.id} className="flex items-center gap-2 text-sm cursor-pointer py-1">
-                        <Checkbox checked={dialog.serviceIds.includes(sv.id)} onCheckedChange={() => toggleService(sv.id)} />
-                        {sv.name}
-                      </label>
-                    ))}
-                  </div>
+                {activeServices.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Creá servicios primero.</p>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2 items-end">
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Categoría</Label>
+                        <Select value={catSel} onValueChange={(v) => { setCatSel(v); setSvcSel('') }}>
+                          <SelectTrigger className="h-9"><SelectValue placeholder="Elegí categoría" /></SelectTrigger>
+                          <SelectContent>{pickerCategories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Servicio</Label>
+                        <Select value={svcSel} onValueChange={setSvcSel} disabled={!catSel}>
+                          <SelectTrigger className="h-9"><SelectValue placeholder={catSel ? 'Elegí servicio' : 'Elegí categoría'} /></SelectTrigger>
+                          <SelectContent>
+                            {availableInCat.length === 0
+                              ? <div className="px-2 py-1.5 text-sm text-muted-foreground">Sin servicios disponibles</div>
+                              : availableInCat.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <Button type="button" onClick={addService} disabled={!svcSel} className="h-9 gap-1"><Plus className="w-4 h-4" />Agregar</Button>
+                    </div>
+                    {catSel && servicesOfCat(catSel).length === 0 && (
+                      <p className="text-xs text-muted-foreground">Esta categoría no tiene servicios activos.</p>
+                    )}
+
+                    <div className="mt-1">
+                      <p className="text-xs text-muted-foreground mb-1">Servicios asignados ({dialog.serviceIds.length})</p>
+                      {dialog.serviceIds.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">Todavía no asignaste servicios.</p>
+                      ) : (
+                        <div className="space-y-1">
+                          {dialog.serviceIds.map(id => {
+                            const svc = serviceInfo(id)
+                            return (
+                              <div key={id} className="flex items-center justify-between gap-2 rounded-md bg-muted/50 px-2.5 py-1.5 text-sm">
+                                <span className="min-w-0 truncate"><span className="text-muted-foreground">{catNameOf(svc)} → </span><span className="font-medium">{svc?.name || 'Servicio'}</span></span>
+                                <button type="button" onClick={() => removeService(id)} className="text-red-500 hover:text-red-600 flex-shrink-0"><X className="w-4 h-4" /></button>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </>
                 )}
               </div>
+
               <div className="flex items-center justify-between rounded-md border p-3"><Label>Activo</Label><Switch checked={dialog.data.is_active} onCheckedChange={(v) => setDialog({ ...dialog, data: { ...dialog.data, is_active: v } })} /></div>
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialog({ open: false, data: null, serviceIds: [] })}>Cancelar</Button>
+            <Button variant="outline" onClick={closeDialog}>Cancelar</Button>
             <Button onClick={save} disabled={saving}>{saving ? 'Guardando...' : 'Guardar'}</Button>
           </DialogFooter>
         </DialogContent>
