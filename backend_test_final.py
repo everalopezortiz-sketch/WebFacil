@@ -12,7 +12,7 @@ from datetime import datetime
 import uuid
 
 # Get base URL from environment
-BASE_URL = "https://capillary-diag.preview.emergentagent.com/api"
+BASE_URL = "https://staff-manager-171.preview.emergentagent.com/api"
 
 # Test credentials
 ADMIN_CREDENTIALS = {

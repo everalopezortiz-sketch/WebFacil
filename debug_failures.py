@@ -6,7 +6,7 @@ Debug specific API failures
 import requests
 import json
 
-BASE_URL = "https://capillary-diag.preview.emergentagent.com/api"
+BASE_URL = "https://staff-manager-171.preview.emergentagent.com/api"
 
 USER_CREDENTIALS = {
     "email": "testuser@test.com", 

@@ -7,6 +7,9 @@ import ImageUpload from '@/components/ImageUpload'
 import OrderReceipt from '@/components/OrderReceipt'
 import BookingManager from '@/app/components/booking/BookingManager'
 import DiagnosticsManager from '@/app/components/diagnostics/DiagnosticsManager'
+import ServiceCheckoutManager from '@/app/components/booking/ServiceCheckoutManager'
+import PersonnelManager from '@/app/components/booking/PersonnelManager'
+import ServicesReport from '@/app/components/booking/ServicesReport'
 import { hasBookings } from '@/lib/business'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -26,7 +29,7 @@ import {
   Plus, Pencil, Trash2, Loader2, Image, DollarSign, Tag,
   MessageSquare, Bell, QrCode, Link2, Copy, ExternalLink,
   Calendar, TrendingUp, Users, Store, AlertTriangle, X, Check,
-  Phone, Mail, MapPin, CreditCard, Truck, Eye, FileText, Boxes, Home, Lock, CalendarDays
+  Phone, Mail, MapPin, CreditCard, Truck, Eye, FileText, Boxes, Home, Lock, CalendarDays, Wallet, Scissors
 } from 'lucide-react'
 
 const CURRENCIES = [
@@ -85,6 +88,7 @@ export default function Dashboard({ user, profile, onLogout }) {
   const [userPlan, setUserPlan] = useState(null)
   const [infoContent, setInfoContent] = useState([])
   const [reports, setReports] = useState(null)
+  const [reportSubTab, setReportSubTab] = useState('productos')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   
@@ -747,6 +751,16 @@ export default function Dashboard({ user, profile, onLogout }) {
               </TabsTrigger>
             )}
             {hasBookings(profile.business_type) && (
+              <TabsTrigger value="cobros" className="gap-2 data-[state=active]:gradient-brand data-[state=active]:text-white data-[state=active]:shadow-md">
+                <DollarSign className="w-4 h-4" /> Cobros
+              </TabsTrigger>
+            )}
+            {hasBookings(profile.business_type) && (
+              <TabsTrigger value="personal" className="gap-2 data-[state=active]:gradient-brand data-[state=active]:text-white data-[state=active]:shadow-md">
+                <Users className="w-4 h-4" /> Personal
+              </TabsTrigger>
+            )}
+            {hasBookings(profile.business_type) && (
               <TabsTrigger value="fichas" className="gap-2 data-[state=active]:gradient-brand data-[state=active]:text-white data-[state=active]:shadow-md">
                 <FileText className="w-4 h-4" /> Fichas capilares
               </TabsTrigger>
@@ -781,6 +795,16 @@ export default function Dashboard({ user, profile, onLogout }) {
           {hasBookings(profile.business_type) && (
             <TabsContent value="agenda">
               <BookingManager supabase={supabase} profile={profile} />
+            </TabsContent>
+          )}
+          {hasBookings(profile.business_type) && (
+            <TabsContent value="cobros" forceMount className={activeTab === 'cobros' ? '' : 'hidden'}>
+              <ServiceCheckoutManager supabase={supabase} profile={profile} active={activeTab === 'cobros'} currencySymbol={getCurrencySymbol()} />
+            </TabsContent>
+          )}
+          {hasBookings(profile.business_type) && (
+            <TabsContent value="personal" forceMount className={activeTab === 'personal' ? '' : 'hidden'}>
+              <PersonnelManager supabase={supabase} profile={profile} settings={settings} active={activeTab === 'personal'} currencySymbol={getCurrencySymbol()} currency={settings?.currency || 'PYG'} />
             </TabsContent>
           )}
           {hasBookings(profile.business_type) && (
@@ -869,6 +893,42 @@ export default function Dashboard({ user, profile, onLogout }) {
                   </CardContent>
                 </Card>
               </div>
+
+              {/* Booking (services) stats — booking accounts only */}
+              {hasBookings(profile.business_type) && stats?.booking && (
+                <div className="space-y-3">
+                  <h3 className="font-semibold flex items-center gap-2"><Scissors className="w-4 h-4 text-primary" /> Servicios (agenda)</h3>
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <Card className="bg-gradient-to-br from-violet-500 to-purple-600 text-white border-0">
+                      <CardContent className="p-4">
+                        <div className="flex items-center gap-2 opacity-90 mb-1"><DollarSign className="w-4 h-4" /><span className="text-xs">Cobrado hoy (servicios)</span></div>
+                        <p className="text-2xl font-extrabold">{formatPrice(stats.booking.today.serviceRevenue)}</p>
+                        <p className="text-xs opacity-80 mt-1">{stats.booking.today.paidServiceSales} cobro(s)</p>
+                      </CardContent>
+                    </Card>
+                    <Card className="bg-gradient-to-br from-sky-500 to-blue-600 text-white border-0">
+                      <CardContent className="p-4">
+                        <div className="flex items-center gap-2 opacity-90 mb-1"><Scissors className="w-4 h-4" /><span className="text-xs">Servicios realizados hoy</span></div>
+                        <p className="text-3xl font-extrabold">{stats.booking.today.servicesPerformed}</p>
+                      </CardContent>
+                    </Card>
+                    <Card className="bg-gradient-to-br from-amber-500 to-orange-600 text-white border-0">
+                      <CardContent className="p-4">
+                        <div className="flex items-center gap-2 opacity-90 mb-1"><CalendarDays className="w-4 h-4" /><span className="text-xs">Pendiente de cobro</span></div>
+                        <p className="text-2xl font-extrabold">{formatPrice(stats.booking.today.pendingCollection)}</p>
+                        <p className="text-xs opacity-80 mt-1">Servicios sin cobrar</p>
+                      </CardContent>
+                    </Card>
+                    <Card className="bg-gradient-to-br from-teal-500 to-emerald-600 text-white border-0">
+                      <CardContent className="p-4">
+                        <div className="flex items-center gap-2 opacity-90 mb-1"><Wallet className="w-4 h-4" /><span className="text-xs">Comisiones generadas hoy</span></div>
+                        <p className="text-2xl font-extrabold">{formatPrice(stats.booking.today.commissionsGenerated)}</p>
+                      </CardContent>
+                    </Card>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Los servicios pendientes de cobro no cuentan como ingreso hasta que se cobran.</p>
+                </div>
+              )}
 
               {/* Charts */}
               <div className="grid lg:grid-cols-2 gap-6">
@@ -1739,6 +1799,19 @@ export default function Dashboard({ user, profile, onLogout }) {
 
           {/* Reports Tab */}
           <TabsContent value="reports">
+            {hasBookings(profile.business_type) && (
+              <div className="mb-4">
+                <Tabs value={reportSubTab} onValueChange={setReportSubTab}>
+                  <TabsList className="bg-white/60 backdrop-blur p-1.5 shadow-sm">
+                    <TabsTrigger value="productos" className="gap-2 data-[state=active]:gradient-brand data-[state=active]:text-white"><Package className="w-4 h-4" />Productos</TabsTrigger>
+                    <TabsTrigger value="servicios" className="gap-2 data-[state=active]:gradient-brand data-[state=active]:text-white"><Scissors className="w-4 h-4" />Servicios</TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
+            )}
+            {hasBookings(profile.business_type) && reportSubTab === 'servicios' ? (
+              <ServicesReport supabase={supabase} formatPrice={formatPrice} />
+            ) : (
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between flex-wrap gap-4">
@@ -1856,6 +1929,7 @@ export default function Dashboard({ user, profile, onLogout }) {
                 )}
               </CardContent>
             </Card>
+            )}
           </TabsContent>
 
           {/* Website Tab */}

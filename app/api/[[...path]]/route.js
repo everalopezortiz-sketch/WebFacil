@@ -512,10 +512,44 @@ export async function GET(request, { params }) {
         .lte('stock_quantity', 5)
         .order('stock_quantity', { ascending: true })
 
+      // Booking finance (services) — only for booking accounts
+      let booking = null
+      try {
+        const { data: prof } = await supabaseAdmin.from('profiles').select('business_type').eq('id', user.id).single()
+        if (prof?.business_type === 'booking') {
+          const fmtDay = (d) => d.toISOString().split('T')[0]
+          const todayStr = fmtDay(startOfToday)
+          const weekStr = fmtDay(startOfWeek)
+          const [todayRes, weekRes] = await Promise.all([
+            supabaseAdmin.rpc('get_booking_finance_dashboard', { p_user_id: user.id, p_date_from: todayStr, p_date_to: todayStr }),
+            supabaseAdmin.rpc('get_booking_finance_dashboard', { p_user_id: user.id, p_date_from: weekStr, p_date_to: todayStr }),
+          ])
+          const t = todayRes.data || {}
+          const w = weekRes.data || {}
+          booking = {
+            today: {
+              serviceRevenue: t.serviceRevenue || 0,
+              totalRevenue: t.totalRevenue || 0,
+              servicesPerformed: t.servicesPerformedCount || 0,
+              paidServiceSales: t.paidServiceSalesCount || 0,
+              pendingCollection: t.pendingServiceCollection || 0,
+              commissionsGenerated: t.commissionsGenerated || 0,
+            },
+            week: {
+              serviceRevenue: w.serviceRevenue || 0,
+              servicesPerformed: w.servicesPerformedCount || 0,
+              commissionsGenerated: w.commissionsGenerated || 0,
+              pendingCollection: w.pendingServiceCollection || 0,
+            },
+          }
+        }
+      } catch (e) { /* booking stats optional */ }
+
       return handleCORS(NextResponse.json({
         visitsTotal, visitsToday, visitsWeek, visitsByDay,
         salesToday, salesWeek, ordersToday, salesByDay,
-        lowStock: lowStock || []
+        lowStock: lowStock || [],
+        booking,
       }))
     }
 
