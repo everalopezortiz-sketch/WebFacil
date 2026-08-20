@@ -70,6 +70,7 @@ export default function StoreBooking({ slug, brandColor = '#7c3aed', formatPrice
   const [recover, setRecover] = useState({ open: false, code: '', phone: '', busy: false })
   const lastFetchRef = useRef(0)
   const slotAbort = useRef(null)
+  const slotReq = useRef(0)
 
   useEffect(() => {
     fetch(`/api/store/${slug}/booking`).then(r => r.ok ? r.json() : null).then(d => { setData(d); setLoading(false) }).catch(() => setLoading(false))
@@ -121,30 +122,35 @@ export default function StoreBooking({ slug, brandColor = '#7c3aed', formatPrice
   }, [selected, staff, staffServices])
 
   const toggle = (id) => {
+    // changing services invalidates downstream selections
+    setStaffId('any'); setChosenSlot(null); setSlots([])
     if (!settings.allow_multiple_services) { setSelected([id]); return }
     setSelected(s => s.includes(id) ? s.filter(x => x !== id) : [...s, id])
-    // changing services invalidates downstream selections
-    setStaffId('any'); setChosenSlot(null)
   }
 
-  // ---------- availability (with AbortController, never cached) ----------
+  // ---------- availability (single request, AbortController + request-id, never cached) ----------
   const loadSlots = useCallback(async () => {
-    if (selected.length === 0) return
+    if (selected.length === 0) { setSlots([]); setChosenSlot(null); return }
     slotAbort.current?.abort()
     const ctrl = new AbortController(); slotAbort.current = ctrl
+    const reqId = ++slotReq.current
     setLoadingSlots(true); setChosenSlot(null); setSlots([])
     try {
-      const params = new URLSearchParams({ service_ids: selected.join(','), date })
-      if (staffId !== 'any') params.set('staff_id', staffId)
+      // Always send staff_id: 'any' for "Cualquier profesional", the UUID for a specific one.
+      const params = new URLSearchParams({ service_ids: selected.join(','), date, staff_id: staffId })
       const res = await fetch(`/api/store/${slug}/booking/availability?${params}`, { signal: ctrl.signal, cache: 'no-store' })
+      if (reqId !== slotReq.current) return // a newer request superseded this one
       if (res.ok) {
         let d = await res.json()
-        // With "any professional" keep a single time keeping one valid staff assignment
+        if (reqId !== slotReq.current) return // stale response — never replace fresh slots
+        // Only keep rows carrying a real staff_id (one free professional for that slot)
+        d = (Array.isArray(d) ? d : []).filter(s => s && s.staff_id && s.slot_start)
+        // With "Cualquier profesional" group by slot_start -> a single row per time, keeping one valid staff assignment
         if (staffId === 'any') { const seen = new Set(); d = d.filter(s => { if (seen.has(s.slot_start)) return false; seen.add(s.slot_start); return true }) }
         setSlots(d)
       } else { const e = await res.json().catch(() => ({})); toast.error(e.error || 'No se pudieron cargar los horarios'); setSlots([]) }
     } catch (e) { if (e.name !== 'AbortError') setSlots([]) }
-    finally { if (slotAbort.current === ctrl) setLoadingSlots(false) }
+    finally { if (reqId === slotReq.current) setLoadingSlots(false) }
   }, [slug, selected, date, staffId])
 
   useEffect(() => { if (step === 'schedule') loadSlots() }, [step, date, staffId, loadSlots])
@@ -286,25 +292,6 @@ export default function StoreBooking({ slug, brandColor = '#7c3aed', formatPrice
             <button onClick={() => setRecover(r => ({ ...r, open: true }))} className="text-sm text-muted-foreground hover:underline inline-flex items-center gap-1"><Search className="w-3.5 h-3.5" />Ya tengo una cita, buscarla</button>
           </div>
         )}
-
-        {hasServices && (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">
-            {services.slice(0, 6).map(s => (
-              <Card key={s.id} className="overflow-hidden cursor-pointer hover:shadow-md transition" onClick={() => { setSelected([s.id]); if (s.category_id && catIds.has(s.category_id)) setCategory(s.category_id); setOpen(true) }}>
-                {s.image_url && <img src={s.image_url} alt={s.name} className="w-full h-28 object-cover" />}
-                <CardContent className="p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="font-semibold truncate">{s.name}</p>
-                    <span className="text-xs text-muted-foreground flex items-center gap-1 flex-shrink-0"><Clock className="w-3 h-3" />{s.duration_minutes}m</span>
-                  </div>
-                  <p className="text-sm font-bold mt-1" style={{ color: brandColor }}>
-                    {s.promo_active && s.promo_price != null ? <><span className="line-through text-muted-foreground mr-1 font-normal">{fp(s.price)}</span>{fp(s.promo_price)}</> : fp(s.price)}
-                  </p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
       </section>
 
       {/* Recover dialog */}
@@ -358,22 +345,26 @@ export default function StoreBooking({ slug, brandColor = '#7c3aed', formatPrice
             <>
               <DialogHeader><DialogTitle className="flex items-center gap-2"><User className="w-5 h-5" />Elegí profesional</DialogTitle></DialogHeader>
               <div className="space-y-2">
-                <button onClick={() => setStaffId('any')} className={`w-full text-left p-3 rounded-lg border ${staffId === 'any' ? 'ring-2' : 'hover:bg-muted'}`} style={staffId === 'any' ? { borderColor: brandColor, boxShadow: `0 0 0 1px ${brandColor}` } : {}}>
-                  <span className="font-medium">Cualquier profesional</span>
-                  <span className="block text-xs text-muted-foreground">Te asignamos el primero disponible</span>
-                </button>
                 {eligibleStaff.length === 0 ? (
-                  <p className="text-sm text-muted-foreground py-2">Ningún profesional realiza todos los servicios elegidos. Podés continuar con "Cualquier profesional".</p>
-                ) : eligibleStaff.map(st => (
-                  <button key={st.id} onClick={() => setStaffId(st.id)} className={`w-full flex items-center gap-3 p-3 rounded-lg border ${staffId === st.id ? 'ring-2' : 'hover:bg-muted'}`} style={staffId === st.id ? { borderColor: brandColor, boxShadow: `0 0 0 1px ${brandColor}` } : {}}>
-                    {st.photo_url ? <img src={st.photo_url} alt={st.name} className="w-9 h-9 rounded-full object-cover" /> : <span className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-semibold" style={{ background: st.color || brandColor }}>{st.name?.[0]?.toUpperCase()}</span>}
-                    <span className="font-medium">{st.name}</span>
-                  </button>
-                ))}
+                  <p className="text-sm text-red-600 py-2">No hay profesionales disponibles para los servicios seleccionados.</p>
+                ) : (
+                  <>
+                    <button onClick={() => { setStaffId('any'); setChosenSlot(null); setSlots([]) }} className={`w-full text-left p-3 rounded-lg border ${staffId === 'any' ? 'ring-2' : 'hover:bg-muted'}`} style={staffId === 'any' ? { borderColor: brandColor, boxShadow: `0 0 0 1px ${brandColor}` } : {}}>
+                      <span className="font-medium">Cualquier profesional</span>
+                      <span className="block text-xs text-muted-foreground">Te asignamos el primero disponible</span>
+                    </button>
+                    {eligibleStaff.map(st => (
+                      <button key={st.id} onClick={() => { setStaffId(st.id); setChosenSlot(null); setSlots([]) }} className={`w-full flex items-center gap-3 p-3 rounded-lg border ${staffId === st.id ? 'ring-2' : 'hover:bg-muted'}`} style={staffId === st.id ? { borderColor: brandColor, boxShadow: `0 0 0 1px ${brandColor}` } : {}}>
+                        {st.photo_url ? <img src={st.photo_url} alt={st.name} className="w-9 h-9 rounded-full object-cover" /> : <span className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-semibold" style={{ background: st.color || brandColor }}>{st.name?.[0]?.toUpperCase()}</span>}
+                        <span className="font-medium">{st.name}</span>
+                      </button>
+                    ))}
+                  </>
+                )}
               </div>
               <div className="flex gap-2 pt-3 border-t mt-2">
                 <Button variant="outline" onClick={() => setStep('services')} className="gap-1"><ChevronLeft className="w-4 h-4" />Atrás</Button>
-                <Button className="flex-1" style={{ background: brandColor }} onClick={goSchedule}>Continuar</Button>
+                <Button className="flex-1" style={{ background: brandColor }} onClick={goSchedule} disabled={eligibleStaff.length === 0}>Continuar</Button>
               </div>
             </>
           )}
@@ -383,7 +374,7 @@ export default function StoreBooking({ slug, brandColor = '#7c3aed', formatPrice
             <>
               <DialogHeader><DialogTitle className="flex items-center gap-2"><CalendarDays className="w-5 h-5" />Elegí fecha y horario</DialogTitle></DialogHeader>
               <div className="space-y-4">
-                <div><Label>Fecha</Label><Input type="date" min={todayStr()} value={date} onChange={(e) => { setDate(e.target.value); setChosenSlot(null) }} />
+                <div><Label>Fecha</Label><Input type="date" min={todayStr()} value={date} onChange={(e) => { setDate(e.target.value); setChosenSlot(null); setSlots([]) }} />
                   <p className="text-xs text-muted-foreground mt-1 capitalize">{(() => { try { return new Date(date + 'T00:00:00').toLocaleDateString('es-PY', { weekday: 'long', day: '2-digit', month: 'long' }) } catch { return '' } })()}</p>
                 </div>
                 <div>

@@ -13,7 +13,7 @@ import os
 from datetime import datetime, timedelta
 
 # Read environment variables
-BASE_URL = os.getenv('NEXT_PUBLIC_BASE_URL', 'https://staff-manager-171.preview.emergentagent.com')
+BASE_URL = os.getenv('NEXT_PUBLIC_BASE_URL', 'https://staff-earnings-5.preview.emergentagent.com')
 SUPABASE_URL = os.getenv('NEXT_PUBLIC_SUPABASE_URL', 'https://ydgbqxpehrqfvslcuhqk.supabase.co')
 SUPABASE_ANON_KEY = os.getenv('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlkZ2JxeHBlaHJxZnZzbGN1aHFrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk3MDMzMTIsImV4cCI6MjA4NTI3OTMxMn0.caH78KNZOJfO05FcOoDdGTB9aL5ui8-_vjDt48lbO1I')
 

@@ -21,15 +21,15 @@ const fmtD = (iso) => { if (!iso) return ''; try { return new Date(iso).toLocale
 export default function ServiceCheckoutManager({ supabase, profile, active = true, currencySymbol = 'Gs' }) {
   const [tab, setTab] = useState('pendientes')
   const [loaded, setLoaded] = useState(false)
-  const [base, setBase] = useState({ staff: [], services: [], staffServices: [] })
+  const [base, setBase] = useState({ staff: [], services: [], staffServices: [], categories: [] })
   const money = (v) => `${currencySymbol} ${Math.round(Number(v || 0)).toLocaleString('es-PY')}`
 
   const loadBase = useCallback(async () => {
     const get = async (url) => { const r = await authFetch(supabase, url); return r.ok ? r.json() : [] }
-    const [staff, services, staffServices] = await Promise.all([
-      get('/api/booking/staff'), get('/api/booking/services'), get('/api/booking/staff-services'),
+    const [staff, services, staffServices, categories] = await Promise.all([
+      get('/api/booking/staff'), get('/api/booking/services'), get('/api/booking/staff-services'), get('/api/booking/service-categories'),
     ])
-    setBase({ staff, services, staffServices })
+    setBase({ staff, services, staffServices, categories })
     setLoaded(true)
   }, [supabase])
   useEffect(() => { if (active && !loaded) loadBase() }, [active, loaded, loadBase])
@@ -225,8 +225,32 @@ function CheckoutModal({ supabase, helpers, money, card, markPaid, onClose, onDo
 
 // ---------------- MANUAL ----------------
 function ManualTab({ supabase, base, helpers, money }) {
-  const activeServices = base.services.filter(s => s.is_active !== false)
-  const blankLine = () => ({ service_id: '', staff_id: '', quantity: 1, unit_price: '', discount_amount: 0 })
+  const activeServices = useMemo(() => base.services.filter(s => s.is_active !== false), [base.services])
+
+  // Categories with at least one ACTIVE service, plus a "Sin categoría" bucket when needed
+  const NONE = '__none__'
+  const pickerCats = useMemo(() => {
+    const cats = (base.categories || []).filter(c => c.is_active !== false)
+    const out = cats
+      .filter(c => activeServices.some(s => s.category_id === c.id))
+      .map(c => ({ id: c.id, name: c.name }))
+    const hasUncategorized = activeServices.some(s => !s.category_id || !cats.some(c => c.id === s.category_id))
+    if (hasUncategorized) out.push({ id: NONE, name: 'Sin categoría' })
+    return out
+  }, [base.categories, activeServices])
+
+  const servicesInCat = useCallback((catId) => {
+    if (!catId) return []
+    if (catId === NONE) {
+      const catIds = new Set((base.categories || []).map(c => c.id))
+      return activeServices.filter(s => !s.category_id || !catIds.has(s.category_id))
+    }
+    return activeServices.filter(s => s.category_id === catId)
+  }, [activeServices, base.categories])
+
+  const priceOf = (svc) => svc ? Number((svc.promo_active && svc.promo_price != null) ? svc.promo_price : svc.price || 0) : ''
+
+  const blankLine = () => ({ category_id: '', service_id: '', staff_id: '', quantity: 1, unit_price: '', discount_amount: 0 })
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
   const [completedAt, setCompletedAt] = useState(() => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16) })
@@ -237,25 +261,43 @@ function ManualTab({ supabase, base, helpers, money }) {
   const [saving, setSaving] = useState(false)
   const savingRef = useRef(false)
 
-  const setLine = (i, patch) => setLines(ls => ls.map((l, idx) => {
-    if (idx !== i) return l
-    const next = { ...l, ...patch }
-    if (patch.service_id) { const svc = activeServices.find(s => s.id === patch.service_id); if (svc && (l.unit_price === '' || l.unit_price === undefined)) next.unit_price = Number((svc.promo_active && svc.promo_price) ? svc.promo_price : svc.price || 0); next.staff_id = '' }
-    return next
-  }))
+  const patchLine = (i, patch) => setLines(ls => ls.map((l, idx) => idx === i ? { ...l, ...patch } : l))
+
+  const onCategory = (i, catId) => patchLine(i, { category_id: catId, service_id: '', staff_id: '', unit_price: '', discount_amount: 0 })
+  const onService = (i, serviceId) => {
+    const svc = activeServices.find(s => s.id === serviceId)
+    patchLine(i, { service_id: serviceId, staff_id: '', unit_price: priceOf(svc) })
+  }
   const addLine = () => setLines(ls => [...ls, blankLine()])
   const removeLine = (i) => setLines(ls => ls.length > 1 ? ls.filter((_, idx) => idx !== i) : ls)
 
-  const calc = (l) => { const net = Math.max(0, (Number(l.unit_price) || 0) * (l.quantity || 1) - (Number(l.discount_amount) || 0)); const pct = l.staff_id && l.service_id ? helpers.assignedPct(l.staff_id, l.service_id) : 0; return { net, pct, comm: Math.round(net * pct / 100) } }
+  const calc = (l) => {
+    const subtotal = (Number(l.unit_price) || 0) * (Number(l.quantity) || 0)
+    const net = Math.max(0, subtotal - (Number(l.discount_amount) || 0))
+    const pct = l.staff_id && l.service_id ? helpers.assignedPct(l.staff_id, l.service_id) : 0
+    return { subtotal, net, pct, comm: Math.round(net * pct / 100) }
+  }
   const total = lines.reduce((s, l) => s + calc(l).net, 0)
 
   const reset = () => { setCustomerName(''); setCustomerPhone(''); setNotes(''); setLines([blankLine()]); setPayStatus('paid'); setPaymentMethod('cash') }
 
   const submit = async () => {
     if (savingRef.current) return
-    const valid = lines.filter(l => l.service_id && l.staff_id)
-    if (valid.length === 0) { toast.error('Agregá al menos un servicio con profesional'); return }
-    if (valid.length !== lines.length) { toast.error('Completá servicio y profesional en cada línea'); return }
+    // Validate every line
+    for (let idx = 0; idx < lines.length; idx++) {
+      const l = lines[idx]
+      const n = idx + 1
+      if (!l.category_id) { toast.error(`Servicio ${n}: seleccioná la categoría`); return }
+      if (!l.service_id) { toast.error(`Servicio ${n}: seleccioná el servicio`); return }
+      if (!l.staff_id) { toast.error(`Servicio ${n}: seleccioná el profesional`); return }
+      const qty = Number(l.quantity)
+      if (!Number.isInteger(qty) || qty <= 0) { toast.error(`Servicio ${n}: la cantidad debe ser un entero mayor que cero`); return }
+      const price = Number(l.unit_price)
+      if (isNaN(price) || price < 0) { toast.error(`Servicio ${n}: el precio debe ser mayor o igual a cero`); return }
+      const disc = Number(l.discount_amount) || 0
+      if (disc < 0) { toast.error(`Servicio ${n}: el descuento debe ser mayor o igual a cero`); return }
+      if (disc > price * qty) { toast.error(`Servicio ${n}: el descuento no puede superar el subtotal`); return }
+    }
     const markPaid = payStatus === 'paid'
     savingRef.current = true; setSaving(true)
     try {
@@ -263,7 +305,7 @@ function ManualTab({ supabase, base, helpers, money }) {
         customer_name: customerName || null, customer_phone: customerPhone || null,
         mark_paid: markPaid, payment_method: markPaid ? paymentMethod : null, notes: notes || null,
         completed_at: new Date(completedAt).toISOString(),
-        items: lines.map(l => ({ service_id: l.service_id, staff_id: l.staff_id, quantity: l.quantity || 1, unit_price: Number(l.unit_price) || 0, discount_amount: Number(l.discount_amount) || 0 })),
+        items: lines.map(l => ({ service_id: l.service_id, staff_id: l.staff_id, quantity: Number(l.quantity) || 1, unit_price: Number(l.unit_price) || 0, discount_amount: Number(l.discount_amount) || 0 })),
       }
       const res = await authFetch(supabase, '/api/booking/service-sales', { method: 'POST', body: JSON.stringify(body) })
       const d = await res.json().catch(() => ({}))
@@ -286,31 +328,39 @@ function ManualTab({ supabase, base, helpers, money }) {
 
         <div className="space-y-2">
           {lines.map((l, i) => {
+            const svcOpts = servicesInCat(l.category_id)
             const staffOpts = l.service_id ? helpers.staffForService(l.service_id) : []
             const c = calc(l)
             return (
               <div key={i} className="rounded-md border p-3 space-y-2">
                 <div className="flex items-center justify-between"><span className="text-sm font-medium">Servicio {i + 1}</span>{lines.length > 1 && <button onClick={() => removeLine(i)} className="text-red-500"><Trash2 className="w-4 h-4" /></button>}</div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div>
+                    <Label className="text-xs">Categoría</Label>
+                    <Select value={l.category_id} onValueChange={(v) => onCategory(i, v)}>
+                      <SelectTrigger className="h-9"><SelectValue placeholder="Elegí categoría" /></SelectTrigger>
+                      <SelectContent>{pickerCats.length === 0 ? <div className="px-2 py-1.5 text-sm text-muted-foreground">Sin categorías</div> : pickerCats.map(cat => <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
                   <div>
                     <Label className="text-xs">Servicio</Label>
-                    <Select value={l.service_id} onValueChange={(v) => setLine(i, { service_id: v })}>
-                      <SelectTrigger className="h-9"><SelectValue placeholder="Elegí servicio" /></SelectTrigger>
-                      <SelectContent>{activeServices.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
+                    <Select value={l.service_id} onValueChange={(v) => onService(i, v)} disabled={!l.category_id}>
+                      <SelectTrigger className="h-9"><SelectValue placeholder={l.category_id ? 'Elegí servicio' : 'Elegí categoría'} /></SelectTrigger>
+                      <SelectContent>{svcOpts.length === 0 ? <div className="px-2 py-1.5 text-sm text-muted-foreground">Sin servicios</div> : svcOpts.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
                   <div>
                     <Label className="text-xs">Profesional</Label>
-                    <Select value={l.staff_id} onValueChange={(v) => setLine(i, { staff_id: v })} disabled={!l.service_id}>
+                    <Select value={l.staff_id} onValueChange={(v) => patchLine(i, { staff_id: v })} disabled={!l.service_id}>
                       <SelectTrigger className="h-9"><SelectValue placeholder={l.service_id ? 'Elegí' : 'Elegí servicio'} /></SelectTrigger>
                       <SelectContent>{staffOpts.length === 0 ? <div className="px-2 py-1.5 text-sm text-muted-foreground">Sin personal asignado</div> : staffOpts.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
-                  <div><Label className="text-xs">Cantidad</Label><Input type="number" min="1" value={l.quantity} onChange={(e) => setLine(i, { quantity: parseInt(e.target.value) || 1 })} className="h-9" /></div>
-                  <div><Label className="text-xs">Precio</Label><Input type="number" min="0" value={l.unit_price} onChange={(e) => setLine(i, { unit_price: e.target.value })} className="h-9" /></div>
-                  <div><Label className="text-xs">Descuento</Label><Input type="number" min="0" value={l.discount_amount} onChange={(e) => setLine(i, { discount_amount: e.target.value })} className="h-9" /></div>
+                  <div><Label className="text-xs">Cantidad</Label><Input type="number" min="1" value={l.quantity} onChange={(e) => patchLine(i, { quantity: parseInt(e.target.value) || 1 })} className="h-9" /></div>
+                  <div><Label className="text-xs">Precio</Label><Input type="number" min="0" value={l.unit_price} onChange={(e) => patchLine(i, { unit_price: e.target.value })} className="h-9" /></div>
+                  <div><Label className="text-xs">Descuento</Label><Input type="number" min="0" value={l.discount_amount} onChange={(e) => patchLine(i, { discount_amount: e.target.value })} className="h-9" /></div>
                 </div>
                 {l.staff_id && <p className="text-xs text-muted-foreground">Comisión: {c.pct}% → <span className="font-medium text-emerald-700">{money(c.comm)}</span></p>}
               </div>
