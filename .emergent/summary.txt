@@ -1,58 +1,20 @@
 <analysis>**original_problem_statement**: 
-The user requested a massive, comprehensive implementation of a Personnel, Checkouts, Earnings, and Reports module for the Booking SaaS functionality. 
+The user requested a massive, comprehensive implementation of a Personnel, Checkouts, Earnings, and Reports module for the Booking SaaS functionality, followed by 3 specific UI/API corrections.
 PRODUCT REQUIREMENTS:
-- **Strict Constraint 1**: Do NOT modify the Supabase schema, functions, tables, or policies. The backend is completely pre-configured with the necessary RPCs.
-- **Strict Constraint 2**: Do NOT run On branch main
-Your branch is up to date with 'origin/main'.
-
-nothing to commit, working tree clean, , or attempt any deployments (Vercel, etc.). The user handles saving to GitHub manually.
-- **Personnel Module**: Unify Staff/Professionals. Add employment fields (compensation type, salary, default commission). Create  with Earnings, Advances, and Payment History tabs.
-- **Checkout Module**: Create  to handle pending checkouts from appointments, allow manual service sales, and track payment status. 
-- **Finance/Reports**: Calculate commissions automatically. Allow generation of PDF settlement receipts ( using ). Update  to include Cobros and Personal tabs, and split reports into Products and Services.
-- **Performance Constraints**: No Supabase Realtime, no polling, no  on new routes. Code must compile with yarn run v1.22.22
-$ next build
-  ▲ Next.js 14.2.3
-  - Environments: .env
-
-   Creating an optimized production build ...
- ✓ Compiled successfully
-   Linting and checking validity of types ...
-   Collecting page data ...
-   Generating static pages (0/4) ...
-   Generating static pages (1/4) 
-   Generating static pages (2/4) 
-   Generating static pages (3/4) 
- ✓ Generating static pages (4/4)
-   Finalizing page optimization ...
-   Collecting build traces ...
-
-Route (app)                              Size     First Load JS
-┌ ○ /                                    169 kB          296 kB
-├ ○ /_not-found                          875 B          88.3 kB
-├ ƒ /api/[[...path]]                     0 B                0 B
-├ ƒ /f/[token]                           2.47 kB         104 kB
-├ ƒ /s/[slug]                            145 B           140 kB
-├ ƒ /s/[slug]/r                          145 B           140 kB
-└ ƒ /store/[slug]                        138 B          87.6 kB
-+ First Load JS shared by all            87.4 kB
-  ├ chunks/23-43cb4dc9f96b355f.js        31.6 kB
-  ├ chunks/fd9d1056-6cf38bb21615835b.js  53.6 kB
-  └ other shared chunks (total)          2.19 kB
-
-
-○  (Static)   prerendered as static content
-ƒ  (Dynamic)  server-rendered on demand
-
-Done in 17.30s. exiting with code 0.
+- **Strict Constraint 1**: Do NOT modify the Supabase schema, functions, tables, or policies. The backend is completely pre-configured with necessary RPCs.
+- **Strict Constraint 2**: Do NOT run , , or attempt any deployments (Vercel, etc.).
+- **Fix 1 (Cualquier profesional)**: Group available slots to show unique times if any professional is available. Assign a real  to the slot. Cancel stale frontend requests using  and block browser caching for the availability endpoint using .
+- **Fix 2 (Category before Service in Checkouts)**: In , force the order: Category -> Service -> Professional -> Quantity -> Price -> Discount. Calculate lines correctly without sending  to the database payload.
+- **Fix 3 (Hide Services in Storefront)**: Hide service cards on the main public index () but keep them visible inside the booking modal. Do not affect products.
 
 **User's preferred language**: Spanish
-**INSTRUCT**: The next agent MUST automatically detect the user's primary language from their messages inside the <trajectory> tag and INSTRUCT next agent to respond in the user's preferred language only. The next agent MUST respond to the user in Spanish only.
+**INSTRUCT**: The user exclusively communicates in Spanish. The next agent MUST automatically detect the user's primary language from their messages inside the <trajectory> tag and INSTRUCT next agent to respond in the user's preferred language only. **You MUST respond to the user in Spanish only.**
 
 **what currently exists?** 
-A Next.js 14 (App Router) SaaS application with a Supabase backend. It has E-commerce, Booking, and Capillary Diagnostics modules. The massive new Booking Finance module (Personnel management, Service Checkouts, Advances, Settlements, and PDF Receipts) has just been successfully implemented, tested locally, and compiled perfectly.
+A Next.js 14 (App Router) SaaS application with a Supabase backend. It includes E-commerce, Booking, and Capillary Diagnostics modules. The Booking Finance module was just updated with three critical fixes regarding staff availability (Cualquier profesional), checkout logic, and UI visibility. A Next.js build cache corruption that crashed the preview was also successfully resolved.
 
 **Last working item**:
-    - Last item agent was working: Implementing the complete Booking Finance module (Personnel, Checkouts, Dashboard integrations, and API routes utilizing existing Supabase RPCs), testing it, and ensuring yarn run v1.22.22
+    - Last item agent was working: Fixing a preview environment crash () caused by a corrupt  cache after running a requested yarn run v1.22.22
 $ next build
   ▲ Next.js 14.2.3
   - Environments: .env
@@ -70,12 +32,12 @@ $ next build
    Collecting build traces ...
 
 Route (app)                              Size     First Load JS
-┌ ○ /                                    169 kB          296 kB
+┌ ○ /                                    170 kB          297 kB
 ├ ○ /_not-found                          875 B          88.3 kB
 ├ ƒ /api/[[...path]]                     0 B                0 B
 ├ ƒ /f/[token]                           2.47 kB         104 kB
-├ ƒ /s/[slug]                            145 B           140 kB
-├ ƒ /s/[slug]/r                          145 B           140 kB
+├ ƒ /s/[slug]                            145 B           139 kB
+├ ƒ /s/[slug]/r                          145 B           139 kB
 └ ƒ /store/[slug]                        138 B          87.6 kB
 + First Load JS shared by all            87.4 kB
   ├ chunks/23-43cb4dc9f96b355f.js        31.6 kB
@@ -86,17 +48,17 @@ Route (app)                              Size     First Load JS
 ○  (Static)   prerendered as static content
 ƒ  (Dynamic)  server-rendered on demand
 
-Done in 14.11s. passes without errors.
+Done in 24.55s.. 
     - Status: USER VERIFICATION PENDING
     - Agent Testing Done: Y
-    - Which testing method agent to use?: NA (Backend testing agent passed 100%; screenshot tool verified frontend).
+    - Which testing method agent to use?: NA (Preview restored via bash and verified with ).
     - User Testing Done: N
 
 **All Pending/In progress Issue list**: 
   Issue 1: User must trigger Save to GitHub UI button (P0)
-     - Attempted fixes: Agent completed all code changes locally, verified the build (exit code 0), and passed control back to the user.
-     - Next debug checklist: Await user confirmation that they clicked the Save to GitHub button.
-     - Why fix this issue and what will be achieved with the fix?: Pushes the new Booking Finance module to production.
+     - Attempted fixes: Agent completed all code changes locally, fixed the preview crash, and returned control to the user.
+     - Next debug checklist: Await user confirmation that they clicked the Save to GitHub button and verified the new fixes in the UI.
+     - Why fix this issue and what will be achieved with the fix?: Pushes the new Booking Finance module and fixes to production.
      - Status: USER VERIFICATION PENDING
      - Is recurring issue?: N
      - Should Test frontend/backend/both after fix?: NA
@@ -130,13 +92,91 @@ Done in 14.11s. passes without errors.
   - P4: Feature Enhancement: WhatsApp reminder button the day before an appointment.
 
 **Completed work in this session**
-- Created  with tabs for Staff, Earnings, Advances, and Payment History (DONE).
-- Created  to handle pending appointments and manual checkouts (DONE).
-- Created  to generate PDF receipts for staff payments using  (DONE).
-- Created  and updated  to inject Cobros and Personal tabs natively, splitting the reports (DONE).
-- Updated  to support new employment fields (salary, compensation_type, commission percentages) (DONE).
-- Updated  with new GET/POST/PUT handlers mapping directly to pre-existing Supabase RPCs (, , etc.) (DONE).
-- Seeded a new test user () and passed 100% of backend tests. yarn run v1.22.22
+- Corrected Cualquier profesional availability logic in  (frontend ) and  (no-store caching, strict single RPC call) (DONE).
+- Rewrote the Manual Checkout tab in  to strictly follow Category -> Service -> Professional order and handle line-item calculations (DONE).
+- Removed public service cards from the storefront view in  (DONE).
+- Fixed Next.js preview corruption by removing  directory and restarting  via supervisor (DONE).
+
+**Earlier issues found/mentioned but not fixed**
+*(None newly identified)*
+
+**Known issue recurrence from previous fork**
+- None.
+
+**Code Architecture**
+
+
+**Key Technical Concepts**
+- Next.js 14 (App Router), Supabase, Tailwind CSS, shadcn/ui.
+- **Supabase RPCs**: All logic heavily relies on read-only calls to existing Supabase postgres functions. 
+
+**key DB schema**
+- : Stores staff info, compensation types.
+- : Maps professionals to services.
+- : Handles available slots calculations.
+
+**changes in tech stack**
+- None.
+
+**All files of reference**
+-  (Updated for availability & UI hiding)
+-  (Updated for checkout categories flow)
+-  (Updated for cache headers & availability params)
+-  (Updated with backend test results)
+
+**Areas that need refactoring**:
+-  is quite large. 
+
+**key api endpoints**
+-  (Strictly requires  cache headers now)
+
+**Critical Info for New Agent**
+- **CRITICAL - NO GIT / NO DEPLOY / NO SUPABASE MODS**: Do not run usage: git [-v | --version] [-h | --help] [-C <path>] [-c <name>=<value>]
+           [--exec-path[=<path>]] [--html-path] [--man-path] [--info-path]
+           [-p | --paginate | -P | --no-pager] [--no-replace-objects] [--bare]
+           [--git-dir=<path>] [--work-tree=<path>] [--namespace=<name>]
+           [--super-prefix=<path>] [--config-env=<name>=<envvar>]
+           <command> [<args>]
+
+These are common Git commands used in various situations:
+
+start a working area (see also: git help tutorial)
+   clone     Clone a repository into a new directory
+   init      Create an empty Git repository or reinitialize an existing one
+
+work on the current change (see also: git help everyday)
+   add       Add file contents to the index
+   mv        Move or rename a file, a directory, or a symlink
+   restore   Restore working tree files
+   rm        Remove files from the working tree and from the index
+
+examine the history and state (see also: git help revisions)
+   bisect    Use binary search to find the commit that introduced a bug
+   diff      Show changes between commits, commit and working tree, etc
+   grep      Print lines matching a pattern
+   log       Show commit logs
+   show      Show various types of objects
+   status    Show the working tree status
+
+grow, mark and tweak your common history
+   branch    List, create, or delete branches
+   commit    Record changes to the repository
+   merge     Join two or more development histories together
+   rebase    Reapply commits on top of another base tip
+   reset     Reset current HEAD to the specified state
+   switch    Switch branches
+   tag       Create, list, delete or verify a tag object signed with GPG
+
+collaborate (see also: git help workflows)
+   fetch     Download objects and refs from another repository
+   pull      Fetch from and integrate with another repository or a local branch
+   push      Update remote refs along with associated objects
+
+'git help -a' and 'git help -g' list available subcommands and some
+concept guides. See 'git help <command>' or 'git help <concept>'
+to read about a specific subcommand or concept.
+See 'git help git' for an overview of the system. commands, do not deploy to Vercel, do not attempt to alter the Supabase schema or create migrations. 
+- **Next.js Cache Bug**: If you run yarn run v1.22.22
 $ next build
   ▲ Next.js 14.2.3
   - Environments: .env
@@ -150,82 +190,38 @@ $ next build
    Generating static pages (2/4) 
    Generating static pages (3/4) 
  ✓ Generating static pages (4/4)
-info Visit https://yarnpkg.com/en/docs/cli/run for documentation about this command. completed with exit code 0 (DONE).
+   Finalizing page optimization ...
+   Collecting build traces ...
 
-**Earlier issues found/mentioned but not fixed**
-*(None newly identified)*
+Route (app)                              Size     First Load JS
+┌ ○ /                                    170 kB          297 kB
+├ ○ /_not-found                          875 B          88.3 kB
+├ ƒ /api/[[...path]]                     0 B                0 B
+├ ƒ /f/[token]                           2.47 kB         104 kB
+├ ƒ /s/[slug]                            145 B           139 kB
+├ ƒ /s/[slug]/r                          145 B           139 kB
+└ ƒ /store/[slug]                        138 B          87.6 kB
++ First Load JS shared by all            87.4 kB
+  ├ chunks/23-43cb4dc9f96b355f.js        31.6 kB
+  ├ chunks/fd9d1056-6cf38bb21615835b.js  53.6 kB
+  └ other shared chunks (total)          2.19 kB
 
-**Known issue recurrence from previous fork**
-- None.
 
-**Code Architecture**
-handleBookingRoute
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
 
-**Key Technical Concepts**
-- Next.js 14 (App Router), Supabase, Tailwind CSS, shadcn/ui.
-- Supabase RPCs: The backend logic for finance (calculating commissions, deducting advances, creating sales) is handled entirely by Supabase Postgres Functions (RPCs) which the agent calls via the API.
-- jsPDF: Used for client-side PDF generation of payment receipts.
-
-**key DB schema**
-- : Stores staff info, compensation types, and salary.
-- : Maps professionals to services with .
--  & : Records completed/pending checkouts.
--  & : Financial records for staff payments.
-
-**changes in tech stack**
-- None.
-
-**All files of reference**
--  (Updated layout and tabs)
--  (Updated with employment fields)
--  (Massive update adding all finance dispatchers)
--  (New)
--  (New)
--  (New)
--  (New)
--  &  (Updated with test data)
-
-**Areas that need refactoring**:
--  is quite large (2800+ lines). Future UI components should ideally be split into smaller files, though it is currently stable.
-
-**key api endpoints**
-- 
--  (Calls )
-- 
--  (Calls )
-- 
-
-**Critical Info for New Agent**
-- **CRITICAL - NO GIT / NO DEPLOY**: The user specifically ordered the agent *NOT* to run On branch main
-Your branch is up to date with 'origin/main'.
-
-Changes not staged for commit:
-  (use "git add <file>..." to update what will be committed)
-  (use "git restore <file>..." to discard changes in working directory)
-	modified:   .emergent/cron/webhook-crons
-	modified:   backend_test.py
-	modified:   backend_test_agenda_v2.py
-	modified:   backend_test_corrected.py
-	modified:   backend_test_final.py
-	modified:   booking_test.py
-	modified:   debug_failures.py
-
-no changes added to commit (use "git add" and/or "git commit -a"), , or attempt to verify Vercel deployments. All code was written directly to the container's files and left for the user to trigger the Save to GitHub UI button.
-- **Database Rules**: Do NOT attempt to create tables, RPCs, or migrations. The user's Supabase backend is strictly locked and pre-configured for the Booking Finance module.
-- **Component Imports**: Ensure imports for booking components always use  and NOT .
+Done in 14.30s. while the supervisor dev server is running, the preview will crash with a missing module error. If this happens, run nextjs: stopped
+nextjs: started to fix the preview environment instantly.
 
 **documents and test reports created in this job**
--  (Updated with Booking Finance test suite results - 100% pass)
--  (Added  for finance testing)
+-  (Updated to reflect 100% backend test pass for  endpoint)
 
-**Last 10 User Messages and any pending HUMAN messages**
+**Last 10 User Messages and any pending HUMAN messages** 
 *(Oldest to newest)*
 1. User asked for ask_human confirmation.
 2. Agent sent confirmation request.
-3. User provided a massive, highly detailed Spanish prompt to build the entire Personnel, Checkouts, and Earnings module, strictly forbidding Git, Vercel, and DB Schema changes.
-4. Agent wrote all the code, verified DB schema types via read-only introspect scripts, fixed a Next.js syntax error in , ran the backend testing agent (which passed 100%), and updated test docs.
-5. User said: continua por favor.
-6. Agent ran screenshot tool, verified the UI rendered properly, confirmed yarn run v1.22.22
+3. User provided a massive Spanish prompt ordering 3 strict UI/API fixes without altering DB or git.
+4. Agent applied all code changes, ran yarn run v1.22.22
 $ next build
   ▲ Next.js 14.2.3
   - Environments: .env
@@ -234,11 +230,19 @@ $ next build
  ✓ Compiled successfully
    Linting and checking validity of types ...
    Collecting page data ...
-info Visit https://yarnpkg.com/en/docs/cli/run for documentation about this command. exit code 0, and fired the Finish tool with a summary.
-7. *(PENDING)*: User needs to confirm they saved to GitHub. The next agent should wait for this or ask if they should proceed to the next backlog item (removing plain passwords).
+   Generating static pages (0/4) ...
+   Generating static pages (1/4) 
+   Generating static pages (2/4) 
+   Generating static pages (3/4) 
+ ✓ Generating static pages (4/4)
+info Visit https://yarnpkg.com/en/docs/cli/run for documentation about this command. (exit 0), and passed backend testing at 100%.
+5. Agent summarized changes in Spanish and asked if frontend tests were required.
+6. User reported a bug (in Spanish) stating the preview was broken and provided an image showing a Next.js chunk missing error.
+7. Agent identified the  cache corruption, cleared the cache, restarted the Next.js server, and verified via screenshot that the preview was fully working again.
+8. *(PENDING)*: Awaiting user confirmation that the preview is functioning as expected and to prompt them to use the Save to GitHub button, or proceed to the next backlog task.
 
 **Project Health Check:**
-- Broken: None. Build succeeds (Exit code 0).
+- Broken: None.
 - Mocked: None.
 
 **3rd Party Integrations**
@@ -247,7 +251,7 @@ info Visit https://yarnpkg.com/en/docs/cli/run for documentation about this comm
 - WhatsApp Web ( links) — No key required.
 
 **Testing status**
-- Testing agent used after significant changes: YES (Backend tested with , 100% passed).
+- Testing agent used after significant changes: YES (Backend testing passed 100% for availability endpoint).
 - Troubleshoot agent used after agent stuck in loop: NO.
 - Test files created: Updated .
 - Known regressions: None.
@@ -255,7 +259,7 @@ info Visit https://yarnpkg.com/en/docs/cli/run for documentation about this comm
 **Credentials to test flow:**
 - Admin:  / 
 - Booking User:  / 
-- **NEW Booking Finance User**:  / 
+- Booking Finance User:  / 
 
 **What agent forgot to execute**
-- The agent flawlessly executed the massive Booking Finance module prompt. Nothing was forgotten. The agent should now await user instructions or prompt about the remaining P1/P2 issues in the backlog.</analysis>
+- Nothing was forgotten. The agent successfully handled the 3 requested UI/API fixes, passed tests, and rapidly debugged the Next.js preview corruption. Next steps are awaiting user confirmation.</analysis>

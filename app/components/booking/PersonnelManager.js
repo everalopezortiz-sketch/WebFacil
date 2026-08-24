@@ -400,6 +400,8 @@ function SettlementsTab({ supabase, staff, money, branding, currency }) {
   const [filterStaff, setFilterStaff] = useState('all')
   const [detail, setDetail] = useState(null)
   const [detailLoading, setDetailLoading] = useState(false)
+  const [createOpen, setCreateOpen] = useState(false)
+  const activeStaff = staff.filter(s => s.is_active !== false)
   const staffName = (id) => staff.find(s => s.id === id)?.name || '-'
 
   const load = useCallback(async () => {
@@ -430,11 +432,14 @@ function SettlementsTab({ supabase, staff, money, branding, currency }) {
 
   return (
     <div className="space-y-4">
-      <div className="w-48">
-        <Select value={filterStaff} onValueChange={setFilterStaff}>
-          <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-          <SelectContent><SelectItem value="all">Todo el personal</SelectItem>{staff.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
-        </Select>
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="w-48">
+          <Select value={filterStaff} onValueChange={setFilterStaff}>
+            <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+            <SelectContent><SelectItem value="all">Todo el personal</SelectItem>{staff.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+        <Button onClick={() => setCreateOpen(true)} className="gap-2"><Plus className="w-4 h-4" />Crear pago</Button>
       </div>
       {loading ? <div className="py-12 text-center text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin mx-auto" /></div> : items.length === 0 ? (
         <Card><CardContent className="p-8 text-center text-muted-foreground">Sin pagos registrados.</CardContent></Card>
@@ -498,6 +503,128 @@ function SettlementsTab({ supabase, staff, money, branding, currency }) {
           ) : null}
         </DialogContent>
       </Dialog>
+
+      <CreatePaymentDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        supabase={supabase}
+        staff={activeStaff}
+        money={money}
+        onSaved={load}
+      />
     </div>
+  )
+}
+
+// ---------- CREAR PAGO MANUAL (semanal / mensual) ----------
+function CreatePaymentDialog({ open, onOpenChange, supabase, staff, money, onSaved }) {
+  const [form, setForm] = useState({ staff_id: '', amount: '', pay_frequency: 'monthly', payment_method: 'cash', paid_at: ymd(new Date()), notes: '', settle_commissions: false })
+  const [saving, setSaving] = useState(false)
+  const [pending, setPending] = useState(null) // { count, total } | null | 'loading'
+
+  useEffect(() => {
+    if (open) setForm({ staff_id: '', amount: '', pay_frequency: 'monthly', payment_method: 'cash', paid_at: ymd(new Date()), notes: '', settle_commissions: false })
+    setPending(null)
+  }, [open])
+
+  // Load pending commissions preview when a staff member is chosen
+  useEffect(() => {
+    let cancelled = false
+    if (!open || !form.staff_id) { setPending(null); return }
+    setPending('loading')
+    ;(async () => {
+      try {
+        const r = await authFetch(supabase, `/api/booking/staff-earnings?staff_id=${form.staff_id}&status=pending&limit=100`)
+        const d = r.ok ? await r.json() : { items: [] }
+        if (cancelled) return
+        const list = d.items || []
+        setPending({ count: list.length, total: list.reduce((s, l) => s + Number(l.commission_amount || 0), 0) })
+      } catch { if (!cancelled) setPending(null) }
+    })()
+    return () => { cancelled = true }
+  }, [open, form.staff_id, supabase])
+
+  const save = async () => {
+    if (!form.staff_id) { toast.error('Elegí la persona'); return }
+    if (!(Number(form.amount) >= 0) || form.amount === '') { toast.error('Ingresá un monto válido'); return }
+    setSaving(true)
+    try {
+      const res = await authFetch(supabase, '/api/booking/staff-settlements/manual', {
+        method: 'POST',
+        body: JSON.stringify({
+          staff_id: form.staff_id,
+          amount: Number(form.amount),
+          pay_frequency: form.pay_frequency,
+          payment_method: form.payment_method,
+          paid_at: form.paid_at ? new Date(form.paid_at + 'T12:00:00').toISOString() : undefined,
+          notes: form.notes || null,
+          settle_commissions: form.settle_commissions,
+        }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error(d.error || 'No se pudo registrar el pago'); setSaving(false); return }
+      const extra = d.commissionsSettled ? ` · ${d.commissionsSettled} comisión(es) saldada(s)` : ''
+      toast.success(`Pago registrado: ${money(d.totalPaid)} (${d.settlementNumber || 'liquidación'})${extra}`)
+      onOpenChange(false)
+      await onSaved()
+    } catch { toast.error('Error al registrar el pago') }
+    setSaving(false)
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !saving && onOpenChange(o)}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
+        <DialogHeader><DialogTitle>Crear pago</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <div>
+            <Label className="text-xs">Personal</Label>
+            <Select value={form.staff_id} onValueChange={(v) => setForm({ ...form, staff_id: v })}>
+              <SelectTrigger><SelectValue placeholder="Elegí una persona" /></SelectTrigger>
+              <SelectContent>{staff.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label className="text-xs">Monto a pagar</Label><Input type="number" min="0" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="0" /></div>
+            <div><Label className="text-xs">Fecha de pago</Label><Input type="date" value={form.paid_at} onChange={(e) => setForm({ ...form, paid_at: e.target.value })} /></div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">Período</Label>
+              <Select value={form.pay_frequency} onValueChange={(v) => setForm({ ...form, pay_frequency: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="weekly">Semanal</SelectItem><SelectItem value="monthly">Mensual</SelectItem></SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">Forma de pago</Label>
+              <Select value={form.payment_method} onValueChange={(v) => setForm({ ...form, payment_method: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{Object.entries(PM_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div><Label className="text-xs">Nota / concepto</Label><Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Ej: Sueldo mensual de enero" /></div>
+
+          <label className="flex items-start gap-2 rounded-md border p-3 cursor-pointer">
+            <input type="checkbox" className="mt-0.5 h-4 w-4" checked={form.settle_commissions} onChange={(e) => setForm({ ...form, settle_commissions: e.target.checked })} />
+            <div className="text-sm">
+              <span className="font-medium">Saldar comisiones pendientes</span>
+              <p className="text-xs text-muted-foreground">Deja en cero todas las comisiones pendientes de esta persona (las marca como saldadas). No afecta el historial de ventas.</p>
+              {form.staff_id && (
+                <p className="text-xs mt-1">
+                  {pending === 'loading' ? 'Calculando comisiones pendientes...'
+                    : pending ? <>Comisiones pendientes actuales: <b>{money(pending.total)}</b> ({pending.count} servicio{pending.count === 1 ? '' : 's'})</>
+                    : null}
+                </p>
+              )}
+            </div>
+          </label>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancelar</Button>
+          <Button onClick={save} disabled={saving}>{saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}Registrar pago</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
