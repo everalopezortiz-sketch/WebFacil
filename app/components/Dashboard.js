@@ -10,6 +10,8 @@ import DiagnosticsManager from '@/app/components/diagnostics/DiagnosticsManager'
 import ServiceCheckoutManager from '@/app/components/booking/ServiceCheckoutManager'
 import PersonnelManager from '@/app/components/booking/PersonnelManager'
 import ServicesReport from '@/app/components/booking/ServicesReport'
+import FinanceManager from '@/app/components/booking/FinanceManager'
+import TreatmentNotifications from '@/app/components/diagnostics/TreatmentNotifications'
 import { hasBookings } from '@/lib/business'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -756,6 +758,11 @@ export default function Dashboard({ user, profile, onLogout }) {
               </TabsTrigger>
             )}
             {hasBookings(profile.business_type) && (
+              <TabsTrigger value="finanzas" className="gap-2 data-[state=active]:gradient-brand data-[state=active]:text-white data-[state=active]:shadow-md">
+                <Wallet className="w-4 h-4" /> Finanzas
+              </TabsTrigger>
+            )}
+            {hasBookings(profile.business_type) && (
               <TabsTrigger value="personal" className="gap-2 data-[state=active]:gradient-brand data-[state=active]:text-white data-[state=active]:shadow-md">
                 <Users className="w-4 h-4" /> Personal
               </TabsTrigger>
@@ -803,6 +810,13 @@ export default function Dashboard({ user, profile, onLogout }) {
             </TabsContent>
           )}
           {hasBookings(profile.business_type) && (
+            <TabsContent value="finanzas">
+              {activeTab === 'finanzas' && (
+                <FinanceManager supabase={supabase} profile={profile} currencySymbol={getCurrencySymbol()} currency={settings?.currency || 'PYG'} />
+              )}
+            </TabsContent>
+          )}
+          {hasBookings(profile.business_type) && (
             <TabsContent value="personal" forceMount className={activeTab === 'personal' ? '' : 'hidden'}>
               <PersonnelManager supabase={supabase} profile={profile} settings={settings} active={activeTab === 'personal'} currencySymbol={getCurrencySymbol()} currency={settings?.currency || 'PYG'} />
             </TabsContent>
@@ -815,6 +829,9 @@ export default function Dashboard({ user, profile, onLogout }) {
 
           <TabsContent value="inicio">
             <div className="space-y-6">
+              {hasBookings(profile.business_type) && (
+                <TreatmentNotifications supabase={supabase} />
+              )}
               {/* Low stock alert */}
               {stats?.lowStock?.length > 0 && (
                 <Card className="border-amber-200 bg-amber-50">

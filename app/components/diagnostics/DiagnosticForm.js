@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
-import { ChevronDown, ChevronRight, Plus, Trash2, Save, CheckCircle2, Loader2, ArrowLeft, FlaskConical, Clock, PenLine, UserCog, Pencil, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, Plus, Trash2, Save, CheckCircle2, Loader2, ArrowLeft, FlaskConical, Clock, PenLine, UserCog, Pencil, X, CalendarClock } from 'lucide-react'
 import DynamicField from './DynamicField'
 import SignaturePad from './SignaturePad'
 import { authFetch, uploadSignature, calcAge, fmtDate } from '@/lib/diagnostics/helpers'
@@ -48,6 +48,8 @@ export default function DiagnosticForm({ supabase, userId, client, catalog, staf
   const [answers, setAnswers] = useState(() => hydrateAnswers(record?.answers, fields))
   const [exposureMin, setExposureMin] = useState(rec?.exposure_minutes ?? '')
   const [exposureNotes, setExposureNotes] = useState(rec?.exposure_notes || '')
+  const [nextCheckDate, setNextCheckDate] = useState(rec?.next_check_date || '')
+  const [nextSessionNotes, setNextSessionNotes] = useState(rec?.next_session_notes || '')
   const [products, setProducts] = useState(() => (record?.products || []).map(p => ({ ...emptyProduct(), ...p, quantity: p.quantity ?? '' })))
   const [draftProduct, setDraftProduct] = useState(null) // temp product being added/edited
   const [draftIndex, setDraftIndex] = useState(null)      // null = adding new, number = editing existing
@@ -148,6 +150,8 @@ export default function DiagnosticForm({ supabase, userId, client, catalog, staf
     professional_name: professionalMode === 'manual' ? (professionalName || null) : (professionalId ? (staff.find(s => s.id === professionalId)?.name || null) : null),
     exposure_minutes: exposureMin !== '' ? parseInt(exposureMin) : null,
     exposure_notes: exposureNotes || null,
+    next_check_date: nextCheckDate || null,
+    next_session_notes: nextSessionNotes || null,
     consent_accepted_at: consent ? new Date().toISOString() : null,
     answers: serializeAnswers(),
     products: serializeProducts(),
@@ -323,6 +327,21 @@ export default function DiagnosticForm({ supabase, userId, client, catalog, staf
         <div className="grid sm:grid-cols-3 gap-3">
           <div className="space-y-1"><Label>Minutos</Label><Input type="number" min={0} max={1440} value={exposureMin} onChange={e => setExposureMin(e.target.value)} /></div>
           <div className="sm:col-span-2 space-y-1"><Label>Notas de exposición / mezcla</Label><Textarea rows={2} value={exposureNotes} onChange={e => setExposureNotes(e.target.value)} /></div>
+        </div>
+      </Section>
+
+      {/* Next treatment */}
+      <Section title="Próximo tratamiento" icon={CalendarClock} open={open.next_treatment} onToggle={() => toggle('next_treatment')}>
+        <div className="grid sm:grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <Label>Fecha del próximo tratamiento</Label>
+            <div className="flex gap-2">
+              <Input type="date" value={nextCheckDate} onChange={e => { setNextCheckDate(e.target.value); setDirty(true) }} />
+              {nextCheckDate && <Button type="button" variant="outline" size="icon" className="h-10 w-10 flex-shrink-0" onClick={() => { setNextCheckDate(''); setDirty(true) }}><X className="w-4 h-4" /></Button>}
+            </div>
+            <p className="text-xs text-muted-foreground">Se mostrará un aviso en el dashboard desde un día antes.</p>
+          </div>
+          <div className="space-y-1"><Label>Notas para la próxima sesión</Label><Textarea rows={2} value={nextSessionNotes} onChange={e => { setNextSessionNotes(e.target.value); setDirty(true) }} placeholder="Ej: continuar con hidratación, retoque de color..." /></div>
         </div>
       </Section>
 

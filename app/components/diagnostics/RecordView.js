@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { ArrowLeft, Pencil, FileDown, Share2, Loader2, MessageCircle, Copy, Link2, Ban, Clock, Trash2 } from 'lucide-react'
+import { ArrowLeft, Pencil, FileDown, Share2, Loader2, MessageCircle, Copy, Link2, Ban, Clock, Trash2, CalendarClock, RotateCcw } from 'lucide-react'
 import { authFetch, fmtDate, fmtDateTime, calcAge, answerToText, STATUS_LABELS } from '@/lib/diagnostics/helpers'
 import { buildDiagnosticPdf, pdfFilename } from '@/lib/diagnostics/pdf'
 import { toast } from 'sonner'
@@ -20,6 +20,7 @@ export default function RecordView({ supabase, recordId, businessPhone, onBack, 
   const [shareDialog, setShareDialog] = useState({ open: false, link: null })
   const [delDialog, setDelDialog] = useState(false)
   const [delBusy, setDelBusy] = useState(false)
+  const [reopenBusy, setReopenBusy] = useState(false)
 
   useEffect(() => { load() }, [recordId])
   const load = async () => {
@@ -96,8 +97,19 @@ export default function RecordView({ supabase, recordId, businessPhone, onBack, 
     } catch { toast.error('No se pudo revocar') }
   }
 
-  const deleteRecord = async () => {
-    setDelBusy(true)
+  const reopenReminder = async () => {
+    setReopenBusy(true)
+    try {
+      const res = await authFetch(supabase, `/api/diagnostics/treatment-notifications/${recordId}`, { method: 'PUT', body: JSON.stringify({ action: 'reopen' }) })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error(data.error || 'No se pudo reabrir el seguimiento'); return }
+      toast.success('Seguimiento reabierto. Volverá a aparecer en el dashboard.')
+      setBundle(b => b ? { ...b, record: { ...b.record, next_treatment_status: 'pending' } } : b)
+    } catch { toast.error('No se pudo reabrir el seguimiento') }
+    finally { setReopenBusy(false) }
+  }
+
+  const deleteRecord = async () => {    setDelBusy(true)
     try {
       const res = await authFetch(supabase, `/api/diagnostics/records/${recordId}`, { method: 'DELETE' })
       const data = await res.json().catch(() => ({}))
@@ -184,6 +196,20 @@ export default function RecordView({ supabase, recordId, businessPhone, onBack, 
         <Card><CardContent className="p-4">
           <h3 className="font-semibold text-violet-700 mb-1">Tiempo de exposición</h3>
           <p className="text-sm">{rec.exposure_minutes != null ? `${rec.exposure_minutes} min` : ''} {rec.exposure_notes || ''}</p>
+        </CardContent></Card>
+      )}
+
+      {(rec.next_check_date || rec.next_session_notes) && (
+        <Card className="border-violet-200"><CardContent className="p-4">
+          <h3 className="font-semibold text-violet-700 mb-1 flex items-center gap-2"><CalendarClock className="w-4 h-4" />Próximo tratamiento</h3>
+          {rec.next_check_date && <p className="text-sm">Fecha: <span className="font-medium">{fmtDate(rec.next_check_date)}</span></p>}
+          {rec.next_session_notes && <p className="text-sm text-muted-foreground mt-0.5">{rec.next_session_notes}</p>}
+          {(rec.next_treatment_status === 'completed' || rec.next_treatment_status === 'dismissed') && (
+            <div className="mt-2 flex items-center gap-2 flex-wrap">
+              <Badge variant="outline" className="text-muted-foreground">{rec.next_treatment_status === 'completed' ? 'Seguimiento completado' : 'Seguimiento descartado'}</Badge>
+              <Button variant="outline" size="sm" onClick={reopenReminder} disabled={reopenBusy} className="gap-1">{reopenBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}Reabrir seguimiento</Button>
+            </div>
+          )}
         </CardContent></Card>
       )}
 
