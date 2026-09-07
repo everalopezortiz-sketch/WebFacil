@@ -276,16 +276,17 @@ function ManualTab({ supabase, base, helpers, money }) {
   const toggleCategory = (categoryId) => setQuickCategories(prev => prev.includes(categoryId) ? prev.filter(id => id !== categoryId) : [...prev, categoryId])
   const toggleQuickService = (svc) => {
     const existing = lines.findIndex(l => l.service_id === svc.id)
-    if (existing >= 0) { setLines(ls => ls.filter((_, i) => i !== existing)); return }
+    if (existing >= 0) { setLines(ls => ls.length === 1 ? [blankLine()] : ls.filter((_, i) => i !== existing)); return }
     const staff = helpers.staffForService(svc.id)
-    setLines(ls => [...ls, {
+    const quickLine = {
       category_id: svc.category_id || NONE,
       service_id: svc.id,
       staff_id: staff.length === 1 ? staff[0].id : '',
       quantity: 1,
       unit_price: priceOf(svc),
       discount_amount: 0,
-    }])
+    }
+    setLines(ls => ls.length === 1 && !ls[0].service_id ? [quickLine] : [...ls, quickLine])
   }
   const addLine = () => setLines(ls => [...ls, blankLine()])
   const removeLine = (i) => setLines(ls => ls.length > 1 ? ls.filter((_, idx) => idx !== i) : ls)
