@@ -9,8 +9,9 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { CalendarClock, Plus, History, Loader2, DollarSign, CheckCircle2, XCircle, UserX, Trash2, Search } from 'lucide-react'
+import { CalendarClock, Plus, History, Loader2, DollarSign, CheckCircle2, XCircle, UserX, Trash2, Search, ClipboardPlus } from 'lucide-react'
 import { toast } from 'sonner'
 
 const PM_LABELS = { cash: 'Efectivo', transfer: 'Transferencia', card: 'Tarjeta', mixed: 'Mixto', other: 'Otro' }
@@ -258,6 +259,10 @@ function ManualTab({ supabase, base, helpers, money }) {
   const [paymentMethod, setPaymentMethod] = useState('cash')
   const [notes, setNotes] = useState('')
   const [lines, setLines] = useState([blankLine()])
+  const [quickCategories, setQuickCategories] = useState([])
+  const [nextTreatmentDate, setNextTreatmentDate] = useState('')
+  const [nextTreatmentNotes, setNextTreatmentNotes] = useState('')
+  const [saveFollowup, setSaveFollowup] = useState(true)
   const [saving, setSaving] = useState(false)
   const savingRef = useRef(false)
 
@@ -267,6 +272,20 @@ function ManualTab({ supabase, base, helpers, money }) {
   const onService = (i, serviceId) => {
     const svc = activeServices.find(s => s.id === serviceId)
     patchLine(i, { service_id: serviceId, staff_id: '', unit_price: priceOf(svc) })
+  }
+  const toggleCategory = (categoryId) => setQuickCategories(prev => prev.includes(categoryId) ? prev.filter(id => id !== categoryId) : [...prev, categoryId])
+  const toggleQuickService = (svc) => {
+    const existing = lines.findIndex(l => l.service_id === svc.id)
+    if (existing >= 0) { setLines(ls => ls.filter((_, i) => i !== existing)); return }
+    const staff = helpers.staffForService(svc.id)
+    setLines(ls => [...ls, {
+      category_id: svc.category_id || NONE,
+      service_id: svc.id,
+      staff_id: staff.length === 1 ? staff[0].id : '',
+      quantity: 1,
+      unit_price: priceOf(svc),
+      discount_amount: 0,
+    }])
   }
   const addLine = () => setLines(ls => [...ls, blankLine()])
   const removeLine = (i) => setLines(ls => ls.length > 1 ? ls.filter((_, idx) => idx !== i) : ls)
@@ -279,10 +298,11 @@ function ManualTab({ supabase, base, helpers, money }) {
   }
   const total = lines.reduce((s, l) => s + calc(l).net, 0)
 
-  const reset = () => { setCustomerName(''); setCustomerPhone(''); setNotes(''); setLines([blankLine()]); setPayStatus('paid'); setPaymentMethod('cash') }
+  const reset = () => { setCustomerName(''); setCustomerPhone(''); setNotes(''); setLines([blankLine()]); setQuickCategories([]); setNextTreatmentDate(''); setNextTreatmentNotes(''); setSaveFollowup(true); setPayStatus('paid'); setPaymentMethod('cash') }
 
   const submit = async () => {
     if (savingRef.current) return
+    if (nextTreatmentDate && saveFollowup && !customerName.trim()) { toast.error('Ingresá el nombre del cliente para guardar el seguimiento capilar'); return }
     // Validate every line
     for (let idx = 0; idx < lines.length; idx++) {
       const l = lines[idx]
@@ -310,6 +330,20 @@ function ManualTab({ supabase, base, helpers, money }) {
       const res = await authFetch(supabase, '/api/booking/service-sales', { method: 'POST', body: JSON.stringify(body) })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) { toast.error(d.error || 'No se pudo registrar'); savingRef.current = false; setSaving(false); return }
+      if (nextTreatmentDate && saveFollowup) {
+        const followup = await authFetch(supabase, '/api/diagnostics/quick-follow-up', {
+          method: 'POST',
+          body: JSON.stringify({
+            full_name: customerName,
+            phone: customerPhone,
+            next_check_date: nextTreatmentDate,
+            next_session_notes: nextTreatmentNotes,
+            completed_at: new Date(completedAt).toISOString(),
+          }),
+        })
+        const followupData = await followup.json().catch(() => ({}))
+        if (!followup.ok) toast.error(followupData.error || 'El cobro se guardó, pero no se pudo crear el seguimiento')
+      }
       toast.success(markPaid ? 'Servicio cobrado' : 'Servicio registrado (pendiente de cobro)')
       reset()
     } catch { toast.error('Error al registrar') }
@@ -324,6 +358,29 @@ function ManualTab({ supabase, base, helpers, money }) {
           <div><Label className="text-xs">Cliente (opcional)</Label><Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} /></div>
           <div><Label className="text-xs">Teléfono (opcional)</Label><Input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} /></div>
           <div><Label className="text-xs">Fecha y hora</Label><Input type="datetime-local" value={completedAt} onChange={(e) => setCompletedAt(e.target.value)} /></div>
+        </div>
+
+        <div className="rounded-lg border border-primary/20 bg-primary/[0.03] p-3 space-y-3">
+          <div className="flex items-center gap-2"><ClipboardPlus className="h-4 w-4 text-primary" /><div><p className="text-sm font-semibold">Cobro rápido</p><p className="text-xs text-muted-foreground">Marcá una o varias categorías y luego tocá los servicios realizados.</p></div></div>
+          <div className="flex flex-wrap gap-2">
+            {pickerCats.map(cat => <Button key={cat.id} type="button" size="sm" variant={quickCategories.includes(cat.id) ? 'default' : 'outline'} onClick={() => toggleCategory(cat.id)}>{quickCategories.includes(cat.id) ? '✓ ' : ''}{cat.name}</Button>)}
+          </div>
+          {quickCategories.map(categoryId => {
+            const category = pickerCats.find(c => c.id === categoryId)
+            const categoryServices = servicesInCat(categoryId)
+            return <div key={categoryId} className="space-y-2"><p className="text-xs font-medium text-muted-foreground">{category?.name}</p><div className="grid gap-2 sm:grid-cols-2">
+              {categoryServices.map(svc => {
+                const checked = lines.some(l => l.service_id === svc.id)
+                const lineIndex = lines.findIndex(l => l.service_id === svc.id)
+                const line = lines[lineIndex]
+                const staffOpts = helpers.staffForService(svc.id)
+                return <div key={svc.id} className={`rounded-md border p-2 ${checked ? 'border-primary bg-primary/5' : 'bg-background'}`}>
+                  <div className="flex items-center gap-2"><Checkbox id={`quick-${svc.id}`} checked={checked} onCheckedChange={() => toggleQuickService(svc)} /><label htmlFor={`quick-${svc.id}`} className="flex-1 cursor-pointer text-sm font-medium">{svc.name}</label><span className="text-sm font-semibold text-primary">{money(priceOf(svc))}</span></div>
+                  {checked && <div className="mt-2"><Select value={line?.staff_id || ''} onValueChange={v => patchLine(lineIndex, { staff_id: v })}><SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Profesional" /></SelectTrigger><SelectContent>{staffOpts.map(staff => <SelectItem key={staff.id} value={staff.id}>{staff.name}</SelectItem>)}</SelectContent></Select></div>}
+                </div>
+              })}
+            </div></div>
+          })}
         </div>
 
         <div className="space-y-2">
@@ -367,6 +424,13 @@ function ManualTab({ supabase, base, helpers, money }) {
             )
           })}
           <Button variant="outline" size="sm" className="gap-1" onClick={addLine}><Plus className="w-4 h-4" />Agregar servicio</Button>
+        </div>
+
+        <div className="rounded-lg border p-3 space-y-3">
+          <div><p className="text-sm font-semibold">Próximo tratamiento y ficha capilar</p><p className="text-xs text-muted-foreground">Al guardar, el nombre y teléfono se registran automáticamente en Fichas capilares para el seguimiento.</p></div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><div><Label className="text-xs">Fecha del próximo tratamiento</Label><Input type="date" value={nextTreatmentDate} onChange={e => setNextTreatmentDate(e.target.value)} /></div><div className="flex items-end pb-2 gap-2"><Checkbox id="save-followup" checked={saveFollowup} onCheckedChange={v => setSaveFollowup(v === true)} disabled={!nextTreatmentDate} /><Label htmlFor="save-followup" className="text-sm cursor-pointer">Guardar en Fichas capilares</Label></div></div>
+          <div><Label className="text-xs">Notas para el seguimiento</Label><Textarea rows={2} value={nextTreatmentNotes} onChange={e => setNextTreatmentNotes(e.target.value)} placeholder="Ej.: retoque, tratamiento hidratante, control..." /></div>
+          {nextTreatmentDate && !customerName.trim() && <p className="text-xs text-amber-700">Para crear la ficha de seguimiento ingresá el nombre del cliente.</p>}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
