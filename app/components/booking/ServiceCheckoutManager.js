@@ -166,6 +166,15 @@ function CheckoutModal({ supabase, helpers, money, card, markPaid, onClose, onDo
       const res = await authFetch(supabase, '/api/booking/service-sales', { method: 'POST', body: JSON.stringify(body) })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) { toast.error(d.error || 'No se pudo registrar'); savingRef.current = false; setSaving(false); return }
+      const performedServices = lines.map(l => l.service_name || l.serviceName || '').filter(Boolean).join(', ')
+      if (String(card.customerName || '').trim()) {
+        const followup = await authFetch(supabase, '/api/diagnostics/quick-follow-up', {
+          method: 'POST',
+          body: JSON.stringify({ full_name: card.customerName, phone: card.customerPhone, consultation_reason: performedServices, treatment_plan: performedServices, completed_at: new Date().toISOString() }),
+        })
+        const followupData = await followup.json().catch(() => ({}))
+        if (!followup.ok) toast.warning(followupData.error || 'El cobro se guardó, pero no se pudo guardar la ficha capilar')
+      }
       toast.success(d.alreadyExisted ? 'Esta cita ya estaba registrada' : (markPaid ? 'Cobro registrado' : 'Servicio finalizado (pendiente de cobro)'))
       onDone(card.appointmentId)
     } catch { toast.error('Error al registrar'); savingRef.current = false; setSaving(false) }
@@ -331,19 +340,24 @@ function ManualTab({ supabase, base, helpers, money }) {
       const res = await authFetch(supabase, '/api/booking/service-sales', { method: 'POST', body: JSON.stringify(body) })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) { toast.error(d.error || 'No se pudo registrar'); savingRef.current = false; setSaving(false); return }
-      if (nextTreatmentDate && saveFollowup) {
+      // Every customer registered from Cobros is also available in Fichas capilares.
+      // The next treatment remains optional and creates the reminder when supplied.
+      if (customerName.trim()) {
+        const performedServices = lines.map(l => base.services.find(s => s.id === l.service_id)?.name || l.service_name || '').filter(Boolean).join(', ')
         const followup = await authFetch(supabase, '/api/diagnostics/quick-follow-up', {
           method: 'POST',
           body: JSON.stringify({
             full_name: customerName,
             phone: customerPhone,
-            next_check_date: nextTreatmentDate,
+            next_check_date: nextTreatmentDate && saveFollowup ? nextTreatmentDate : null,
+            consultation_reason: performedServices,
+            treatment_plan: performedServices,
             next_session_notes: nextTreatmentNotes,
             completed_at: new Date(completedAt).toISOString(),
           }),
         })
         const followupData = await followup.json().catch(() => ({}))
-        if (!followup.ok) toast.error(followupData.error || 'El cobro se guardó, pero no se pudo crear el seguimiento')
+        if (!followup.ok) toast.error(followupData.error || 'El cobro se guardó, pero no se pudo guardar el cliente en Fichas capilares')
       }
       toast.success(markPaid ? 'Servicio cobrado' : 'Servicio registrado (pendiente de cobro)')
       reset()
