@@ -557,19 +557,30 @@ function CreatePaymentDialog({ open, onOpenChange, supabase, staff, money, onSav
   // Load pending commissions preview when a staff member is chosen
   useEffect(() => {
     let cancelled = false
-    if (!open || !form.staff_id) { setPending(null); return }
+    if (!open || !form.staff_id || !form.period_start || !form.period_end) { setPending(null); return }
     setPending('loading')
     ;(async () => {
       try {
-        const r = await authFetch(supabase, `/api/booking/staff-earnings?staff_id=${form.staff_id}&status=pending&limit=100`)
+        const r = await authFetch(supabase, `/api/booking/staff-earnings?staff_id=${form.staff_id}&from=${form.period_start}&to=${form.period_end}&status=pending&limit=100`)
         const d = r.ok ? await r.json() : { items: [] }
         if (cancelled) return
         const list = d.items || []
-        setPending({ count: list.length, total: list.reduce((s, l) => s + Number(l.commission_amount || 0), 0) })
+        const commissions = list.reduce((s, l) => s + Number(l.commission_amount || 0), 0)
+        const person = staff.find(s => s.id === form.staff_id)
+        const salary = Number(person?.salary_amount || 0)
+        const start = new Date(`${form.period_start}T12:00:00`)
+        const end = new Date(`${form.period_end}T12:00:00`)
+        const days = Math.max(1, Math.round((end - start) / 86400000) + 1)
+        const daysInMonth = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate()
+        const salaryPart = (person?.compensation_type === 'salary' || person?.compensation_type === 'mixed')
+          ? (form.pay_frequency === 'monthly' ? salary : Math.round(salary * days / daysInMonth)) : 0
+        const calculated = Math.max(0, Math.round(commissions + salaryPart))
+        setPending({ count: list.length, total: commissions })
+        setForm(prev => ({ ...prev, amount: String(calculated) }))
       } catch { if (!cancelled) setPending(null) }
     })()
     return () => { cancelled = true }
-  }, [open, form.staff_id, supabase])
+  }, [open, form.staff_id, form.period_start, form.period_end, form.pay_frequency, supabase, staff])
 
   const save = async () => {
     if (!form.staff_id) { toast.error('Elegí la persona'); return }
