@@ -401,6 +401,8 @@ function SettlementsTab({ supabase, staff, money, branding, currency }) {
   const [detail, setDetail] = useState(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
+  const [editing, setEditing] = useState(null)
   const activeStaff = staff.filter(s => s.is_active !== false)
   const staffName = (id) => staff.find(s => s.id === id)?.name || '-'
 
@@ -420,6 +422,17 @@ function SettlementsTab({ supabase, staff, money, branding, currency }) {
     const d = r.ok ? await r.json() : null
     setDetail(d); setDetailLoading(false)
   }
+
+  const deleteSettlement = async (s) => {
+    if (!window.confirm(`¿Eliminar el pago ${s.settlement_number}? Las comisiones vinculadas volverán a quedar pendientes.`)) return
+    const r = await authFetch(supabase, `/api/booking/staff-settlements/${s.id}`, { method: 'DELETE' })
+    const d = await r.json().catch(() => ({}))
+    if (!r.ok) { toast.error(d.error || 'No se pudo eliminar el pago'); return }
+    toast.success('Pago eliminado')
+    setDetail(null); await load()
+  }
+
+  const startEdit = (s) => { setDetail(null); setEditing(s); setEditOpen(true) }
 
   const bundleFromDetail = (d) => ({
     mode: 'final', currency, branding,
@@ -455,6 +468,8 @@ function SettlementsTab({ supabase, staff, money, branding, currency }) {
                 <p className="font-bold text-primary">{money(s.net_paid)} <span className="text-xs font-normal text-muted-foreground">({PM_LABELS[s.payment_method] || s.payment_method})</span></p>
                 <div className="flex gap-1 pt-1">
                   <Button size="sm" variant="outline" className="gap-1 flex-1" onClick={() => openDetail(s)}><Eye className="w-3.5 h-3.5" />Detalle</Button>
+                  <Button size="sm" variant="outline" aria-label="Editar pago" onClick={() => { setEditing(s); setEditOpen(true) }}><Pencil className="w-3.5 h-3.5" /></Button>
+                  <Button size="sm" variant="outline" aria-label="Eliminar pago" className="text-red-600 hover:text-red-700" onClick={() => deleteSettlement(s)}><Trash2 className="w-3.5 h-3.5" /></Button>
                 </div>
               </CardContent>
             </Card>
@@ -496,6 +511,8 @@ function SettlementsTab({ supabase, staff, money, branding, currency }) {
                 <Row label="Total pagado" value={money(detail.settlement?.net_paid)} bold />
               </div>
               <div className="flex gap-2 justify-end">
+                <Button variant="outline" size="sm" className="gap-1" onClick={() => startEdit(detail.settlement)}><Pencil className="w-4 h-4" />Editar</Button>
+                <Button variant="outline" size="sm" className="gap-1 text-red-600 hover:text-red-700" onClick={() => deleteSettlement(detail.settlement)}><Trash2 className="w-4 h-4" />Eliminar</Button>
                 <Button variant="outline" size="sm" className="gap-1" onClick={() => downloadSettlementPdf(bundleFromDetail(detail))}><FileDown className="w-4 h-4" />PDF</Button>
                 <Button variant="outline" size="sm" className="gap-1" onClick={() => printSettlementPdf(bundleFromDetail(detail))}><Printer className="w-4 h-4" />Imprimir</Button>
               </div>
@@ -512,20 +529,30 @@ function SettlementsTab({ supabase, staff, money, branding, currency }) {
         money={money}
         onSaved={load}
       />
+      <EditPaymentDialog open={editOpen} onOpenChange={setEditOpen} supabase={supabase} payment={editing} money={money} onSaved={load} />
     </div>
   )
 }
 
 // ---------- CREAR PAGO MANUAL (semanal / mensual) ----------
 function CreatePaymentDialog({ open, onOpenChange, supabase, staff, money, onSaved }) {
-  const [form, setForm] = useState({ staff_id: '', amount: '', pay_frequency: 'monthly', payment_method: 'cash', paid_at: ymd(new Date()), notes: '', settle_commissions: false })
+  const initialForm = () => { const now = new Date(); const p = defaultPeriod('monthly'); return { staff_id: '', amount: '', pay_frequency: 'monthly', period_start: p.start, period_end: p.end, payment_method: 'cash', paid_at: ymd(now), notes: '', settle_commissions: false } }
+  const [form, setForm] = useState(initialForm)
   const [saving, setSaving] = useState(false)
   const [pending, setPending] = useState(null) // { count, total } | null | 'loading'
 
   useEffect(() => {
-    if (open) setForm({ staff_id: '', amount: '', pay_frequency: 'monthly', payment_method: 'cash', paid_at: ymd(new Date()), notes: '', settle_commissions: false })
+    if (open) setForm(initialForm())
     setPending(null)
   }, [open])
+
+  const changeFrequency = (frequency) => {
+    const anchor = form.paid_at ? new Date(`${form.paid_at}T12:00:00`) : new Date()
+    const p = frequency === 'monthly' ? { start: ymd(new Date(anchor.getFullYear(), anchor.getMonth(), 1)), end: ymd(new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0)) }
+      : frequency === 'weekly' ? (() => { const day = anchor.getDay() === 0 ? 7 : anchor.getDay(); const start = new Date(anchor); start.setDate(anchor.getDate() - day + 1); const end = new Date(start); end.setDate(start.getDate() + 6); return { start: ymd(start), end: ymd(end) } })()
+      : { start: form.period_start, end: form.period_end }
+    setForm({ ...form, pay_frequency: frequency, period_start: p.start, period_end: p.end })
+  }
 
   // Load pending commissions preview when a staff member is chosen
   useEffect(() => {
@@ -556,6 +583,8 @@ function CreatePaymentDialog({ open, onOpenChange, supabase, staff, money, onSav
           amount: Number(form.amount),
           pay_frequency: form.pay_frequency,
           payment_method: form.payment_method,
+          period_start: form.period_start,
+          period_end: form.period_end,
           paid_at: form.paid_at ? new Date(form.paid_at + 'T12:00:00').toISOString() : undefined,
           notes: form.notes || null,
           settle_commissions: form.settle_commissions,
@@ -590,9 +619,9 @@ function CreatePaymentDialog({ open, onOpenChange, supabase, staff, money, onSav
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label className="text-xs">Período</Label>
-              <Select value={form.pay_frequency} onValueChange={(v) => setForm({ ...form, pay_frequency: v })}>
+              <Select value={form.pay_frequency} onValueChange={changeFrequency}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="weekly">Semanal</SelectItem><SelectItem value="monthly">Mensual</SelectItem></SelectContent>
+                <SelectContent><SelectItem value="weekly">Esta semana</SelectItem><SelectItem value="monthly">Este mes</SelectItem><SelectItem value="custom">Días personalizados</SelectItem></SelectContent>
               </Select>
             </div>
             <div>
@@ -602,6 +631,10 @@ function CreatePaymentDialog({ open, onOpenChange, supabase, staff, money, onSav
                 <SelectContent>{Object.entries(PM_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
               </Select>
             </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label className="text-xs">Desde</Label><Input type="date" value={form.period_start} onChange={(e) => setForm({ ...form, period_start: e.target.value, pay_frequency: 'custom' })} /></div>
+            <div><Label className="text-xs">Hasta</Label><Input type="date" value={form.period_end} onChange={(e) => setForm({ ...form, period_end: e.target.value, pay_frequency: 'custom' })} /></div>
           </div>
           <div><Label className="text-xs">Nota / concepto</Label><Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Ej: Sueldo mensual de enero" /></div>
 
@@ -624,6 +657,42 @@ function CreatePaymentDialog({ open, onOpenChange, supabase, staff, money, onSav
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancelar</Button>
           <Button onClick={save} disabled={saving}>{saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}Registrar pago</Button>
         </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function EditPaymentDialog({ open, onOpenChange, supabase, payment, money, onSaved }) {
+  const [form, setForm] = useState({ amount: '', period_start: '', period_end: '', paid_at: '', payment_method: 'cash', notes: '' })
+  const [saving, setSaving] = useState(false)
+  useEffect(() => {
+    if (!payment) return
+    setForm({ amount: String(payment.base_salary_amount ?? payment.net_paid ?? ''), period_start: payment.period_start || '', period_end: payment.period_end || '', paid_at: String(payment.paid_at || payment.created_at || '').slice(0, 10), payment_method: payment.payment_method || 'cash', notes: payment.notes || '' })
+  }, [payment])
+  const save = async () => {
+    if (!payment) return
+    const amount = Number(form.amount)
+    if (!Number.isFinite(amount) || amount < 0) { toast.error('Ingresá un monto válido'); return }
+    if (!form.period_start || !form.period_end || form.period_start > form.period_end) { toast.error('Indicá un período válido'); return }
+    setSaving(true)
+    try {
+      const r = await authFetch(supabase, `/api/booking/staff-settlements/${payment.id}`, { method: 'PUT', body: JSON.stringify({ amount, period_start: form.period_start, period_end: form.period_end, paid_at: form.paid_at ? new Date(`${form.paid_at}T12:00:00`).toISOString() : null, payment_method: form.payment_method, notes: form.notes || null }) })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) { toast.error(d.error || 'No se pudo actualizar el pago'); return }
+      toast.success('Pago actualizado'); onOpenChange(false); await onSaved()
+    } catch { toast.error('Error al actualizar el pago') } finally { setSaving(false) }
+  }
+  return (
+    <Dialog open={open} onOpenChange={(o) => !saving && onOpenChange(o)}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
+        <DialogHeader><DialogTitle>Editar pago</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3"><div><Label className="text-xs">Monto pagado</Label><Input type="number" min="0" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} /></div><div><Label className="text-xs">Fecha de pago</Label><Input type="date" value={form.paid_at} onChange={(e) => setForm({ ...form, paid_at: e.target.value })} /></div></div>
+          <div className="grid grid-cols-2 gap-3"><div><Label className="text-xs">Desde</Label><Input type="date" value={form.period_start} onChange={(e) => setForm({ ...form, period_start: e.target.value })} /></div><div><Label className="text-xs">Hasta</Label><Input type="date" value={form.period_end} onChange={(e) => setForm({ ...form, period_end: e.target.value })} /></div></div>
+          <div><Label className="text-xs">Forma de pago</Label><Select value={form.payment_method} onValueChange={(v) => setForm({ ...form, payment_method: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{Object.entries(PM_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent></Select></div>
+          <div><Label className="text-xs">Nota / concepto</Label><Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
+        </div>
+        <DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancelar</Button><Button onClick={save} disabled={saving}>{saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}Guardar cambios</Button></DialogFooter>
       </DialogContent>
     </Dialog>
   )
