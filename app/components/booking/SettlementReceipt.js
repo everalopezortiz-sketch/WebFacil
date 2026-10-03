@@ -91,7 +91,7 @@ export async function buildSettlementPdf(bundle) {
     { key: 'date', label: 'Fecha', w: 20, align: 'left' },
     { key: 'client', label: 'Cliente', w: 34, align: 'left' },
     { key: 'service', label: 'Servicio', w: 46, align: 'left' },
-    { key: 'base', label: 'Base', w: 28, align: 'right' },
+    { key: 'base', label: 'Servicio', w: 28, align: 'right' },
     { key: 'pct', label: '%', w: 14, align: 'right' },
     { key: 'comm', label: 'Comisión', w: contentW - 20 - 34 - 46 - 28 - 14, align: 'right' },
   ]
@@ -106,6 +106,7 @@ export async function buildSettlementPdf(bundle) {
 
   doc.setFont('helvetica', 'normal'); doc.setTextColor(40, 40, 40); doc.setFontSize(8.5)
   const lines = bundle.lines || []
+  const serviceTotal = lines.reduce((sum, line) => sum + Number(line.net_amount || 0), 0)
   const rowH = 6
   lines.forEach((ln, i) => {
     if (y + rowH > pageH - 40) { doc.addPage(); y = 14; drawHeader(); doc.setFont('helvetica', 'normal'); doc.setTextColor(40, 40, 40); doc.setFontSize(8.5) }
@@ -127,7 +128,7 @@ export async function buildSettlementPdf(bundle) {
 
   // Summary
   const ensureSpace = (h) => { if (y + h > pageH - 30) { doc.addPage(); y = 16 } }
-  ensureSpace(40)
+  ensureSpace(46)
   doc.setDrawColor(220); doc.line(M, y, pageW - M, y); y += 6
   const sumRow = (label, val, bold = false) => {
     doc.setFont('helvetica', bold ? 'bold' : 'normal'); doc.setFontSize(bold ? 11 : 9.5)
@@ -136,8 +137,9 @@ export async function buildSettlementPdf(bundle) {
     doc.text(money(val), pageW - M, y, { align: 'right' })
     y += bold ? 7 : 5.5
   }
-  sumRow('Sueldo fijo', bundle.baseSalary || 0)
-  sumRow('Comisiones', bundle.commissionTotal || 0)
+  sumRow('Total de servicios', serviceTotal)
+  sumRow('Comisión exacta', bundle.commissionTotal || 0)
+  sumRow('Sueldo proporcional', bundle.baseSalary || 0)
   sumRow('Adelantos descontados', -(bundle.advancesTotal || 0))
   doc.setDrawColor(200); doc.line(pageW - M - 60, y - 1, pageW - M, y - 1); y += 3
   sumRow('Total a pagar', bundle.netPaid || 0, true)

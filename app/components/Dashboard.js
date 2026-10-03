@@ -64,7 +64,7 @@ const ORDER_STATUS_LABELS = {
 
 const BUSINESS_LABELS = {
   ecommerce: { label: 'Tienda', icon: Store, productLabel: 'Productos' },
-  booking: { label: 'Agendamientos + Tienda', icon: CalendarDays, productLabel: 'Productos' },
+  booking: { label: 'Agendamientos + Tienda', icon: CalendarDays, productLabel: 'Productos/servicios' },
   personal: { label: 'Personal', icon: Users, productLabel: 'Servicios' },
   restaurant: { label: 'Restaurante', icon: Package, productLabel: 'Menú' }
 }
@@ -106,6 +106,7 @@ export default function Dashboard({ user, profile, onLogout }) {
 
   const supabase = createClient()
   const businessConfig = BUSINESS_LABELS[profile.business_type] || BUSINESS_LABELS.ecommerce
+  const inventoryProducts = products.filter(product => product.item_type !== 'service')
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
   const storeUrl = `${baseUrl}/s/${profile.slug}`
 
@@ -1445,7 +1446,7 @@ export default function Dashboard({ user, profile, onLogout }) {
                 <div>
                   <CardTitle>{businessConfig.productLabel}</CardTitle>
                 </div>
-                <Button onClick={() => setProductDialog({ open: true, data: { name: '', description: '', price: '', image_url: '', category_id: 'none', promo_price: '', promo_active: false, is_featured: false, is_active: true, stock_quantity: '' } })}>
+                <Button onClick={() => setProductDialog({ open: true, data: { name: '', description: '', price: '', image_url: '', category_id: 'none', promo_price: '', promo_active: false, is_featured: false, is_active: true, stock_quantity: '', item_type: 'product' } })}>
                   <Plus className="w-4 h-4 mr-2" /> Nuevo
                 </Button>
               </CardHeader>
@@ -1488,7 +1489,8 @@ export default function Dashboard({ user, profile, onLogout }) {
                           {product.categories?.name && (
                             <Badge variant="outline" className="mt-2">{product.categories.name}</Badge>
                           )}
-                          {product.stock_quantity !== null && product.stock_quantity !== undefined && (
+                          <Badge variant="secondary" className="mt-2 ml-1">{product.item_type === 'service' ? 'Servicio' : 'Producto'}</Badge>
+                          {product.item_type !== 'service' && product.stock_quantity !== null && product.stock_quantity !== undefined && (
                             <Badge variant="outline" className={`mt-2 ml-1 ${product.stock_quantity <= 0 ? 'bg-red-100 text-red-700 border-red-200' : product.stock_quantity <= 5 ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-green-100 text-green-700 border-green-200'}`}>
                               <Boxes className="w-3 h-3 mr-1" /> {product.stock_quantity <= 0 ? 'Agotado' : `${product.stock_quantity} en stock`}
                             </Badge>
@@ -1516,11 +1518,11 @@ export default function Dashboard({ user, profile, onLogout }) {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2"><Boxes className="w-5 h-5" /> Inventario / Stock</CardTitle>
-                <CardDescription>Controla la cantidad disponible de cada {businessConfig.productLabel.toLowerCase()}. El stock se descuenta automáticamente con cada pedido.</CardDescription>
+                <CardDescription>Controlá la cantidad disponible de tus productos. Los servicios no usan stock.</CardDescription>
               </CardHeader>
               <CardContent>
                 {(() => {
-                  const tracked = products.filter(p => p.stock_quantity !== null && p.stock_quantity !== undefined)
+                  const tracked = inventoryProducts.filter(p => p.stock_quantity !== null && p.stock_quantity !== undefined)
                   const outOfStock = tracked.filter(p => p.stock_quantity <= 0).length
                   const lowStock = tracked.filter(p => p.stock_quantity > 0 && p.stock_quantity <= 5).length
                   return (
@@ -1541,14 +1543,14 @@ export default function Dashboard({ user, profile, onLogout }) {
                   )
                 })()}
 
-                {products.length === 0 ? (
+                {inventoryProducts.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     <Boxes className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                    <p>No hay {businessConfig.productLabel.toLowerCase()} aún</p>
+                    <p>No hay productos con control de stock aún</p>
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {products.map(product => {
+                    {inventoryProducts.map(product => {
                       const mainImg = parseImages(product.image_url)[0]
                       const stock = product.stock_quantity
                       const hasStock = stock !== null && stock !== undefined
@@ -2264,10 +2266,44 @@ export default function Dashboard({ user, profile, onLogout }) {
       {/* Product Dialog */}
       <Dialog open={productDialog.open} onOpenChange={(open) => setProductDialog({ ...productDialog, open })}>        <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{productDialog.data?.id ? 'Editar' : 'Nuevo'} {businessConfig.productLabel.slice(0, -1)}</DialogTitle>
+            <DialogTitle>{productDialog.data?.id ? 'Editar' : 'Nuevo'} {productDialog.data?.item_type === 'service' ? 'servicio' : 'producto'}</DialogTitle>
           </DialogHeader>
           <ScrollArea className="max-h-[70vh]">
             <div className="space-y-4 p-1">
+              <div>
+                <Label className="text-base font-semibold">Tipo de elemento</Label>
+                <p className="text-xs text-muted-foreground mb-2">Elegí si vas a publicar un producto o un servicio.</p>
+                <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Tipo de elemento">
+                  {[
+                    { value: 'product', label: 'Producto', icon: Package },
+                    { value: 'service', label: 'Servicio', icon: Scissors },
+                  ].map(option => {
+                    const selected = (productDialog.data?.item_type || 'product') === option.value
+                    const Icon = option.icon
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={selected}
+                        onClick={() => setProductDialog({
+                          ...productDialog,
+                          data: {
+                            ...productDialog.data,
+                            item_type: option.value,
+                            ...(option.value === 'service' ? { stock_quantity: '', is_combo: false, combo_items: [] } : {}),
+                          },
+                        })}
+                        className={`flex items-center justify-between rounded-lg border px-3 py-3 text-left transition ${selected ? 'border-primary bg-primary/5 text-primary' : 'hover:bg-muted/50'}`}
+                      >
+                        <span className="flex items-center gap-2 font-medium"><Icon className="w-4 h-4" />{option.label}</span>
+                        <span className={`w-5 h-5 rounded border flex items-center justify-center ${selected ? 'bg-primary border-primary text-white' : 'border-muted-foreground/40'}`}>{selected && <Check className="w-3.5 h-3.5" />}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
                   <Label>Nombre *</Label>
@@ -2305,7 +2341,7 @@ export default function Dashboard({ user, profile, onLogout }) {
               </div>
 
               <div>
-                <Label className="text-base font-semibold">Imágenes del producto (hasta 3)</Label>
+                <Label className="text-base font-semibold">Imágenes del {productDialog.data?.item_type === 'service' ? 'servicio' : 'producto'} (hasta 3)</Label>
                 <p className="text-xs text-muted-foreground mb-2">La primera será la imagen principal</p>
                 <div className="grid grid-cols-3 gap-2">
                   {[0, 1, 2].map((idx) => {
@@ -2355,8 +2391,8 @@ export default function Dashboard({ user, profile, onLogout }) {
                 </div>
               </div>
 
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div>
+              <div className={`grid gap-4 ${productDialog.data?.item_type === 'service' ? 'sm:grid-cols-1' : 'sm:grid-cols-2'}`}>
+                {productDialog.data?.item_type !== 'service' && <div>
                   <Label>Cantidad en stock</Label>
                   <Input
                     type="number"
@@ -2367,9 +2403,9 @@ export default function Dashboard({ user, profile, onLogout }) {
                     onChange={(e) => setProductDialog({ ...productDialog, data: { ...productDialog.data, stock_quantity: e.target.value === '' ? '' : parseInt(e.target.value) } })}
                   />
                   <p className="text-xs text-muted-foreground mt-1">Se descuenta automáticamente con cada venta</p>
-                </div>
+                </div>}
                 <div>
-                  <Label>Costo del producto</Label>
+                  <Label>Costo del {productDialog.data?.item_type === 'service' ? 'servicio' : 'producto'}</Label>
                   <Input
                     type="number"
                     min="0"
@@ -2383,7 +2419,7 @@ export default function Dashboard({ user, profile, onLogout }) {
               </div>
 
               {/* Combo / Kit */}
-              <div className="rounded-lg border p-3 space-y-3">
+              {productDialog.data?.item_type !== 'service' && <div className="rounded-lg border p-3 space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
                     <Label className="text-base font-semibold">Es un Combo / Kit</Label>
@@ -2404,7 +2440,7 @@ export default function Dashboard({ user, profile, onLogout }) {
                         }}>
                           <SelectTrigger className="flex-1"><SelectValue placeholder="Producto componente" /></SelectTrigger>
                           <SelectContent>
-                            {products.filter(p => p.id !== productDialog.data?.id && !p.is_combo).map(p => (
+                            {products.filter(p => p.id !== productDialog.data?.id && !p.is_combo && p.item_type !== 'service').map(p => (
                               <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                             ))}
                           </SelectContent>
@@ -2421,7 +2457,7 @@ export default function Dashboard({ user, profile, onLogout }) {
                     </Button>
                   </div>
                 )}
-              </div>
+              </div>}
 
               <div className="flex flex-wrap gap-6">
                 <div className="flex items-center gap-2">
@@ -2840,4 +2876,3 @@ function BarChart({ data, valueKey, color, formatValue }) {
     </div>
   )
 }
-

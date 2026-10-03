@@ -33,7 +33,7 @@ const CURRENCIES = {
 
 const BUSINESS_CONFIG = {
   ecommerce: { icon: Store, title: 'Tienda', productLabel: 'Productos' },
-  booking: { icon: CalendarDays, title: 'Tienda', productLabel: 'Productos' },
+  booking: { icon: CalendarDays, title: 'Tienda', productLabel: 'Productos/servicios' },
   personal: { icon: User, title: 'Servicios', productLabel: 'Servicios' },
   restaurant: { icon: Utensils, title: 'Menú', productLabel: 'Menú' }
 }
@@ -882,6 +882,9 @@ function ProductGrid({ products, addToCart, setProductDetail, formatPrice, getPr
             )}
             {product.promo_active && (
               <Badge className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2">Oferta</Badge>
+            )}
+            {product.item_type === 'service' && (
+              <Badge className="absolute top-2 left-2 bg-violet-600 text-white text-xs px-2">Servicio</Badge>
             )}
             {product.is_featured && !product.promo_active && (
               <Badge className="absolute top-2 right-2 bg-amber-500 text-white text-xs px-1.5">

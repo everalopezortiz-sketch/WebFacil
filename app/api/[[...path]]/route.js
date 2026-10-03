@@ -94,7 +94,7 @@ function handleCORS(response) {
 }
 
 // Public column selects (minimize data transfer)
-const PRODUCT_PUBLIC_SELECT = 'id,category_id,name,description,image_url,price,promo_price,promo_active,is_featured,stock_quantity,categories(name)'
+const PRODUCT_PUBLIC_SELECT = 'id,category_id,name,description,image_url,price,promo_price,promo_active,is_featured,stock_quantity,item_type,categories(name)'
 const PROFILE_PUBLIC_SELECT = 'id,first_name,last_name,business_type,slug,maintenance_mode'
 const CATEGORY_PUBLIC_SELECT = 'id,name'
 const CHECKOUT_PUBLIC_SELECT = 'id,field_name,field_label,field_type,is_required,options,display_order'
@@ -103,7 +103,7 @@ const CHECKOUT_PUBLIC_SELECT = 'id,field_name,field_label,field_type,is_required
 const PRODUCT_ALLOWED_FIELDS = [
   'name', 'description', 'price', 'image_url', 'category_id',
   'promo_price', 'promo_active', 'is_featured', 'is_active',
-  'stock_quantity', 'display_order', 'cost_price', 'is_combo'
+  'stock_quantity', 'display_order', 'cost_price', 'is_combo', 'item_type'
 ]
 function pickProductFields(body) {
   const out = {}
@@ -114,6 +114,11 @@ function pickProductFields(body) {
   // If it's undefined (partial update), leave it out so we never overwrite the saved cost with 0.
   if (out.cost_price === '' || out.cost_price === null) out.cost_price = 0
   else if (out.cost_price !== undefined) out.cost_price = parseFloat(out.cost_price) || 0
+  if (out.item_type !== undefined) out.item_type = out.item_type === 'service' ? 'service' : 'product'
+  if (out.item_type === 'service') {
+    out.stock_quantity = null
+    out.is_combo = false
+  }
   return out
 }
 
@@ -219,7 +224,7 @@ export async function GET(request, { params }) {
       
       const { data, error } = await supabase
         .from('products')
-        .select('id,category_id,name,description,image_url,price,promo_price,promo_active,is_featured,is_active,stock_quantity,display_order,cost_price,is_combo,createdAt,categories(name)')
+        .select('id,category_id,name,description,image_url,price,promo_price,promo_active,is_featured,is_active,stock_quantity,display_order,cost_price,is_combo,item_type,createdAt,categories(name)')
         .eq('user_id', user.id)
         .order('createdAt', { ascending: false })
       
@@ -1034,7 +1039,7 @@ export async function POST(request, { params }) {
       // Whitelist fields; never trust user_id/timestamps/joins from client
       const productData = { ...pickProductFields(body), user_id: user.id }
       const SELECT_COLS = 'id,category_id,name,description,image_url,price,promo_price,promo_active,is_featured,is_active,stock_quantity,display_order,createdAt,categories(name)'
-      const SELECT_COLS_FULL = 'id,category_id,name,description,image_url,price,promo_price,promo_active,is_featured,is_active,stock_quantity,display_order,cost_price,is_combo,createdAt,categories(name)'
+      const SELECT_COLS_FULL = 'id,category_id,name,description,image_url,price,promo_price,promo_active,is_featured,is_active,stock_quantity,display_order,cost_price,is_combo,item_type,createdAt,categories(name)'
 
       let { data, error } = await supabaseAdmin
         .from('products')
@@ -1044,7 +1049,7 @@ export async function POST(request, { params }) {
 
       // Fallback if new columns (cost_price/is_combo) don't exist yet
       if (error) {
-        const { cost_price, is_combo, ...safe } = productData
+        const { cost_price, is_combo, item_type, ...safe } = productData
         ;({ data, error } = await supabaseAdmin.from('products').insert(safe).select(SELECT_COLS).single())
       }
       if (error) return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
@@ -1522,7 +1527,7 @@ export async function PUT(request, { params }) {
       // Whitelist fields only (supports partial updates like { stock_quantity })
       const productData = pickProductFields(body)
       const SELECT_COLS = 'id,category_id,name,description,image_url,price,promo_price,promo_active,is_featured,is_active,stock_quantity,display_order,createdAt,categories(name)'
-      const SELECT_COLS_FULL = 'id,category_id,name,description,image_url,price,promo_price,promo_active,is_featured,is_active,stock_quantity,display_order,cost_price,is_combo,createdAt,categories(name)'
+      const SELECT_COLS_FULL = 'id,category_id,name,description,image_url,price,promo_price,promo_active,is_featured,is_active,stock_quantity,display_order,cost_price,is_combo,item_type,createdAt,categories(name)'
 
       let { data, error } = await supabaseAdmin
         .from('products')
@@ -1534,7 +1539,7 @@ export async function PUT(request, { params }) {
 
       // Fallback if new columns (cost_price/is_combo) don't exist yet
       if (error) {
-        const { cost_price, is_combo, ...safe } = productData
+        const { cost_price, is_combo, item_type, ...safe } = productData
         if (Object.keys(safe).length > 0) {
           ;({ data, error } = await supabaseAdmin.from('products').update(safe).eq('id', id).eq('user_id', user.id).select(SELECT_COLS).single())
         }

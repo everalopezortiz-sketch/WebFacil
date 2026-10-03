@@ -107,32 +107,32 @@ function EarningsTab({ supabase, staff, money, branding, currency }) {
 
   const load = useCallback(async () => {
     if (!staffId) { toast.error('Elegí una persona'); return }
+    if (!period.start || !period.end || period.start > period.end) { toast.error('Indicá un período válido'); return }
     setLoading(true)
     try {
-      const p = new URLSearchParams({ from: period.start, to: period.end })
-      const [sumR, earnR] = await Promise.all([
-        authFetch(supabase, `/api/booking/finance/staff-summary?${p}`),
-        authFetch(supabase, `/api/booking/staff-earnings?staff_id=${staffId}&from=${period.start}&to=${period.end}&limit=100`),
+      const p = new URLSearchParams({ staff_id: staffId, from: period.start, to: period.end })
+      const [earnR, previewR] = await Promise.all([
+        authFetch(supabase, `/api/booking/staff-earnings?${p}&limit=500`),
+        authFetch(supabase, `/api/booking/staff-settlements/preview?${p}`),
       ])
-      const sums = sumR.ok ? await sumR.json() : []
-      const earn = earnR.ok ? await earnR.json() : { items: [] }
-      const row = (Array.isArray(sums) ? sums : []).find(x => x.staffId === staffId || x.staff_id === staffId) || null
-      setSummary(row)
+      const earn = await earnR.json().catch(() => ({ items: [] }))
+      const preview = await previewR.json().catch(() => ({}))
+      if (!earnR.ok || !previewR.ok) throw new Error(preview.error || earn.error || 'No se pudieron cargar las ganancias')
+      setSummary({ ...preview, earnings: earn.summary || {}, earningsTotal: earn.total || 0 })
       setLines(earn.items || [])
-    } catch { toast.error('No se pudieron cargar las ganancias') }
+    } catch (e) { toast.error(e?.message || 'No se pudieron cargar las ganancias'); setSummary(null); setLines([]) }
     setLoading(false)
   }, [supabase, staffId, period])
 
   const pendingLines = lines.filter(l => l.settlement_status === 'pending')
-  const commissionPending = pendingLines.reduce((s, l) => s + Number(l.commission_amount || 0), 0)
-  const totalSold = lines.reduce((s, l) => s + Number(l.net_amount || 0), 0)
-  const commissionGenerated = lines.reduce((s, l) => s + Number(l.commission_amount || 0), 0)
-  const compType = selected?.compensation_type || 'commission'
-  const salaryPeriod = (compType === 'salary' || compType === 'mixed') ? Number(selected?.salary_amount || 0) : 0
-  const advancesRemaining = Number(summary?.advancesRemaining ?? summary?.advances_remaining ?? 0)
-  const bruto = salaryPeriod + commissionPending
-  const advancesApplied = Math.min(advancesRemaining, bruto)
-  const totalToPay = Math.max(0, bruto - advancesApplied)
+  const commissionPending = Number(summary?.commissionTotal || 0)
+  const pendingServiceTotal = Number(summary?.serviceTotal || 0)
+  const totalSold = Number(summary?.earnings?.serviceTotal || 0)
+  const commissionGenerated = Number(summary?.earnings?.commissionTotal || 0)
+  const salaryPeriod = Number(summary?.baseSalaryAmount || 0)
+  const advancesRemaining = Number(summary?.advancesAvailable || 0)
+  const advancesApplied = Number(summary?.advancesTotal || 0)
+  const totalToPay = Number(summary?.netPaid || 0)
 
   const doPay = async () => {
     if (!PM_ok(payForm.payment_method)) { toast.error('Seleccioná la forma de pago'); return }
@@ -144,7 +144,7 @@ function EarningsTab({ supabase, staff, money, branding, currency }) {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) { toast.error(data.error || 'No se pudo procesar el pago'); setPaying(false); return }
-      const paid = data.totalPaid ?? data.net_paid ?? totalToPay
+      const paid = data.netPaid ?? data.totalPaid ?? data.net_paid ?? totalToPay
       toast.success(`Pago registrado: ${money(paid)} (${data.settlementNumber || 'liquidación'})`)
       setPayOpen(false); setPayForm({ payment_method: 'cash', notes: '' })
       await load()
@@ -179,15 +179,16 @@ function EarningsTab({ supabase, staff, money, branding, currency }) {
       {summary !== null || lines.length > 0 ? (
         <>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <StatMini label="Servicios realizados" value={String(pendingLines.length + (lines.length - pendingLines.length))} sub={`${lines.length} en el período`} />
+            <StatMini label="Servicios realizados" value={String(summary?.earningsTotal || lines.length)} sub={`${pendingLines.length} pendientes`} />
             <StatMini label="Total vendido" value={money(totalSold)} />
             <StatMini label="Comisión generada" value={money(commissionGenerated)} />
             <StatMini label="Comisión pendiente" value={money(commissionPending)} highlight />
-            <StatMini label="Sueldo fijo del período" value={money(salaryPeriod)} />
+            <StatMini label="Base de servicios pendientes" value={money(pendingServiceTotal)} />
+            <StatMini label="Sueldo proporcional" value={money(salaryPeriod)} />
             <StatMini label="Adelantos pendientes" value={money(advancesRemaining)} />
-            <StatMini label="Total estimado a pagar" value={money(totalToPay)} highlight />
+            <StatMini label="Total exacto a pagar" value={money(totalToPay)} highlight />
           </div>
-          <p className="text-xs text-muted-foreground">Cálculo: sueldo fijo + comisiones pendientes − adelantos. El monto final lo confirma el sistema al pagar.</p>
+          <p className="text-xs text-muted-foreground">Cálculo exacto: cada servicio × su porcentaje configurado, más sueldo proporcional si corresponde, menos adelantos.</p>
 
           <Card>
             <CardHeader className="pb-2"><CardTitle className="text-base">Servicios pendientes de liquidar ({pendingLines.length})</CardTitle></CardHeader>
@@ -229,8 +230,9 @@ function EarningsTab({ supabase, staff, money, branding, currency }) {
             <div className="text-sm text-muted-foreground">Período: {fmtDate(period.start)} al {fmtDate(period.end)}</div>
             <div className="rounded-md border divide-y text-sm">
               <Row label="Servicios incluidos" value={String(pendingLines.length)} />
-              <Row label="Comisiones" value={money(commissionPending)} />
-              <Row label="Sueldo fijo" value={money(salaryPeriod)} />
+              <Row label="Total de esos servicios" value={money(pendingServiceTotal)} />
+              <Row label="Comisión exacta" value={money(commissionPending)} />
+              <Row label="Sueldo proporcional" value={money(salaryPeriod)} />
               <Row label="Adelantos a descontar" value={`- ${money(advancesApplied)}`} />
               <Row label="Total a pagar" value={money(totalToPay)} bold />
             </div>
@@ -534,77 +536,89 @@ function SettlementsTab({ supabase, staff, money, branding, currency }) {
   )
 }
 
-// ---------- CREAR PAGO MANUAL (semanal / mensual) ----------
+// ---------- CREAR PAGO EXACTO POR PERÍODO ----------
 function CreatePaymentDialog({ open, onOpenChange, supabase, staff, money, onSaved }) {
-  const initialForm = () => { const now = new Date(); const p = defaultPeriod('monthly'); return { staff_id: '', amount: '', pay_frequency: 'monthly', period_start: p.start, period_end: p.end, payment_method: 'cash', paid_at: ymd(now), notes: '', settle_commissions: false } }
+  const initialForm = () => { const now = new Date(); const p = defaultPeriod('monthly'); return { staff_id: '', pay_frequency: 'monthly', period_start: p.start, period_end: p.end, payment_method: 'cash', paid_at: ymd(now), notes: '' } }
   const [form, setForm] = useState(initialForm)
   const [saving, setSaving] = useState(false)
-  const [pending, setPending] = useState(null) // { count, total } | null | 'loading'
+  const [preview, setPreview] = useState(null) // exact server result | null | 'loading'
 
   useEffect(() => {
     if (open) setForm(initialForm())
-    setPending(null)
+    setPreview(null)
   }, [open])
 
-  const changeFrequency = (frequency) => {
-    const anchor = form.paid_at ? new Date(`${form.paid_at}T12:00:00`) : new Date()
-    const p = frequency === 'monthly' ? { start: ymd(new Date(anchor.getFullYear(), anchor.getMonth(), 1)), end: ymd(new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0)) }
-      : frequency === 'weekly' ? (() => { const day = anchor.getDay() === 0 ? 7 : anchor.getDay(); const start = new Date(anchor); start.setDate(anchor.getDate() - day + 1); const end = new Date(start); end.setDate(start.getDate() + 6); return { start: ymd(start), end: ymd(end) } })()
-      : { start: form.period_start, end: form.period_end }
-    setForm({ ...form, pay_frequency: frequency, period_start: p.start, period_end: p.end })
+  const rangeFor = (frequency, paidAt, current) => {
+    const anchor = paidAt ? new Date(`${paidAt}T12:00:00`) : new Date()
+    const p = frequency === 'monthly' ? { start: ymd(new Date(anchor.getFullYear(), anchor.getMonth(), 1)), end: ymd(anchor) }
+      : frequency === 'weekly' ? (() => { const day = anchor.getDay() === 0 ? 7 : anchor.getDay(); const start = new Date(anchor); start.setDate(anchor.getDate() - day + 1); return { start: ymd(start), end: ymd(anchor) } })()
+      : { start: current.period_start, end: current.period_end }
+    return p
   }
 
-  // Load pending commissions preview when a staff member is chosen
+  const changeStaff = (staffId) => {
+    setForm(prev => {
+      const frequency = staff.find(s => s.id === staffId)?.pay_frequency || 'monthly'
+      const p = rangeFor(frequency, prev.paid_at, prev)
+      return { ...prev, staff_id: staffId, pay_frequency: frequency, period_start: p.start, period_end: p.end }
+    })
+  }
+
+  const changeFrequency = (frequency) => {
+    setForm(prev => {
+      const p = rangeFor(frequency, prev.paid_at, prev)
+      return { ...prev, pay_frequency: frequency, period_start: p.start, period_end: p.end }
+    })
+  }
+
+  const changePaidAt = (paidAt) => {
+    setForm(prev => {
+      if (prev.pay_frequency === 'custom') return { ...prev, paid_at: paidAt }
+      const p = rangeFor(prev.pay_frequency, paidAt, prev)
+      return { ...prev, paid_at: paidAt, period_start: p.start, period_end: p.end }
+    })
+  }
+
+  // Server-authoritative preview. It uses the business timezone and the same
+  // transaction rules as the final payment, eliminating client-side drift.
   useEffect(() => {
     let cancelled = false
-    if (!open || !form.staff_id || !form.period_start || !form.period_end) { setPending(null); return }
-    setPending('loading')
+    if (!open || !form.staff_id || !form.period_start || !form.period_end || form.period_start > form.period_end) { setPreview(null); return }
+    setPreview('loading')
     ;(async () => {
       try {
-        const r = await authFetch(supabase, `/api/booking/staff-earnings?staff_id=${form.staff_id}&from=${form.period_start}&to=${form.period_end}&status=pending&limit=100`)
-        const d = r.ok ? await r.json() : { items: [] }
+        const p = new URLSearchParams({ staff_id: form.staff_id, from: form.period_start, to: form.period_end })
+        const r = await authFetch(supabase, `/api/booking/staff-settlements/preview?${p}`)
+        const d = await r.json().catch(() => ({}))
         if (cancelled) return
-        const list = d.items || []
-        const commissions = list.reduce((s, l) => s + Number(l.commission_amount || 0), 0)
-        const person = staff.find(s => s.id === form.staff_id)
-        const salary = Number(person?.salary_amount || 0)
-        const start = new Date(`${form.period_start}T12:00:00`)
-        const end = new Date(`${form.period_end}T12:00:00`)
-        const days = Math.max(1, Math.round((end - start) / 86400000) + 1)
-        const daysInMonth = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate()
-        const salaryPart = (person?.compensation_type === 'salary' || person?.compensation_type === 'mixed')
-          ? (form.pay_frequency === 'monthly' ? salary : Math.round(salary * days / daysInMonth)) : 0
-        const calculated = Math.max(0, Math.round(commissions + salaryPart))
-        setPending({ count: list.length, total: commissions })
-        setForm(prev => ({ ...prev, amount: String(calculated) }))
-      } catch { if (!cancelled) setPending(null) }
+        setPreview(r.ok ? d : { error: d.error || 'No se pudo calcular el pago' })
+      } catch { if (!cancelled) setPreview({ error: 'No se pudo calcular el pago' }) }
     })()
     return () => { cancelled = true }
-  }, [open, form.staff_id, form.period_start, form.period_end, form.pay_frequency, supabase, staff])
+  }, [open, form.staff_id, form.period_start, form.period_end, supabase])
 
   const save = async () => {
     if (!form.staff_id) { toast.error('Elegí la persona'); return }
-    if (!(Number(form.amount) >= 0) || form.amount === '') { toast.error('Ingresá un monto válido'); return }
+    if (!form.period_start || !form.period_end || form.period_start > form.period_end) { toast.error('Indicá un período válido'); return }
+    if (preview === 'loading') { toast.error('Esperá a que termine el cálculo'); return }
+    if (!preview || preview.error) { toast.error(preview?.error || 'No se pudo calcular el pago'); return }
+    if (!(Number(preview.netPaid) > 0)) { toast.error('No hay comisiones o sueldo pendientes en ese período'); return }
     setSaving(true)
     try {
-      const res = await authFetch(supabase, '/api/booking/staff-settlements/manual', {
+      const res = await authFetch(supabase, '/api/booking/staff-settlements', {
         method: 'POST',
         body: JSON.stringify({
           staff_id: form.staff_id,
-          amount: Number(form.amount),
-          pay_frequency: form.pay_frequency,
           payment_method: form.payment_method,
           period_start: form.period_start,
           period_end: form.period_end,
           paid_at: form.paid_at ? new Date(form.paid_at + 'T12:00:00').toISOString() : undefined,
           notes: form.notes || null,
-          settle_commissions: form.settle_commissions,
         }),
       })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) { toast.error(d.error || 'No se pudo registrar el pago'); setSaving(false); return }
-      const extra = d.commissionsSettled ? ` · ${d.commissionsSettled} comisión(es) saldada(s)` : ''
-      toast.success(`Pago registrado: ${money(d.totalPaid)} (${d.settlementNumber || 'liquidación'})${extra}`)
+      toast.success(`Pago registrado: ${money(d.netPaid)} (${d.settlementNumber || 'liquidación'})`)
       onOpenChange(false)
       await onSaved()
     } catch { toast.error('Error al registrar el pago') }
@@ -618,14 +632,14 @@ function CreatePaymentDialog({ open, onOpenChange, supabase, staff, money, onSav
         <div className="space-y-3">
           <div>
             <Label className="text-xs">Personal</Label>
-            <Select value={form.staff_id} onValueChange={(v) => setForm({ ...form, staff_id: v })}>
+            <Select value={form.staff_id} onValueChange={changeStaff}>
               <SelectTrigger><SelectValue placeholder="Elegí una persona" /></SelectTrigger>
               <SelectContent>{staff.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
             </Select>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div><Label className="text-xs">Monto a pagar</Label><Input type="number" min="0" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="0" /></div>
-            <div><Label className="text-xs">Fecha de pago</Label><Input type="date" value={form.paid_at} onChange={(e) => setForm({ ...form, paid_at: e.target.value })} /></div>
+            <div><Label className="text-xs">Monto exacto a pagar</Label><Input value={preview && preview !== 'loading' && !preview.error ? money(preview.netPaid) : ''} readOnly placeholder={preview === 'loading' ? 'Calculando...' : '0'} className="font-semibold bg-muted/40" /></div>
+            <div><Label className="text-xs">Fecha de pago</Label><Input type="date" value={form.paid_at} onChange={(e) => changePaidAt(e.target.value)} /></div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -647,26 +661,30 @@ function CreatePaymentDialog({ open, onOpenChange, supabase, staff, money, onSav
             <div><Label className="text-xs">Desde</Label><Input type="date" value={form.period_start} onChange={(e) => setForm({ ...form, period_start: e.target.value, pay_frequency: 'custom' })} /></div>
             <div><Label className="text-xs">Hasta</Label><Input type="date" value={form.period_end} onChange={(e) => setForm({ ...form, period_end: e.target.value, pay_frequency: 'custom' })} /></div>
           </div>
-          <div><Label className="text-xs">Nota / concepto</Label><Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Ej: Sueldo mensual de enero" /></div>
-
-          <label className="flex items-start gap-2 rounded-md border p-3 cursor-pointer">
-            <input type="checkbox" className="mt-0.5 h-4 w-4" checked={form.settle_commissions} onChange={(e) => setForm({ ...form, settle_commissions: e.target.checked })} />
-            <div className="text-sm">
-              <span className="font-medium">Saldar comisiones pendientes</span>
-              <p className="text-xs text-muted-foreground">Deja en cero todas las comisiones pendientes de esta persona (las marca como saldadas). No afecta el historial de ventas.</p>
-              {form.staff_id && (
-                <p className="text-xs mt-1">
-                  {pending === 'loading' ? 'Calculando comisiones pendientes...'
-                    : pending ? <>Comisiones pendientes actuales: <b>{money(pending.total)}</b> ({pending.count} servicio{pending.count === 1 ? '' : 's'})</>
-                    : null}
-                </p>
-              )}
+          {form.staff_id && (
+            <div className="rounded-md border divide-y text-sm">
+              {preview === 'loading' ? (
+                <div className="flex items-center justify-center gap-2 p-4 text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin" />Calculando monto exacto...</div>
+              ) : preview?.error ? (
+                <div className="p-3 text-red-600">{preview.error}</div>
+              ) : preview ? (
+                <>
+                  <Row label="Servicios pendientes incluidos" value={String(preview.serviceItemCount || 0)} />
+                  <Row label="Total cobrado por esos servicios" value={money(preview.serviceTotal)} />
+                  <Row label="Comisión según % configurado" value={money(preview.commissionTotal)} />
+                  <Row label="Sueldo proporcional por los días" value={money(preview.baseSalaryAmount)} />
+                  <Row label="Adelantos a descontar" value={`- ${money(preview.advancesTotal)}`} />
+                  <Row label="Total exacto a pagar" value={money(preview.netPaid)} bold />
+                </>
+              ) : null}
             </div>
-          </label>
+          )}
+          <p className="text-xs text-muted-foreground">El cálculo toma únicamente los servicios pendientes dentro de las fechas elegidas y aplica el porcentaje guardado en cada servicio. No se puede pagar dos veces la misma comisión.</p>
+          <div><Label className="text-xs">Nota / concepto</Label><Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Ej: Pago de la semana" /></div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancelar</Button>
-          <Button onClick={save} disabled={saving}>{saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}Registrar pago</Button>
+          <Button onClick={save} disabled={saving || preview === 'loading' || !preview || !!preview?.error || Number(preview?.netPaid || 0) <= 0}>{saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}Registrar pago exacto</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -676,18 +694,21 @@ function CreatePaymentDialog({ open, onOpenChange, supabase, staff, money, onSav
 function EditPaymentDialog({ open, onOpenChange, supabase, payment, money, onSaved }) {
   const [form, setForm] = useState({ amount: '', period_start: '', period_end: '', paid_at: '', payment_method: 'cash', notes: '' })
   const [saving, setSaving] = useState(false)
+  const calculated = Number(payment?.commission_total || 0) > 0 || payment?.legacy_recalculated === true
   useEffect(() => {
     if (!payment) return
-    setForm({ amount: String(payment.base_salary_amount ?? payment.net_paid ?? ''), period_start: payment.period_start || '', period_end: payment.period_end || '', paid_at: String(payment.paid_at || payment.created_at || '').slice(0, 10), payment_method: payment.payment_method || 'cash', notes: payment.notes || '' })
-  }, [payment])
+    setForm({ amount: String(calculated ? payment.net_paid : (payment.base_salary_amount ?? payment.net_paid ?? '')), period_start: payment.period_start || '', period_end: payment.period_end || '', paid_at: String(payment.paid_at || payment.created_at || '').slice(0, 10), payment_method: payment.payment_method || 'cash', notes: payment.notes || '' })
+  }, [payment, calculated])
   const save = async () => {
     if (!payment) return
     const amount = Number(form.amount)
-    if (!Number.isFinite(amount) || amount < 0) { toast.error('Ingresá un monto válido'); return }
-    if (!form.period_start || !form.period_end || form.period_start > form.period_end) { toast.error('Indicá un período válido'); return }
+    if (!calculated && (!Number.isFinite(amount) || amount < 0)) { toast.error('Ingresá un monto válido'); return }
+    if (!calculated && (!form.period_start || !form.period_end || form.period_start > form.period_end)) { toast.error('Indicá un período válido'); return }
     setSaving(true)
     try {
-      const r = await authFetch(supabase, `/api/booking/staff-settlements/${payment.id}`, { method: 'PUT', body: JSON.stringify({ amount, period_start: form.period_start, period_end: form.period_end, paid_at: form.paid_at ? new Date(`${form.paid_at}T12:00:00`).toISOString() : null, payment_method: form.payment_method, notes: form.notes || null }) })
+      const payload = { paid_at: form.paid_at ? new Date(`${form.paid_at}T12:00:00`).toISOString() : null, payment_method: form.payment_method, notes: form.notes || null }
+      if (!calculated) Object.assign(payload, { amount, period_start: form.period_start, period_end: form.period_end })
+      const r = await authFetch(supabase, `/api/booking/staff-settlements/${payment.id}`, { method: 'PUT', body: JSON.stringify(payload) })
       const d = await r.json().catch(() => ({}))
       if (!r.ok) { toast.error(d.error || 'No se pudo actualizar el pago'); return }
       toast.success('Pago actualizado'); onOpenChange(false); await onSaved()
@@ -698,8 +719,9 @@ function EditPaymentDialog({ open, onOpenChange, supabase, payment, money, onSav
       <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>Editar pago</DialogTitle></DialogHeader>
         <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3"><div><Label className="text-xs">Monto pagado</Label><Input type="number" min="0" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} /></div><div><Label className="text-xs">Fecha de pago</Label><Input type="date" value={form.paid_at} onChange={(e) => setForm({ ...form, paid_at: e.target.value })} /></div></div>
-          <div className="grid grid-cols-2 gap-3"><div><Label className="text-xs">Desde</Label><Input type="date" value={form.period_start} onChange={(e) => setForm({ ...form, period_start: e.target.value })} /></div><div><Label className="text-xs">Hasta</Label><Input type="date" value={form.period_end} onChange={(e) => setForm({ ...form, period_end: e.target.value })} /></div></div>
+          <div className="grid grid-cols-2 gap-3"><div><Label className="text-xs">{calculated ? 'Total exacto pagado' : 'Monto pagado'}</Label><Input type="number" min="0" value={form.amount} disabled={calculated} onChange={(e) => setForm({ ...form, amount: e.target.value })} /></div><div><Label className="text-xs">Fecha de pago</Label><Input type="date" value={form.paid_at} onChange={(e) => setForm({ ...form, paid_at: e.target.value })} /></div></div>
+          <div className="grid grid-cols-2 gap-3"><div><Label className="text-xs">Desde</Label><Input type="date" value={form.period_start} disabled={calculated} onChange={(e) => setForm({ ...form, period_start: e.target.value })} /></div><div><Label className="text-xs">Hasta</Label><Input type="date" value={form.period_end} disabled={calculated} onChange={(e) => setForm({ ...form, period_end: e.target.value })} /></div></div>
+          {calculated && <p className="text-xs text-muted-foreground">El total y el período están protegidos porque fueron calculados desde los servicios y porcentajes incluidos. Podés corregir la fecha de pago, la forma de pago o la nota.</p>}
           <div><Label className="text-xs">Forma de pago</Label><Select value={form.payment_method} onValueChange={(v) => setForm({ ...form, payment_method: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{Object.entries(PM_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent></Select></div>
           <div><Label className="text-xs">Nota / concepto</Label><Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
         </div>
