@@ -485,7 +485,8 @@ function HistoryTab({ supabase, staff, money }) {
   const [filters, setFilters] = useState({ from: '', to: '', staff_id: 'all', payment_status: 'all', search: '' })
   const [searchInput, setSearchInput] = useState('')
   const abortRef = useRef(null)
-  const staffName = (id) => staff.find(s => s.id === id)?.name || ''
+  const hasStaffFilter = filters.staff_id !== 'all'
+  const selectedStaff = hasStaffFilter ? staff.find(s => s.id === filters.staff_id) : null
 
   const load = useCallback(async (off = 0) => {
     setLoading(true)
@@ -547,18 +548,20 @@ function HistoryTab({ supabase, staff, money }) {
       ) : (
         <Card><CardContent className="p-0"><div className="overflow-x-auto">
           <table className="w-full text-sm min-w-[720px]">
-            <thead><tr className="text-xs text-muted-foreground text-left border-b"><th className="py-2 px-3">N°</th><th className="py-2 px-3">Fecha</th><th className="py-2 px-3">Cliente</th><th className="py-2 px-3">Servicios / Personal</th><th className="py-2 px-3 text-right">Total</th><th className="py-2 px-3">Estado</th><th className="py-2 px-3"></th></tr></thead>
+            <thead><tr className="text-xs text-muted-foreground text-left border-b"><th className="py-2 px-3">N°</th><th className="py-2 px-3">Fecha</th><th className="py-2 px-3">Cliente</th><th className="py-2 px-3">Servicios / Personal</th><th className="py-2 px-3 text-right">{hasStaffFilter ? `Comisión${selectedStaff?.name ? ` de ${selectedStaff.name}` : ''}` : 'Total'}</th><th className="py-2 px-3">Estado</th><th className="py-2 px-3"></th></tr></thead>
             <tbody>
               {items.map(s => {
                 const svcNames = (s.booking_service_sale_items || []).map(it => it.service_name_snapshot).join(', ')
                 const staffNames = [...new Set((s.booking_service_sale_items || []).map(it => it.staff_name_snapshot).filter(Boolean))].join(', ')
+                const selectedCommission = Number(s.selected_staff_commission_amount ??
+                  (s.booking_service_sale_items || []).reduce((sum, item) => sum + Number(item.commission_amount || 0), 0))
                 return (
                   <tr key={s.id} className="border-b last:border-0 align-top">
                     <td className="py-2 px-3 font-medium whitespace-nowrap">{s.sale_number}</td>
                     <td className="py-2 px-3 whitespace-nowrap">{fmtDT(s.completed_at)}</td>
                     <td className="py-2 px-3">{s.customer_name || '-'}</td>
                     <td className="py-2 px-3"><div>{svcNames}</div><div className="text-xs text-muted-foreground">{staffNames}</div></td>
-                    <td className="py-2 px-3 text-right whitespace-nowrap font-medium">{money(s.total_amount)}</td>
+                    <td className="py-2 px-3 text-right whitespace-nowrap font-medium">{money(hasStaffFilter ? selectedCommission : s.total_amount)}</td>
                     <td className="py-2 px-3">{s.payment_status === 'paid' ? <Badge className="bg-green-100 text-green-800 border-green-300">Pagado{s.payment_method ? ` · ${PM_LABELS[s.payment_method] || ''}` : ''}</Badge> : <Badge variant="outline" className="text-amber-700 border-amber-300">Pendiente</Badge>}</td>
                     <td className="py-2 px-3">{s.payment_status !== 'paid' && <Button size="sm" onClick={() => setPayModal(s)}>Cobrar</Button>}</td>
                   </tr>
