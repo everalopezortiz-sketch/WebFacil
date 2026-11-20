@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { CalendarDays, LayoutGrid, Scissors, Tag, UserRound, Clock, CalendarX, Settings, ExternalLink, CheckCircle2, Circle, Copy, Link2 } from 'lucide-react'
 import { toast } from 'sonner'
 import BookingOverview from './BookingOverview'
+import AgendaShareDialog from './AgendaShareDialog'
 import WeeklyCalendar from './WeeklyCalendar'
 import ServicesManager from './ServicesManager'
 import ServiceCategoriesManager from './ServiceCategoriesManager'
@@ -92,6 +93,7 @@ export default function BookingManager({ supabase, profile }) {
       )}
 
       <div className="flex flex-wrap gap-2">
+        {profile.slug && <AgendaShareDialog slug={profile.slug} timezone={data.settings?.timezone} />}
         <a href={storeUrl} target="_blank" rel="noreferrer"><Button variant="outline" size="sm" className="gap-2"><ExternalLink className="w-4 h-4" />Ver web</Button></a>
         <Button variant="outline" size="sm" className="gap-2" onClick={() => copyLink(storeUrl, 'Enlace de la web')}><Copy className="w-4 h-4" />Copiar web</Button>
         <Button variant="outline" size="sm" className="gap-2" onClick={() => copyLink(reservaUrl, 'Enlace de reservas')}><Link2 className="w-4 h-4" />Copiar enlace de reservas</Button>

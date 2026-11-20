@@ -4,7 +4,6 @@ import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { v4 as uuidv4 } from 'uuid'
 import { handleBookingRoute } from '@/lib/booking/api'
-import { handleDiagnosticsRoute } from '@/lib/diagnostics/api'
 
 // Route segment config - allow custom Cache-Control headers
 export const dynamic = 'force-dynamic'
@@ -162,10 +161,6 @@ export async function GET(request, { params }) {
     // Booking module dispatcher (authenticated + public booking routes)
     const bookingRes = await handleBookingRoute({ method: 'GET', supabase, supabaseAdmin, path, pathStr, searchParams })
     if (bookingRes) return handleCORS(bookingRes)
-
-    // Diagnostics module dispatcher (Fichas capilares)
-    const diagRes = await handleDiagnosticsRoute({ method: 'GET', supabase, supabaseAdmin, path, pathStr, searchParams, authHeader: request.headers.get('Authorization') })
-    if (diagRes) return handleCORS(diagRes)
 
     // Health check
     if (pathStr === 'health') {
@@ -761,10 +756,6 @@ export async function POST(request, { params }) {
     // Booking module dispatcher (authenticated + public booking routes)
     const bookingRes = await handleBookingRoute({ method: 'POST', supabase, supabaseAdmin, path, pathStr, body, searchParams: new URL(request.url).searchParams })
     if (bookingRes) return handleCORS(bookingRes)
-
-    // Diagnostics module dispatcher (Fichas capilares)
-    const diagRes = await handleDiagnosticsRoute({ method: 'POST', supabase, supabaseAdmin, path, pathStr, body, searchParams: new URL(request.url).searchParams, authHeader: request.headers.get('Authorization') })
-    if (diagRes) return handleCORS(diagRes)
 
     // Public: register a store visit (max 1 per browser per day via cookie)
     if (path[0] === 'store' && path[2] === 'visit') {
@@ -1470,10 +1461,6 @@ export async function PUT(request, { params }) {
     const bookingRes = await handleBookingRoute({ method: 'PUT', supabase, supabaseAdmin, path, pathStr, body, searchParams: new URL(request.url).searchParams })
     if (bookingRes) return handleCORS(bookingRes)
 
-    // Diagnostics module dispatcher (Fichas capilares)
-    const diagRes = await handleDiagnosticsRoute({ method: 'PUT', supabase, supabaseAdmin, path, pathStr, body, searchParams: new URL(request.url).searchParams, authHeader: request.headers.get('Authorization') })
-    if (diagRes) return handleCORS(diagRes)
-    
     // Try to get user from cookies first
     let user = null
     const { data: cookieAuth } = await supabase.auth.getUser()
@@ -1641,12 +1628,6 @@ export async function DELETE(request, { params }) {
     const bookingRes = await handleBookingRoute({ method: 'DELETE', supabase, supabaseAdmin, path, pathStr, searchParams: new URL(request.url).searchParams })
     if (bookingRes) return handleCORS(bookingRes)
 
-    // Diagnostics module dispatcher (Fichas capilares) — supports body for revoke
-    let delBody = {}
-    try { delBody = await request.clone().json() } catch { delBody = {} }
-    const diagRes = await handleDiagnosticsRoute({ method: 'DELETE', supabase, supabaseAdmin, path, pathStr, body: delBody, searchParams: new URL(request.url).searchParams, authHeader: request.headers.get('Authorization') })
-    if (diagRes) return handleCORS(diagRes)
-
     // Try to get user from cookies first
     let user = null
     const { data: cookieAuth } = await supabase.auth.getUser()
@@ -1785,26 +1766,6 @@ export async function DELETE(request, { params }) {
 
     return handleCORS(NextResponse.json({ error: 'Not found' }, { status: 404 }))
 
-  } catch (error) {
-    console.error('API Error:', error)
-    return handleCORS(NextResponse.json({ error: error.message }, { status: 500 }))
-  }
-}
-
-
-// PATCH — used by the diagnostics module (client updates)
-export async function PATCH(request, { params }) {
-  const path = params?.path || []
-  const pathStr = path.join('/')
-  const supabase = createSupabaseServer(request.headers.get('Authorization'))
-  const supabaseAdmin = createSupabaseAdmin()
-  let body = {}
-  try { body = await request.json() } catch { body = {} }
-
-  try {
-    const diagRes = await handleDiagnosticsRoute({ method: 'PATCH', supabase, supabaseAdmin, path, pathStr, body, searchParams: new URL(request.url).searchParams, authHeader: request.headers.get('Authorization') })
-    if (diagRes) return handleCORS(diagRes)
-    return handleCORS(NextResponse.json({ error: 'Not found' }, { status: 404 }))
   } catch (error) {
     console.error('API Error:', error)
     return handleCORS(NextResponse.json({ error: error.message }, { status: 500 }))

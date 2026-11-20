@@ -1,14 +1,14 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Loader2 } from 'lucide-react'
-import { authFetch } from '@/lib/diagnostics/helpers'
+import { authFetch } from '@/lib/booking/client'
 import { toast } from 'sonner'
 
 const EMPTY = { full_name: '', phone: '', document: '', email: '', birth_date: '', gender: '', address: '', city: '', occupation: '', general_notes: '' }
@@ -29,20 +29,21 @@ export default function ClientFormDialog({ supabase, open, onOpenChange, client,
     try {
       const payload = { ...form }
       Object.keys(payload).forEach(k => { if (payload[k] === '') payload[k] = null })
-      const url = client ? `/api/diagnostics/clients/${client.id}` : '/api/diagnostics/clients'
-      const res = await authFetch(supabase, url, { method: client ? 'PATCH' : 'POST', body: JSON.stringify(payload) })
+      const url = client ? `/api/booking/clients/${client.id}` : '/api/booking/clients'
+      const res = await authFetch(supabase, url, { method: client ? 'PUT' : 'POST', body: JSON.stringify(payload) })
       const data = await res.json()
       if (!res.ok) { toast.error(data.error || 'No se pudo guardar'); return }
       toast.success(client ? 'Cliente actualizado' : 'Cliente creado')
       onSaved && onSaved(data)
       onOpenChange(false)
-    } finally { setSaving(false) }
+    } catch { toast.error('No se pudo guardar el cliente') }
+    finally { setSaving(false) }
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[92vh] overflow-y-auto">
-        <DialogHeader><DialogTitle>{client ? 'Editar cliente' : 'Nuevo cliente'}</DialogTitle></DialogHeader>
+    <Dialog open={open} onOpenChange={value => !saving && onOpenChange(value)}>
+      <DialogContent className="max-w-lg max-h-[92dvh] overflow-y-auto">
+        <DialogHeader><DialogTitle>{client ? 'Editar cliente' : 'Nuevo cliente'}</DialogTitle><DialogDescription>Datos de contacto del cliente.</DialogDescription></DialogHeader>
         <div className="grid grid-cols-2 gap-3">
           <div className="col-span-2 space-y-1"><Label>Nombre y apellido *</Label><Input value={form.full_name} onChange={e => set('full_name', e.target.value)} /></div>
           <div className="space-y-1"><Label>Teléfono</Label><Input value={form.phone} onChange={e => set('phone', e.target.value)} /></div>
@@ -65,7 +66,7 @@ export default function ClientFormDialog({ supabase, open, onOpenChange, client,
           <div className="col-span-2 space-y-1"><Label>Notas generales</Label><Textarea rows={2} value={form.general_notes} onChange={e => set('general_notes', e.target.value)} /></div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+          <Button variant="outline" disabled={saving} onClick={() => onOpenChange(false)}>Cancelar</Button>
           <Button onClick={save} disabled={saving} className="gradient-brand text-white">{saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}Guardar</Button>
         </DialogFooter>
       </DialogContent>

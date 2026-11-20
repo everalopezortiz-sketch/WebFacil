@@ -6,12 +6,11 @@ import { normalizeImageSrc, parseImages, serializeImages } from '@/lib/imageUtil
 import ImageUpload from '@/components/ImageUpload'
 import OrderReceipt from '@/components/OrderReceipt'
 import BookingManager from '@/app/components/booking/BookingManager'
-import DiagnosticsManager from '@/app/components/diagnostics/DiagnosticsManager'
 import ServiceCheckoutManager from '@/app/components/booking/ServiceCheckoutManager'
 import PersonnelManager from '@/app/components/booking/PersonnelManager'
 import ServicesReport from '@/app/components/booking/ServicesReport'
 import FinanceManager from '@/app/components/booking/FinanceManager'
-import TreatmentNotifications from '@/app/components/diagnostics/TreatmentNotifications'
+import TreatmentNotifications from '@/app/components/booking/TreatmentNotifications'
 import { hasBookings } from '@/lib/business'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -81,6 +80,8 @@ async function authFetch(supabase, url, options = {}) {
 
 export default function Dashboard({ user, profile, onLogout }) {
   const [activeTab, setActiveTab] = useState('inicio')
+  const [treatmentCount, setTreatmentCount] = useState(0)
+  const [reminderRevision, setReminderRevision] = useState(0)
   const [settings, setSettings] = useState(null)
   const [categories, setCategories] = useState([])
   const [products, setProducts] = useState([])
@@ -747,6 +748,8 @@ export default function Dashboard({ user, profile, onLogout }) {
           <TabsList className="mb-6 flex-wrap h-auto gap-1 bg-white/60 backdrop-blur p-1.5 shadow-sm">
             <TabsTrigger value="inicio" className="gap-2 data-[state=active]:gradient-brand data-[state=active]:text-white data-[state=active]:shadow-md">
               <Home className="w-4 h-4" /> Inicio
+              {treatmentCount > 0 && <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-xs font-semibold text-white"
+                aria-label={treatmentCount + ' avisos de tratamiento'}>{treatmentCount}</span>}
             </TabsTrigger>
             {hasBookings(profile.business_type) && (
               <TabsTrigger value="agenda" className="gap-2 data-[state=active]:gradient-brand data-[state=active]:text-white data-[state=active]:shadow-md">
@@ -766,11 +769,6 @@ export default function Dashboard({ user, profile, onLogout }) {
             {hasBookings(profile.business_type) && (
               <TabsTrigger value="personal" className="gap-2 data-[state=active]:gradient-brand data-[state=active]:text-white data-[state=active]:shadow-md">
                 <Users className="w-4 h-4" /> Personal
-              </TabsTrigger>
-            )}
-            {hasBookings(profile.business_type) && (
-              <TabsTrigger value="fichas" className="gap-2 data-[state=active]:gradient-brand data-[state=active]:text-white data-[state=active]:shadow-md">
-                <FileText className="w-4 h-4" /> Fichas capilares
               </TabsTrigger>
             )}
             <TabsTrigger value="settings" className="gap-2 data-[state=active]:gradient-brand data-[state=active]:text-white data-[state=active]:shadow-md">
@@ -807,7 +805,8 @@ export default function Dashboard({ user, profile, onLogout }) {
           )}
           {hasBookings(profile.business_type) && (
             <TabsContent value="cobros" forceMount className={activeTab === 'cobros' ? '' : 'hidden'}>
-              <ServiceCheckoutManager supabase={supabase} profile={profile} active={activeTab === 'cobros'} currencySymbol={getCurrencySymbol()} />
+              <ServiceCheckoutManager supabase={supabase} active={activeTab === 'cobros'} currencySymbol={getCurrencySymbol()}
+                onReminderSaved={() => setReminderRevision(value => value + 1)} />
             </TabsContent>
           )}
           {hasBookings(profile.business_type) && (
@@ -822,16 +821,10 @@ export default function Dashboard({ user, profile, onLogout }) {
               <PersonnelManager supabase={supabase} profile={profile} settings={settings} active={activeTab === 'personal'} currencySymbol={getCurrencySymbol()} currency={settings?.currency || 'PYG'} />
             </TabsContent>
           )}
-          {hasBookings(profile.business_type) && (
-            <TabsContent value="fichas">
-              <DiagnosticsManager supabase={supabase} profile={profile} userId={user.id} businessPhone={settings?.whatsapp_number} />
-            </TabsContent>
-          )}
-
-          <TabsContent value="inicio">
+          <TabsContent value="inicio" forceMount className={activeTab === 'inicio' ? '' : 'hidden'}>
             <div className="space-y-6">
               {hasBookings(profile.business_type) && (
-                <TreatmentNotifications supabase={supabase} />
+                <TreatmentNotifications supabase={supabase} refreshKey={reminderRevision} onCountChange={setTreatmentCount} />
               )}
               {/* Low stock alert */}
               {stats?.lowStock?.length > 0 && (

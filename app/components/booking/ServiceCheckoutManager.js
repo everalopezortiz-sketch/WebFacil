@@ -1,6 +1,7 @@
 'use client'
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef, useId } from 'react'
 import { authFetch } from '@/lib/booking/client'
+import { addCalendarMonths, bookingDate, formatCalendarDate } from '@/lib/booking/dates'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -8,29 +9,32 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { CalendarClock, Plus, History, Loader2, DollarSign, CheckCircle2, XCircle, UserX, Trash2, Search, ClipboardPlus } from 'lucide-react'
+import { CalendarClock, Plus, History, Loader2, DollarSign, CheckCircle2, XCircle, UserX, Trash2, Search, ClipboardPlus, Users } from 'lucide-react'
 import { toast } from 'sonner'
+import ClientsManager from './ClientsManager'
 
 const PM_LABELS = { cash: 'Efectivo', transfer: 'Transferencia', card: 'Tarjeta', mixed: 'Mixto', other: 'Otro' }
 const PM_KEYS = ['cash', 'transfer', 'card', 'mixed', 'other']
 const fmtDT = (iso) => { if (!iso) return ''; try { return new Date(iso).toLocaleString('es-PY', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) } catch { return iso } }
 const fmtD = (iso) => { if (!iso) return ''; try { return new Date(iso).toLocaleDateString('es-PY', { day: '2-digit', month: '2-digit', year: 'numeric' }) } catch { return iso } }
 
-export default function ServiceCheckoutManager({ supabase, profile, active = true, currencySymbol = 'Gs' }) {
+export default function ServiceCheckoutManager({ supabase, active = true, currencySymbol = 'Gs', onReminderSaved }) {
   const [tab, setTab] = useState('pendientes')
+  const [historyClient, setHistoryClient] = useState(null)
   const [loaded, setLoaded] = useState(false)
-  const [base, setBase] = useState({ staff: [], services: [], staffServices: [], categories: [] })
+  const [base, setBase] = useState({ staff: [], services: [], staffServices: [], categories: [], timezone: undefined })
   const money = (v) => `${currencySymbol} ${Math.round(Number(v || 0)).toLocaleString('es-PY')}`
 
   const loadBase = useCallback(async () => {
     const get = async (url) => { const r = await authFetch(supabase, url); return r.ok ? r.json() : [] }
-    const [staff, services, staffServices, categories] = await Promise.all([
+    const [staff, services, staffServices, categories, settings] = await Promise.all([
       get('/api/booking/staff'), get('/api/booking/services'), get('/api/booking/staff-services'), get('/api/booking/service-categories'),
+      get('/api/booking/settings'),
     ])
-    setBase({ staff, services, staffServices, categories })
+    setBase({ staff, services, staffServices, categories, timezone: settings?.timezone })
     setLoaded(true)
   }, [supabase])
   useEffect(() => { if (active && !loaded) loadBase() }, [active, loaded, loadBase])
@@ -53,20 +57,22 @@ export default function ServiceCheckoutManager({ supabase, profile, active = tru
         <h2 className="text-xl font-bold">Cobros de servicios</h2>
         <p className="text-sm text-muted-foreground">Finalizá y cobrá citas, registrá servicios y revisá el historial.</p>
       </div>
-      <Tabs value={tab} onValueChange={setTab}>
+      <Tabs value={tab} onValueChange={value => { setTab(value); setHistoryClient(null) }}>
         <TabsList className="flex-wrap h-auto gap-1 bg-white/60 backdrop-blur p-1.5 shadow-sm overflow-x-auto">
           <TabsTrigger value="pendientes" className="gap-2"><CalendarClock className="w-4 h-4" />Pendientes de Agenda</TabsTrigger>
           <TabsTrigger value="registrar" className="gap-2"><Plus className="w-4 h-4" />Registrar servicio</TabsTrigger>
           <TabsTrigger value="historial" className="gap-2"><History className="w-4 h-4" />Historial de cobros</TabsTrigger>
+          <TabsTrigger value="clientes" className="gap-2"><Users className="w-4 h-4" />Clientes</TabsTrigger>
         </TabsList>
         <div className="mt-4">
           {!loaded ? (
             <div className="py-16 text-center text-muted-foreground"><Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />Cargando...</div>
           ) : (
             <>
-              <TabsContent value="pendientes"><PendingTab supabase={supabase} helpers={helpers} money={money} /></TabsContent>
-              <TabsContent value="registrar"><ManualTab supabase={supabase} base={base} helpers={helpers} money={money} /></TabsContent>
-              <TabsContent value="historial"><HistoryTab supabase={supabase} staff={base.staff} money={money} /></TabsContent>
+              <TabsContent value="pendientes"><PendingTab supabase={supabase} helpers={helpers} money={money} timezone={base.timezone} onReminderSaved={onReminderSaved} /></TabsContent>
+              <TabsContent value="registrar"><ManualTab supabase={supabase} base={base} helpers={helpers} money={money} onReminderSaved={onReminderSaved} /></TabsContent>
+              <TabsContent value="historial"><HistoryTab supabase={supabase} staff={base.staff} money={money} client={historyClient} onClearClient={() => setHistoryClient(null)} /></TabsContent>
+              <TabsContent value="clientes"><ClientsManager supabase={supabase} onHistory={client => { setHistoryClient(client); setTab('historial') }} /></TabsContent>
             </>
           )}
         </div>
@@ -76,7 +82,7 @@ export default function ServiceCheckoutManager({ supabase, profile, active = tru
 }
 
 // ---------------- PENDING ----------------
-function PendingTab({ supabase, helpers, money }) {
+function PendingTab({ supabase, helpers, money, timezone, onReminderSaved }) {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState(null) // { card, markPaid }
@@ -130,21 +136,24 @@ function PendingTab({ supabase, helpers, money }) {
           ))}
         </div>
       )}
-      {modal && <CheckoutModal supabase={supabase} helpers={helpers} money={money} card={modal.card} markPaid={modal.markPaid} onClose={() => setModal(null)} onDone={onDone} />}
+      {modal && <CheckoutModal supabase={supabase} helpers={helpers} money={money} card={modal.card} markPaid={modal.markPaid} timezone={timezone} onReminderSaved={onReminderSaved} onClose={() => setModal(null)} onDone={onDone} />}
     </div>
   )
 }
 
 // Modal to finalize/charge a booking appointment
-function CheckoutModal({ supabase, helpers, money, card, markPaid, onClose, onDone }) {
+function CheckoutModal({ supabase, helpers, money, card, markPaid, timezone, onClose, onDone, onReminderSaved }) {
   const [lines, setLines] = useState(() => (card.services || []).map(s => ({
     service_id: s.serviceId, appointment_service_id: s.appointmentServiceId, service_name: s.serviceName,
     staff_id: card.staffId, quantity: 1, unit_price: Number(s.price || 0), discount_amount: 0,
   })))
   const [paymentMethod, setPaymentMethod] = useState('cash')
   const [notes, setNotes] = useState('')
+  const [reminder, setReminder] = useState({ date: '', notes: '' })
   const [saving, setSaving] = useState(false)
   const savingRef = useRef(false)
+  const requestId = useRef(null)
+  const serviceDate = bookingDate(new Date(), timezone)
 
   const setLine = (i, patch) => setLines(ls => ls.map((l, idx) => idx === i ? { ...l, ...patch } : l))
   const calc = (l) => { const net = Math.max(0, (Number(l.unit_price) || 0) * (l.quantity || 1) - (Number(l.discount_amount) || 0)); const pct = helpers.assignedPct(l.staff_id, l.service_id); return { net, pct, comm: Math.round(net * pct / 100) } }
@@ -154,10 +163,14 @@ function CheckoutModal({ supabase, helpers, money, card, markPaid, onClose, onDo
 
   const submit = async () => {
     if (savingRef.current) return
+    if (reminder.date && reminder.date < serviceDate) { toast.error('La fecha del aviso debe ser igual o posterior a la del servicio'); return }
     if (lines.some(l => !l.staff_id)) { toast.error('Seleccioná el profesional en cada servicio'); return }
     savingRef.current = true; setSaving(true)
     try {
+      requestId.current ||= crypto.randomUUID()
       const body = {
+        request_id: requestId.current,
+        next_treatment_date: reminder.date || null, next_treatment_notes: reminder.notes,
         appointment_id: card.appointmentId, customer_name: card.customerName, customer_phone: card.customerPhone,
         mark_paid: markPaid, payment_method: markPaid ? paymentMethod : null, notes: notes || null,
         completed_at: new Date().toISOString(),
@@ -166,22 +179,14 @@ function CheckoutModal({ supabase, helpers, money, card, markPaid, onClose, onDo
       const res = await authFetch(supabase, '/api/booking/service-sales', { method: 'POST', body: JSON.stringify(body) })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) { toast.error(d.error || 'No se pudo registrar'); savingRef.current = false; setSaving(false); return }
-      const performedServices = lines.map(l => l.service_name || l.serviceName || '').filter(Boolean).join(', ')
-      if (String(card.customerName || '').trim()) {
-        const followup = await authFetch(supabase, '/api/diagnostics/quick-follow-up', {
-          method: 'POST',
-          body: JSON.stringify({ full_name: card.customerName, phone: card.customerPhone, consultation_reason: performedServices, treatment_plan: performedServices, completed_at: new Date().toISOString() }),
-        })
-        const followupData = await followup.json().catch(() => ({}))
-        if (!followup.ok) toast.warning(followupData.error || 'El cobro se guardó, pero no se pudo guardar la ficha capilar')
-      }
       toast.success(d.alreadyExisted ? 'Esta cita ya estaba registrada' : (markPaid ? 'Cobro registrado' : 'Servicio finalizado (pendiente de cobro)'))
+      showSavedReminder(d.reminderDate, onReminderSaved)
       onDone(card.appointmentId)
     } catch { toast.error('Error al registrar'); savingRef.current = false; setSaving(false) }
   }
 
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
+    <Dialog open onOpenChange={(o) => !o && !saving && onClose()}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader><DialogTitle>{markPaid ? 'Cobrar y finalizar' : 'Finalizar sin cobrar'} — {card.customerName || 'Cliente'}</DialogTitle></DialogHeader>
         <div className="space-y-3">
@@ -222,6 +227,7 @@ function CheckoutModal({ supabase, helpers, money, card, markPaid, onClose, onDo
               </Select>
             </div>
           )}
+          <TreatmentReminderFields reminder={reminder} onChange={setReminder} serviceDate={serviceDate} />
           <div><Label className="text-xs">Observación</Label><Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
         </div>
         <DialogFooter>
@@ -233,8 +239,41 @@ function CheckoutModal({ supabase, helpers, money, card, markPaid, onClose, onDo
   )
 }
 
+function showSavedReminder(date, onReminderSaved) {
+  if (!date) return
+  toast.info('Aviso programado para el ' + formatCalendarDate(date))
+  onReminderSaved?.()
+}
+
+function TreatmentReminderFields({ reminder, onChange, serviceDate, needsCustomer }) {
+  const fieldId = useId()
+  return (
+    <fieldset className="min-w-0 rounded-lg border p-3 space-y-3">
+      <legend className="px-1 text-sm font-semibold">Próximo tratamiento</legend>
+      <p className="text-xs text-muted-foreground">Elegí una fecha para recibir un aviso en Inicio.</p>
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="flex-1 min-w-[135px]">
+          <Label htmlFor={fieldId} className="text-xs">Fecha del tratamiento</Label>
+          <Input id={fieldId} type="date" min={serviceDate || undefined} value={reminder.date}
+            onChange={e => onChange({ ...reminder, date: e.target.value })} />
+        </div>
+        <Button type="button" variant="outline" disabled={!serviceDate}
+          onClick={() => onChange({ ...reminder, date: addCalendarMonths(serviceDate, 1) })}>En 1 mes</Button>
+        {reminder.date && <Button type="button" variant="ghost" onClick={() => onChange({ date: '', notes: '' })}>Quitar aviso</Button>}
+      </div>
+      {reminder.date && (
+        <div><Label htmlFor={fieldId + '-notes'} className="text-xs">Notas para el seguimiento</Label>
+          <Textarea id={fieldId + '-notes'} rows={2} maxLength={500} value={reminder.notes}
+            onChange={e => onChange({ ...reminder, notes: e.target.value })} />
+        </div>
+      )}
+      {needsCustomer && <p className="text-xs text-amber-700 dark:text-amber-400">Ingresá el nombre del cliente para programar el aviso.</p>}
+    </fieldset>
+  )
+}
+
 // ---------------- MANUAL ----------------
-function ManualTab({ supabase, base, helpers, money }) {
+function ManualTab({ supabase, base, helpers, money, onReminderSaved }) {
   const activeServices = useMemo(() => base.services.filter(s => s.is_active !== false), [base.services])
 
   // Categories with at least one ACTIVE service, plus a "Sin categoría" bucket when needed
@@ -269,11 +308,13 @@ function ManualTab({ supabase, base, helpers, money }) {
   const [notes, setNotes] = useState('')
   const [lines, setLines] = useState([blankLine()])
   const [quickCategories, setQuickCategories] = useState([])
-  const [nextTreatmentDate, setNextTreatmentDate] = useState('')
-  const [nextTreatmentNotes, setNextTreatmentNotes] = useState('')
-  const [saveFollowup, setSaveFollowup] = useState(true)
+  const [reminder, setReminder] = useState({ date: '', notes: '' })
   const [saving, setSaving] = useState(false)
   const savingRef = useRef(false)
+  const requestId = useRef(null)
+  const completedDate = new Date(completedAt)
+  const serviceDate = Number.isFinite(completedDate.getTime()) ? bookingDate(completedDate, base.timezone) : ''
+
 
   const patchLine = (i, patch) => setLines(ls => ls.map((l, idx) => idx === i ? { ...l, ...patch } : l))
 
@@ -308,11 +349,13 @@ function ManualTab({ supabase, base, helpers, money }) {
   }
   const total = lines.reduce((s, l) => s + calc(l).net, 0)
 
-  const reset = () => { setCustomerName(''); setCustomerPhone(''); setNotes(''); setLines([blankLine()]); setQuickCategories([]); setNextTreatmentDate(''); setNextTreatmentNotes(''); setSaveFollowup(true); setPayStatus('paid'); setPaymentMethod('cash') }
+  const reset = () => { setCustomerName(''); setCustomerPhone(''); setNotes(''); setLines([blankLine()]); setQuickCategories([]); setReminder({ date: '', notes: '' }); requestId.current = null; setPayStatus('paid'); setPaymentMethod('cash') }
 
   const submit = async () => {
     if (savingRef.current) return
-    if (nextTreatmentDate && saveFollowup && !customerName.trim()) { toast.error('Ingresá el nombre del cliente para guardar el seguimiento capilar'); return }
+    if (!serviceDate) { toast.error('Ingresá la fecha del servicio'); return }
+    if (reminder.date && !customerName.trim()) { toast.error('Ingresá el nombre del cliente para programar el aviso'); return }
+    if (reminder.date && reminder.date < serviceDate) { toast.error('La fecha del aviso debe ser igual o posterior a la del servicio'); return }
     // Validate every line
     for (let idx = 0; idx < lines.length; idx++) {
       const l = lines[idx]
@@ -331,35 +374,20 @@ function ManualTab({ supabase, base, helpers, money }) {
     const markPaid = payStatus === 'paid'
     savingRef.current = true; setSaving(true)
     try {
+      requestId.current ||= crypto.randomUUID()
       const body = {
+        request_id: requestId.current,
+        next_treatment_date: reminder.date || null, next_treatment_notes: reminder.notes,
         customer_name: customerName || null, customer_phone: customerPhone || null,
         mark_paid: markPaid, payment_method: markPaid ? paymentMethod : null, notes: notes || null,
-        completed_at: new Date(completedAt).toISOString(),
+        completed_at: completedDate.toISOString(),
         items: lines.map(l => ({ service_id: l.service_id, staff_id: l.staff_id, quantity: Number(l.quantity) || 1, unit_price: Number(l.unit_price) || 0, discount_amount: Number(l.discount_amount) || 0 })),
       }
       const res = await authFetch(supabase, '/api/booking/service-sales', { method: 'POST', body: JSON.stringify(body) })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) { toast.error(d.error || 'No se pudo registrar'); savingRef.current = false; setSaving(false); return }
-      // Every customer registered from Cobros is also available in Fichas capilares.
-      // The next treatment remains optional and creates the reminder when supplied.
-      if (customerName.trim()) {
-        const performedServices = lines.map(l => base.services.find(s => s.id === l.service_id)?.name || l.service_name || '').filter(Boolean).join(', ')
-        const followup = await authFetch(supabase, '/api/diagnostics/quick-follow-up', {
-          method: 'POST',
-          body: JSON.stringify({
-            full_name: customerName,
-            phone: customerPhone,
-            next_check_date: nextTreatmentDate && saveFollowup ? nextTreatmentDate : null,
-            consultation_reason: performedServices,
-            treatment_plan: performedServices,
-            next_session_notes: nextTreatmentNotes,
-            completed_at: new Date(completedAt).toISOString(),
-          }),
-        })
-        const followupData = await followup.json().catch(() => ({}))
-        if (!followup.ok) toast.error(followupData.error || 'El cobro se guardó, pero no se pudo guardar el cliente en Fichas capilares')
-      }
-      toast.success(markPaid ? 'Servicio cobrado' : 'Servicio registrado (pendiente de cobro)')
+      toast.success(d.alreadyExisted ? 'Este servicio ya estaba registrado' : (markPaid ? 'Servicio cobrado' : 'Servicio registrado (pendiente de cobro)'))
+      showSavedReminder(d.reminderDate, onReminderSaved)
       reset()
     } catch { toast.error('Error al registrar') }
     savingRef.current = false; setSaving(false)
@@ -441,12 +469,7 @@ function ManualTab({ supabase, base, helpers, money }) {
           <Button variant="outline" size="sm" className="gap-1" onClick={addLine}><Plus className="w-4 h-4" />Agregar servicio</Button>
         </div>
 
-        <div className="rounded-lg border p-3 space-y-3">
-          <div><p className="text-sm font-semibold">Próximo tratamiento y ficha capilar</p><p className="text-xs text-muted-foreground">Al guardar, el nombre y teléfono se registran automáticamente en Fichas capilares para el seguimiento.</p></div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><div><Label className="text-xs">Fecha del próximo tratamiento</Label><Input type="date" value={nextTreatmentDate} onChange={e => setNextTreatmentDate(e.target.value)} /></div><div className="flex items-end pb-2 gap-2"><Checkbox id="save-followup" checked={saveFollowup} onCheckedChange={v => setSaveFollowup(v === true)} disabled={!nextTreatmentDate} /><Label htmlFor="save-followup" className="text-sm cursor-pointer">Guardar en Fichas capilares</Label></div></div>
-          <div><Label className="text-xs">Notas para el seguimiento</Label><Textarea rows={2} value={nextTreatmentNotes} onChange={e => setNextTreatmentNotes(e.target.value)} placeholder="Ej.: retoque, tratamiento hidratante, control..." /></div>
-          {nextTreatmentDate && !customerName.trim() && <p className="text-xs text-amber-700">Para crear la ficha de seguimiento ingresá el nombre del cliente.</p>}
-        </div>
+        <TreatmentReminderFields reminder={reminder} onChange={setReminder} serviceDate={serviceDate} needsCustomer={reminder.date && !customerName.trim()} />
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
@@ -478,7 +501,7 @@ function ManualTab({ supabase, base, helpers, money }) {
 }
 
 // ---------------- HISTORY ----------------
-function HistoryTab({ supabase, staff, money }) {
+function HistoryTab({ supabase, staff, money, client, onClearClient }) {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [offset, setOffset] = useState(0)
@@ -498,13 +521,14 @@ function HistoryTab({ supabase, staff, money }) {
     if (filters.staff_id !== 'all') p.set('staff_id', filters.staff_id)
     if (filters.payment_status !== 'all') p.set('payment_status', filters.payment_status)
     if (filters.search) p.set('search', filters.search)
+    if (client) p.set('client_id', client.id)
     try {
       const r = await authFetch(supabase, `/api/booking/service-sales?${p}`, { signal: ctrl.signal })
       const d = r.ok ? await r.json() : { items: [] }
       setItems(d.items || []); setOffset(off)
     } catch (e) { if (e.name !== 'AbortError') toast.error('Error al cargar') }
     setLoading(false)
-  }, [supabase, filters])
+  }, [supabase, filters, client])
   useEffect(() => { load(0) }, [load])
 
   // debounce search
@@ -523,6 +547,8 @@ function HistoryTab({ supabase, staff, money }) {
 
   return (
     <div className="space-y-3">
+      {client && <div className="flex flex-wrap items-center gap-2"><Badge variant="secondary">{client.full_name}</Badge>
+        <Button variant="ghost" size="sm" onClick={onClearClient}>Ver todos los clientes</Button></div>}
       <Card><CardContent className="p-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 items-end">
         <div><Label className="text-xs">Desde</Label><Input type="date" value={filters.from} onChange={(e) => setFilters({ ...filters, from: e.target.value })} className="h-9" /></div>
         <div><Label className="text-xs">Hasta</Label><Input type="date" value={filters.to} onChange={(e) => setFilters({ ...filters, to: e.target.value })} className="h-9" /></div>

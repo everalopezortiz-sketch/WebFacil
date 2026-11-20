@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { authFetch } from '@/lib/booking/client'
+import RecurringExpenses from './RecurringExpenses'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -120,8 +121,7 @@ export default function FinanceManager({ supabase, profile, currencySymbol = 'Gs
         <p className="text-sm text-muted-foreground">Ingresos, gastos, ganancia y gastos frecuentes de tu negocio.</p>
       </div>
 
-      {/* Period filters */}
-      <Card>
+      {subtab !== 'frecuentes' && <Card>
         <CardContent className="p-3 space-y-3">
           <div className="flex flex-wrap gap-1.5">
             {PERIODS.map(p => (
@@ -138,7 +138,7 @@ export default function FinanceManager({ supabase, profile, currencySymbol = 'Gs
             <p className="text-xs text-muted-foreground">Período: {fmtDate(range.from)} al {fmtDate(range.to)}</p>
           )}
         </CardContent>
-      </Card>
+      </Card>}
 
       <Tabs value={subtab} onValueChange={setSubtab}>
         <TabsList className="flex-wrap h-auto gap-1 bg-white/60 backdrop-blur p-1.5 shadow-sm overflow-x-auto">
@@ -156,7 +156,7 @@ export default function FinanceManager({ supabase, profile, currencySymbol = 'Gs
             <ExpensesTab supabase={supabase} range={range} categories={setup?.categories || []} money={money} onChanged={reloadAll} />
           </TabsContent>
           <TabsContent value="frecuentes">
-            <TemplatesTab supabase={supabase} setup={setup} money={money} reloadSetup={loadSetup} onChanged={reloadAll} />
+            <RecurringExpenses supabase={supabase} categories={setup?.categories || []} currency={currency} currencySymbol={currencySymbol} paymentMethods={PM_LABELS} onChanged={reloadAll} />
           </TabsContent>
           <TabsContent value="categorias">
             <CategoriesTab supabase={supabase} categories={setup?.categories || []} reloadSetup={loadSetup} />
@@ -501,123 +501,6 @@ function ExpensesTab({ supabase, range, categories, money, onChanged }) {
           <DialogFooter>
             <Button variant="outline" onClick={() => setVoidDialog({ open: false, expense: null, reason: '' })}>Cancelar</Button>
             <Button variant="destructive" onClick={doVoid}>Anular gasto</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  )
-}
-
-// ==================== GASTOS FRECUENTES ====================
-function TemplatesTab({ supabase, setup, money, reloadSetup, onChanged }) {
-  const templates = (setup?.templates || [])
-  const categories = (setup?.categories || [])
-  const [busyId, setBusyId] = useState(null)
-  const [dialog, setDialog] = useState({ open: false, edit: null })
-  const [form, setForm] = useState({ name: '', category_id: 'none', default_amount: '', payment_method: 'cash', supplier: '', notes: '', is_active: true })
-  const [saving, setSaving] = useState(false)
-
-  const activeTemplates = templates.filter(t => t.isActive !== false)
-
-  const quickAdd = async (t) => {
-    if (!confirm(`Agregar el gasto de hoy: ${t.name} — ${money(t.defaultAmount)}?`)) return
-    setBusyId(t.id)
-    try {
-      const res = await authFetch(supabase, '/api/booking/finance/expenses/quick', { method: 'POST', body: JSON.stringify({ template_id: t.id }) })
-      const d = await res.json().catch(() => ({}))
-      if (!res.ok) { toast.error(d.error || 'No se pudo agregar'); return }
-      toast.success('Gasto agregado correctamente')
-      await reloadSetup(); onChanged && onChanged()
-    } catch { toast.error('No se pudo agregar') }
-    finally { setBusyId(null) }
-  }
-
-  const openNew = () => { setForm({ name: '', category_id: 'none', default_amount: '', payment_method: 'cash', supplier: '', notes: '', is_active: true }); setDialog({ open: true, edit: null }) }
-  const openEdit = (t) => { setForm({ name: t.name, category_id: t.categoryId || 'none', default_amount: String(t.defaultAmount ?? ''), payment_method: t.paymentMethod || 'cash', supplier: t.supplier || '', notes: t.notes || '', is_active: t.isActive !== false }); setDialog({ open: true, edit: t }) }
-
-  const save = async () => {
-    if (!form.name.trim()) { toast.error('Ingresá el nombre'); return }
-    if (!(Number(form.default_amount) > 0)) { toast.error('El importe debe ser mayor a cero'); return }
-    setSaving(true)
-    try {
-      const edit = dialog.edit
-      const url = edit ? `/api/booking/finance/templates/${edit.id}` : '/api/booking/finance/templates'
-      const res = await authFetch(supabase, url, {
-        method: edit ? 'PUT' : 'POST',
-        body: JSON.stringify({
-          name: form.name.trim(), category_id: form.category_id === 'none' ? null : form.category_id,
-          default_amount: Number(form.default_amount), payment_method: form.payment_method,
-          supplier: form.supplier || null, notes: form.notes || null, is_active: form.is_active,
-        }),
-      })
-      const d = await res.json().catch(() => ({}))
-      if (!res.ok) { toast.error(d.error || 'No se pudo guardar'); setSaving(false); return }
-      toast.success('Gasto frecuente guardado'); setDialog({ open: false, edit: null }); await reloadSetup()
-    } catch { toast.error('No se pudo guardar') }
-    finally { setSaving(false) }
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <p className="text-sm text-muted-foreground">Registrá con un toque los gastos que se repiten.</p>
-        <Button onClick={openNew} className="gap-1"><Plus className="w-4 h-4" />Nuevo gasto frecuente</Button>
-      </div>
-
-      {activeTemplates.length === 0 ? (
-        <Card><CardContent className="p-8 text-center text-muted-foreground">Todavía no tenés gastos frecuentes.</CardContent></Card>
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {activeTemplates.map(t => (
-            <Card key={t.id}>
-              <CardContent className="p-4 space-y-1.5">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="font-semibold text-sm truncate">{t.name}</p>
-                    <p className="text-xs text-muted-foreground">{t.categoryName || 'Sin categoría'} · {PM_LABELS[t.paymentMethod] || t.paymentMethod}</p>
-                  </div>
-                  <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={() => openEdit(t)}><Pencil className="w-4 h-4" /></Button>
-                </div>
-                <p className="text-lg font-bold text-violet-700">{money(t.defaultAmount)}</p>
-                <p className="text-[11px] text-muted-foreground">{t.usageCount || 0} uso(s){t.lastUsedAt ? ` · último ${fmtDate(t.lastUsedAt)}` : ''}</p>
-                <Button className="w-full gap-1 gradient-brand text-white mt-1" disabled={busyId === t.id} onClick={() => quickAdd(t)}>
-                  {busyId === t.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}Agregar ahora
-                </Button>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      <Dialog open={dialog.open} onOpenChange={o => !o && setDialog({ open: false, edit: null })}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>{dialog.edit ? 'Editar' : 'Nuevo'} gasto frecuente</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div><Label className="text-xs">Nombre *</Label><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label className="text-xs">Importe *</Label><Input type="number" min="0" value={form.default_amount} onChange={e => setForm({ ...form, default_amount: e.target.value })} /></div>
-              <div><Label className="text-xs">Forma de pago</Label>
-                <Select value={form.payment_method} onValueChange={v => setForm({ ...form, payment_method: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{PM_KEYS.map(k => <SelectItem key={k} value={k}>{PM_LABELS[k]}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div><Label className="text-xs">Categoría</Label>
-              <Select value={form.category_id} onValueChange={v => setForm({ ...form, category_id: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="none">Sin categoría</SelectItem>{categories.filter(c => c.isActive !== false).map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div><Label className="text-xs">Proveedor</Label><Input value={form.supplier} onChange={e => setForm({ ...form, supplier: e.target.value })} /></div>
-            <div><Label className="text-xs">Notas</Label><Textarea rows={2} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
-            {dialog.edit && (
-              <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="h-4 w-4" checked={form.is_active} onChange={e => setForm({ ...form, is_active: e.target.checked })} />Activo</label>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialog({ open: false, edit: null })}>Cancelar</Button>
-            <Button onClick={save} disabled={saving}>{saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}Guardar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
