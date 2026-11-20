@@ -101,28 +101,50 @@ export default function TreatmentNotifications({ supabase, refreshKey, onCountCh
   }
   if (!data?.total) return null
 
+  const urgentCount = Number(data.todayCount || 0) + Number(data.overdueCount || 0)
+  const headline = data.overdueCount > 0
+    ? `${data.overdueCount} ${data.overdueCount === 1 ? 'tratamiento vencido' : 'tratamientos vencidos'}`
+    : data.todayCount > 0
+      ? `${data.todayCount} ${data.todayCount === 1 ? 'tratamiento para hoy' : 'tratamientos para hoy'}`
+      : `${data.tomorrowCount} ${data.tomorrowCount === 1 ? 'tratamiento para mañana' : 'tratamientos para mañana'}`
+  const highlight = data.overdueCount > 0
+    ? 'border-red-400 bg-red-50 dark:border-red-700 dark:bg-red-950/40'
+    : urgentCount > 0
+      ? 'border-violet-400 bg-violet-50 dark:border-violet-700 dark:bg-violet-950/40'
+      : 'border-amber-400 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/40'
+
   return (
-    <Card className="border-violet-200 dark:border-violet-800">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base flex items-center gap-2"><Bell className="size-5 text-violet-600 dark:text-violet-400" />Próximos tratamientos <Badge>{data.total}</Badge></CardTitle>
-        <div className="flex flex-wrap gap-x-3 gap-y-1 text-sm text-muted-foreground">
+    <Card className={`border-2 shadow-md ${highlight}`} role="status">
+      <CardHeader className="space-y-3 pb-4">
+        <div className="flex items-start gap-3">
+          <div className="rounded-xl bg-white/80 p-2.5 text-violet-700 dark:bg-black/20 dark:text-violet-300">
+            <Bell className="size-6" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold">Próximos tratamientos</p>
+            <CardTitle className="mt-1 text-xl leading-tight sm:text-2xl">{headline}</CardTitle>
+            <p className="mt-1 text-sm">Revisá los avisos pendientes y marcá los tratamientos realizados.</p>
+          </div>
+          <Badge className="shrink-0 text-sm">{data.total}</Badge>
+        </div>
+        <div className="flex flex-wrap gap-x-3 gap-y-1 text-sm font-medium">
           {data.todayCount > 0 && <span>{data.todayCount} para hoy</span>}
           {data.tomorrowCount > 0 && <span>{data.tomorrowCount} para mañana</span>}
           {data.overdueCount > 0 && <span className="font-medium text-red-700 dark:text-red-400">{data.overdueCount} {data.overdueCount === 1 ? 'vencido' : 'vencidos'}</span>}
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pb-5">
         {error && <p className="mb-2 text-sm text-muted-foreground" role="alert">No se pudo actualizar la lista. <button type="button" className="underline" onClick={load}>Reintentar</button></p>}
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {data.reminders.map(reminder => {
             const link = whatsappLink(reminder)
             return (
-              <article key={reminder.id} className={'min-w-0 rounded-lg border p-3 space-y-2 ' + reminderStyles[reminder.kind]}>
+              <article key={reminder.id} className={'min-w-0 rounded-lg border p-4 space-y-3 shadow-sm ' + reminderStyles[reminder.kind]}>
                 <div className="flex flex-wrap items-center justify-between gap-1">
-                  <h3 className="text-sm font-semibold break-words min-w-0">{reminder.customer_name}</h3>
+                  <h3 className="text-base font-bold break-words min-w-0 sm:text-lg">{reminder.customer_name}</h3>
                   {reminder.status === 'contacted' && <Badge variant="outline">Avisado</Badge>}
                 </div>
-                <p className="text-xs text-muted-foreground">{reminderLabels[reminder.kind]} · {formatCalendarDate(reminder.due_on)}</p>
+                <p className="text-sm font-medium">{reminderLabels[reminder.kind]} · {formatCalendarDate(reminder.due_on)}</p>
                 {reminder.notes && <p className="text-sm whitespace-pre-wrap break-words">{reminder.notes}</p>}
                 <div className="flex flex-wrap items-center gap-1.5">
                   {link && <Button asChild variant="outline" size="sm" className="gap-1.5">
