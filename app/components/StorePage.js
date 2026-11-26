@@ -549,7 +549,7 @@ export default function StorePage({ autoBooking = false, slug: slugProp }) {
 
       {/* Product Detail Dialog */}
       <Dialog open={!!productDetail} onOpenChange={(open) => { if (!open) { setProductDetail(null); setProductImageIndex(0) } }}>
-        <DialogContent className="max-w-md p-0 overflow-hidden">
+        <DialogContent className="max-w-md p-0 overflow-x-hidden overflow-y-auto">
           {productDetail && (() => {
             const detailImages = parseImages(productDetail.image_url)
             const hasImages = detailImages.length > 0
@@ -559,7 +559,7 @@ export default function StorePage({ autoBooking = false, slug: slugProp }) {
             return (
             <>
               {hasImages && (
-                <div className="aspect-square bg-gray-100 relative group">
+                <div className="aspect-square max-h-[45dvh] bg-gray-100 relative group">
                   <img 
                     src={detailImages[currentIdx]}
                     alt={productDetail.name}
@@ -606,7 +606,7 @@ export default function StorePage({ autoBooking = false, slug: slugProp }) {
                 </div>
               )}
               {detailImages.length > 1 && (
-                <div className="px-4 pt-3 flex gap-2">
+                <div className="px-4 pt-3 flex gap-2 overflow-x-auto">
                   {detailImages.map((img, i) => (
                     <button
                       key={i}
@@ -619,12 +619,12 @@ export default function StorePage({ autoBooking = false, slug: slugProp }) {
                   ))}
                 </div>
               )}
-              <div className="p-6">
+              <div className="p-4 sm:p-6 min-w-0">
                 <DialogTitle className="text-xl mb-2">{productDetail.name}</DialogTitle>
                 {productDetail.description && (
                   <p className="text-sm text-gray-600 mb-4">{productDetail.description}</p>
                 )}
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     {productDetail.promo_active && productDetail.promo_price ? (
                       <div className="flex items-center gap-2">
@@ -657,7 +657,7 @@ export default function StorePage({ autoBooking = false, slug: slugProp }) {
 
       {/* Fullscreen Lightbox */}
       <Dialog open={lightbox.open} onOpenChange={(open) => setLightbox({ ...lightbox, open })}>
-        <DialogContent className="max-w-[100vw] w-screen h-screen p-0 bg-black/95 border-0 rounded-none">
+        <DialogContent className="max-w-[100vw] w-screen h-dvh max-h-dvh p-0 overflow-hidden bg-black/95 border-0 rounded-none">
           <DialogTitle className="sr-only">Vista de imagen</DialogTitle>
           {lightbox.images.length > 0 && (
             <div className="relative w-full h-full flex items-center justify-center">
@@ -711,7 +711,7 @@ export default function StorePage({ autoBooking = false, slug: slugProp }) {
 
       {/* Cart Dialog */}
       <Dialog open={cartOpen} onOpenChange={setCartOpen}>
-        <DialogContent className="max-w-md max-h-[90vh] p-0">
+        <DialogContent className="max-w-md max-h-[calc(100dvh-1rem)] p-0">
           <DialogHeader className="p-4 border-b">
             <DialogTitle className="flex items-center gap-2">
               <ShoppingCart className="w-5 h-5" /> Tu Carrito
@@ -728,7 +728,7 @@ export default function StorePage({ autoBooking = false, slug: slugProp }) {
                     <h4 className="font-medium truncate">{item.name}</h4>
                     <p className="text-sm font-bold" style={{ color: buttonColor }}>{formatPrice(getProductPrice(item))}</p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Button size="icon" variant="outline" className="h-8 w-8 rounded-full" onClick={() => updateQuantity(item.id, -1)}>
                       <Minus className="w-3 h-3" />
                     </Button>
@@ -758,7 +758,7 @@ export default function StorePage({ autoBooking = false, slug: slugProp }) {
 
       {/* Checkout Dialog */}
       <Dialog open={checkoutOpen} onOpenChange={setCheckoutOpen}>
-        <DialogContent className="max-w-md max-h-[90vh] p-0">
+        <DialogContent className="max-w-md max-h-[calc(100dvh-1rem)] p-0">
           <DialogHeader className="p-4 border-b">
             <DialogTitle>Finalizar Pedido</DialogTitle>
           </DialogHeader>

@@ -1698,7 +1698,7 @@ export default function Dashboard({ user, profile, onLogout }) {
               <CardHeader>
                 <div className="flex items-center justify-between flex-wrap gap-3">
                   <CardTitle>Pedidos y Ventas</CardTitle>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => { setManualSale({ open: true, customerName: '', saleDate: today, items: [] }); setSaleLine({ productId: '', quantity: 1 }) }}>
                       <Plus className="w-4 h-4 mr-1" /> Cargar venta
                     </Button>
@@ -1709,7 +1709,7 @@ export default function Dashboard({ user, profile, onLogout }) {
                         setOrderDateFilter(e.target.value)
                         loadOrders(e.target.value)
                       }}
-                      className="w-auto"
+                      className="min-w-0 w-full sm:w-auto"
                     />
                     {orderDateFilter && (
                       <Button variant="ghost" size="sm" onClick={() => { setOrderDateFilter(''); loadOrders() }}>
@@ -2050,9 +2050,9 @@ export default function Dashboard({ user, profile, onLogout }) {
                   Mayorista
                 </label>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <Select value={saleLine.productId} onValueChange={(v) => setSaleLine({ ...saleLine, productId: v })}>
-                  <SelectTrigger className="flex-1">
+                  <SelectTrigger className="w-full min-w-0 sm:flex-1">
                     <SelectValue placeholder="Selecciona un producto" />
                   </SelectTrigger>
                   <SelectContent>
@@ -2068,7 +2068,7 @@ export default function Dashboard({ user, profile, onLogout }) {
                 <Input
                   type="number"
                   min="1"
-                  className="w-16"
+                  className="w-20"
                   value={saleLine.quantity}
                   onChange={(e) => setSaleLine({ ...saleLine, quantity: e.target.value })}
                 />
@@ -2112,7 +2112,7 @@ export default function Dashboard({ user, profile, onLogout }) {
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <Label>Cliente (opcional)</Label>
                 <Input
@@ -2170,7 +2170,7 @@ export default function Dashboard({ user, profile, onLogout }) {
               )}
             </div>
 
-            <div className="flex justify-end gap-2 pt-2">
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setManualSale({ ...manualSale, open: false })}>Cancelar</Button>
               <Button onClick={saveManualSale} disabled={savingSale || manualSale.items.length === 0} className="bg-emerald-600 hover:bg-emerald-700 text-white">
                 {savingSale && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
@@ -2192,7 +2192,7 @@ export default function Dashboard({ user, profile, onLogout }) {
               <Label>Nombre *</Label>
               <Input value={materialDialog.data?.name || ''} onChange={(e) => setMaterialDialog({ ...materialDialog, data: { ...materialDialog.data, name: e.target.value } })} placeholder="Ej: Papel sublimación" />
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <Label>Unidad</Label>
                 <Input value={materialDialog.data?.unit || ''} onChange={(e) => setMaterialDialog({ ...materialDialog, data: { ...materialDialog.data, unit: e.target.value } })} placeholder="un / m / kg" />

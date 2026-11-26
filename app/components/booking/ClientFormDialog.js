@@ -44,8 +44,8 @@ export default function ClientFormDialog({ supabase, open, onOpenChange, client,
     <Dialog open={open} onOpenChange={value => !saving && onOpenChange(value)}>
       <DialogContent className="max-w-lg max-h-[92dvh] overflow-y-auto">
         <DialogHeader><DialogTitle>{client ? 'Editar cliente' : 'Nuevo cliente'}</DialogTitle><DialogDescription>Datos de contacto del cliente.</DialogDescription></DialogHeader>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="col-span-2 space-y-1"><Label>Nombre y apellido *</Label><Input value={form.full_name} onChange={e => set('full_name', e.target.value)} /></div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="sm:col-span-2 space-y-1"><Label>Nombre y apellido *</Label><Input value={form.full_name} onChange={e => set('full_name', e.target.value)} /></div>
           <div className="space-y-1"><Label>Teléfono</Label><Input value={form.phone} onChange={e => set('phone', e.target.value)} /></div>
           <div className="space-y-1"><Label>Documento</Label><Input value={form.document} onChange={e => set('document', e.target.value)} /></div>
           <div className="space-y-1"><Label>Fecha de nacimiento</Label><Input type="date" value={form.birth_date} onChange={e => set('birth_date', e.target.value)} /></div>
@@ -62,8 +62,8 @@ export default function ClientFormDialog({ supabase, open, onOpenChange, client,
           <div className="space-y-1"><Label>Email</Label><Input type="email" value={form.email} onChange={e => set('email', e.target.value)} /></div>
           <div className="space-y-1"><Label>Ocupación</Label><Input value={form.occupation} onChange={e => set('occupation', e.target.value)} /></div>
           <div className="space-y-1"><Label>Ciudad</Label><Input value={form.city} onChange={e => set('city', e.target.value)} /></div>
-          <div className="col-span-2 space-y-1"><Label>Dirección</Label><Input value={form.address} onChange={e => set('address', e.target.value)} /></div>
-          <div className="col-span-2 space-y-1"><Label>Notas generales</Label><Textarea rows={2} value={form.general_notes} onChange={e => set('general_notes', e.target.value)} /></div>
+          <div className="sm:col-span-2 space-y-1"><Label>Dirección</Label><Input value={form.address} onChange={e => set('address', e.target.value)} /></div>
+          <div className="sm:col-span-2 space-y-1"><Label>Notas generales</Label><Textarea rows={2} value={form.general_notes} onChange={e => set('general_notes', e.target.value)} /></div>
         </div>
         <DialogFooter>
           <Button variant="outline" disabled={saving} onClick={() => onOpenChange(false)}>Cancelar</Button>
